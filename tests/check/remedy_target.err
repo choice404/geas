@@ -1,0 +1,4 @@
+remedy 'undo' targets 'delivered', which is a signal, not a pledge
+remedy 'lost' names an unknown pledge 'nothing'
+remedy 'again' targets 'undo', which is a remedy, not a pledge
+remedy 'config' targets 'dsn', which is a vow, not a pledge

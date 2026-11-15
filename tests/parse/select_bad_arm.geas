@@ -1,0 +1,11 @@
+contract Bad {
+    signal approved()
+
+    course {
+        let v = select {
+            await approved -> 1
+            sleep 1h -> 2
+            timeout 1d -> 3
+        }
+    }
+}

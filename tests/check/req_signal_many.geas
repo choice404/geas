@@ -1,0 +1,33 @@
+// The cap of 16 atoms counts signals too
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    signal s0()
+    signal s1()
+    signal s2()
+    signal s3()
+    signal s4()
+    signal s5()
+    signal s6()
+    signal s7()
+    signal s8()
+    signal s9()
+    signal s10()
+    signal s11()
+    signal s12()
+    signal s13()
+    signal s14()
+    signal s15()
+    signal s16()
+    requirements {
+        fulfill: s0 && s1 && s2 && s3 && s4 && s5 && s6 && s7 && s8 && s9 && s10 && s11 && s12 && s13 && s14 && s15 && s16
+    }
+}

@@ -1,0 +1,27 @@
+// Terms trail a signature and each may sit on its own line under it, since
+// a term keyword reads across the newline before it
+contract Terms {
+    pledge authorize(card: Card, amount: Float) -> Result<AuthId, PayError>
+        within 30s
+        retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+
+    pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+        after authorize
+        within 1m [abi: "c"] {
+        return Ok(auth)
+    }
+
+    pledge bare() -> Unit retry 2
+    pledge some() -> Unit retry 5 cap 1h on Timeout
+    pledge waits() -> Unit after a, b,
+        c within 1d
+
+    subcontract Shipping transactional
+        after authorize within 48h {
+        pledge ship() -> Unit within 1h
+    }
+
+    subcontract {
+        pledge loose() -> Unit
+    }
+}

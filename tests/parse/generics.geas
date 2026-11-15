@@ -1,0 +1,11 @@
+// Generic constructors on the builtin composites, beside the Map form
+contract Generics {
+    clause build() -> Int {
+        let empty = Map<String, Int>()
+        let xs = List<Int>(1, 2, 3)
+        let none = Option<Int>()
+        let pair = Tuple<Int, String>(first: 1, second: "two")
+        let r = Result<Int, String>(Ok(1))
+        return xs.len()
+    }
+}

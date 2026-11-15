@@ -1,0 +1,4 @@
+exit 1
+skeleton/std_user.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The standard library consumer: one root file whose imports pull four
+  ^

@@ -1,0 +1,18 @@
+// A remedy body checks under its own signature
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge pay() -> Result<Receipt, PayError>
+    remedy refund for pay(receipt: Receipt) -> Result<Unit, PayError> {
+        let id: Int = receipt.id
+        return Ok(1)
+    }
+}

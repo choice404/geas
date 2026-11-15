@@ -1,0 +1,4 @@
+exit 1
+skeleton/saga.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The order saga, host driven. The host signs it and calls each step itself,
+  ^

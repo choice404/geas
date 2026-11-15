@@ -1,0 +1,12 @@
+// An amends vow supplies a vow of this version with a value of its type
+contract Saga [version: 2] {
+    vow dsn: String
+    pledge ship() -> Unit
+    amends 1 {
+        vow missing = "x"
+        vow ship = "x"
+        vow dsn = 7
+        vow dsn = prior
+        vow dsn = nothing.url
+    }
+}

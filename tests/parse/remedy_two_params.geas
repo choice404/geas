@@ -1,0 +1,4 @@
+contract Bad {
+    pledge capture() -> Result<Receipt, PayError>
+    remedy refund for capture(receipt: Receipt, extra: Int) -> Unit
+}

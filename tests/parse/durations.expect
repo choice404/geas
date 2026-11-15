@@ -1,0 +1,97 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Timer",
+            attrs: [
+                Attr {
+                    key: "version",
+                    value: Int(3),
+                },
+                Attr {
+                    key: "term",
+                    value: Duration(604800000),
+                },
+            ],
+            members: [
+                Clause {
+                    name: "grace",
+                    params: [],
+                    ret: Named("Duration"),
+                    body: Block {
+                        stmts: [
+                            Let {
+                                mutable: false,
+                                name: "base",
+                                ty: None,
+                                value: Duration(5400000),
+                            },
+                            Return(
+                                Binary(
+                                    Add,
+                                    Ident("base"),
+                                    Duration(250),
+                                ),
+                            ),
+                        ],
+                    },
+                },
+                Clause {
+                    name: "label",
+                    params: [
+                        Field {
+                            name: "d",
+                            ty: Named("Duration"),
+                        },
+                    ],
+                    ret: Named("String"),
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Match {
+                                    scrutinee: Ident("d"),
+                                    arms: [
+                                        Arm {
+                                            pat: Lit(Duration(0)),
+                                            body: Str("now"),
+                                        },
+                                        Arm {
+                                            pat: Lit(Duration(30000)),
+                                            body: Str("soon"),
+                                        },
+                                        Arm {
+                                            pat: Lit(Unary(
+                                                Neg,
+                                                Duration(1),
+                                            )),
+                                            body: Str("late"),
+                                        },
+                                        Arm {
+                                            pat: Lit(Unary(
+                                                Neg,
+                                                Int(2),
+                                            )),
+                                            body: Str("negative"),
+                                        },
+                                        Arm {
+                                            pat: Lit(Unary(
+                                                Neg,
+                                                Float("0.5"),
+                                            )),
+                                            body: Str("half"),
+                                        },
+                                        Arm {
+                                            pat: Wildcard,
+                                            body: Str("later"),
+                                        },
+                                    ],
+                                },
+                            ),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

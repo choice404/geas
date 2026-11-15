@@ -1,0 +1,6 @@
+contract Bad [version: 2] {
+    amends 1 {
+        drop legacy now
+        retire old
+    }
+}

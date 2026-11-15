@@ -1,0 +1,59 @@
+// The course: own pledges by bare name, a pledge inside a subcontract included,
+// together bindings visible after the block, sleep, await in each payload shape,
+// select, a bare return, and ? on a Result and an Option alike
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Flow {
+    vow limit: Duration = 1h
+
+    subcontract Steps {
+        pledge first(n: Int) -> Result<Int, PayError>
+    }
+    pledge second(n: Int) -> Option<Int>
+    pledge third() -> Unit
+    signal approved(by: String)
+    signal rejected()
+    signal moved(sku: String, count: Int)
+
+    clause grace() -> Duration {
+        return limit
+    }
+
+    course {
+        let one = first(1)?
+        together {
+            let a = first(2)?
+            let b = second(3)?
+        }
+        sleep 1h
+        sleep grace() * 2
+        third()
+        let who: String = await approved
+        let nobody: Unit = await rejected
+        let pair: Tuple<String, Int> = await moved
+        let maybe: Option<String> = await approved within 24h
+        let verdict = select {
+            await approved as by -> by
+            await rejected -> {
+                let why = "rejected"
+                why
+            }
+            await moved as pair -> "moved"
+            timeout 3d -> "none"
+        }
+        let total: Int = one + a + b
+        if total > 3 {
+            return
+        }
+        let started = now()
+        first(total)?
+    }
+}

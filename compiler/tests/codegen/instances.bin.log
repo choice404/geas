@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/instances.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The instance surface skeleton: the lifecycle read and written from inside
+  ^

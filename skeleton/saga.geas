@@ -1,0 +1,99 @@
+// The order saga, host driven. The host signs it and calls each step itself,
+// and the contract keeps the terms: authorize has thirty seconds and three
+// retries on a Timeout or a Gateway hiccup, capture waits on authorize, ship
+// waits on the whole Payment subcontract and on reserve, and the delivered
+// signal has three days from the moment ship landed. The contract as a whole
+// has a week. When any of it breaks, by an Err, by a lapse, or by the week
+// running out, every step that already landed is undone through its remedy,
+// newest first, each remedy handed the Ok value its step produced.
+//
+// Most steps are abstract, since a payment gateway and a carrier are the
+// host's to call, so the host binds authorize, capture, ship, and refund.
+// reserve and release are written in Geas: the hold is the requested one
+// plus the grace vow, and release checks the reservation it was handed
+// before it lets the stock go, so a host reading the remedy's outcome reads
+// whether the right value crossed.
+
+record Card {
+    number: String
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+    amount: Int
+}
+
+record Reservation {
+    id: String
+    sku: String
+    hold: Duration
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderSaga [version: 1, term: 7d] {
+    vow amount: Int = 100
+    vow grace: Duration = 30m
+
+    subcontract Payment {
+        pledge authorize(card: Card) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    // The stock is held for what the host asked plus the grace, and a hold
+    // longer than a day is more than the warehouse gives
+    pledge reserve(sku: String, hold: Duration) -> Result<Reservation, StockError> {
+        if sku == "" {
+            return Err(OutOfStock(sku))
+        }
+        let total = hold + grace
+        if total > 1d {
+            return Err(Unavailable)
+        }
+        return Ok(Reservation { id: "R-" + sku, sku: sku, hold: total })
+    }
+
+    pledge ship(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+
+    signal delivered(tracking: Tracking) after ship within 3d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 2 every 1m
+
+    // A reservation that is not the one reserve produced is not this
+    // saga's to release
+    remedy release for reserve(res: Reservation) -> Result<Unit, StockError> {
+        if res.id != "R-" + res.sku || res.hold < grace {
+            return Err(Unavailable)
+        }
+        return Ok(released())
+    }
+
+    clause released() -> Unit {
+        return
+    }
+
+    requirements {
+        fulfill: Payment && reserve && ship && delivered
+        partial: Payment || reserve
+        break: !Payment || !reserve || !ship || !delivered
+    }
+}

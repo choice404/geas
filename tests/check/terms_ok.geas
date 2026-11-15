@@ -1,0 +1,34 @@
+// Every declaration with the terms it accepts, and an ordering with no cycle
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    subcontract Payment within 10m {
+        pledge authorize(amount: Float) -> Result<Receipt, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(receipt: Receipt) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+            retry 1
+    }
+
+    pledge reserve(items: List<Item>) -> Result<Unit, PayError>
+        within 5m
+    pledge ship() -> Result<Unit, PayError>
+        after Payment, reserve
+    signal delivered() after ship within 14d
+    subcontract after delivered {
+        pledge review() -> Unit
+    }
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        within 1h
+        retry 10 every 1m backoff 1.0 cap 1h on Timeout
+}

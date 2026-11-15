@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/faults_bridge.geas: 11:25: error: codegen: the version attribute must be an integer literal
+  contract Wire [version: 1.5] {
+                          ^~~

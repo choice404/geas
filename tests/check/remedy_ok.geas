@@ -1,0 +1,33 @@
+// Remedies: a target in a subcontract, a Geas body, an abstract one, a foreign
+// one, and the targets that leave no parameter to take
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    subcontract Payment {
+        pledge capture() -> Result<Receipt, PayError>
+    }
+    pledge reserve() -> Result<Item, PayError>
+    pledge notify() -> Unit
+    pledge lookup() -> Option<Item>
+    pledge log() -> Result<Unit, PayError>
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 10 every 1m backoff 2.0 cap 1h
+    remedy release for reserve(item: Item) -> Unit {
+        let sku = item.sku
+        return
+    }
+    remedy retract for notify() -> Unit
+    remedy forget for lookup() -> Result<Unit, PayError> {
+        return Err(Timeout)
+    }
+    remedy erase for log() -> Unit [abi: "c", symbol: "erase_log"]
+}

@@ -1,0 +1,3 @@
+retry on needs pledge 'pay' to return a Result whose error type is a declared sum
+retry on needs pledge 'ship' to return a Result whose error type is a declared sum
+retry on needs remedy 'refund' to return a Result whose error type is a declared sum

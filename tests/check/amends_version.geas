@@ -1,0 +1,19 @@
+// amends N names a version at least 1, older than the contract, and only once
+contract Saga [version: 2] {
+    pledge ship() -> Unit
+    amends 0 {
+    }
+    amends 2 {
+    }
+    amends 5 {
+    }
+    amends 1 {
+    }
+    amends 1 {
+    }
+}
+
+contract Fresh {
+    amends 1 {
+    }
+}

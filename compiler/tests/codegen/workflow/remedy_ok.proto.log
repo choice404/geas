@@ -1,0 +1,4 @@
+exit 1
+tests/check/remedy_ok.geas: 18:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge notify() -> Unit
+      ^~~~~~~~~~~~~

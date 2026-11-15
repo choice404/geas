@@ -1,0 +1,4 @@
+exit 1
+tests/check/terms_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Every declaration with the terms it accepts, and an ordering with no cycle
+  ^

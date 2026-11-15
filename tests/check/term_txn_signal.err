@@ -1,0 +1,1 @@
+signal 'cleared' cannot sit in the transactional subcontract 'Posting'

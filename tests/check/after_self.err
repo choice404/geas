@@ -1,0 +1,2 @@
+pledge 'pay' cannot be ordered after itself
+subcontract 'Tail' cannot be ordered after itself

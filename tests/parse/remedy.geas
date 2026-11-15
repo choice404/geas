@@ -1,0 +1,14 @@
+// Remedies: a parameter or none, terms, attributes, and a body
+contract Undo {
+    pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+    pledge reserve(items: List<Item>) -> Result<Reservation, StockError>
+    pledge note() -> Unit
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 10 every 1m backoff 2.0 cap 1h
+    remedy release for reserve(r: Reservation) -> Unit
+    remedy forget for note() -> Unit within 5s [symbol: "forget_note"]
+    remedy undo for capture(receipt: Receipt) -> Unit {
+        log(receipt)
+    }
+}

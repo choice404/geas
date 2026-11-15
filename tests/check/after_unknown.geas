@@ -1,0 +1,20 @@
+// An after term names a pledge, a named subcontract, or a signal of the same contract
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    vow dsn: String = "db"
+    clause helper() -> Int {
+        return 1
+    }
+    pledge pay() -> Unit after nothing
+    pledge ship() -> Unit after dsn
+    pledge bill() -> Unit after helper
+}

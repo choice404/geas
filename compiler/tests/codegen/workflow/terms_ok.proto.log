@@ -1,0 +1,4 @@
+exit 1
+tests/check/terms_ok.geas: 29:9: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+          pledge review() -> Unit
+          ^~~~~~~~~~~~~

@@ -1,0 +1,20 @@
+// A remedy undoes a pledge of its own contract and nothing else
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    vow dsn: String = "db"
+    pledge pay() -> Result<Receipt, PayError>
+    signal delivered()
+    remedy undo for delivered() -> Unit
+    remedy lost for nothing() -> Unit
+    remedy again for undo() -> Unit
+    remedy config for dsn() -> Unit
+}

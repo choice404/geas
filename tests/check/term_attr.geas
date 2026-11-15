@@ -1,0 +1,24 @@
+// term is a duration longer than nothing and belongs on a contract alone
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Zero [term: 0s] {
+    pledge ship() -> Unit
+}
+
+contract Wrong [term: 7] {
+    pledge ship() -> Unit
+}
+
+contract Misplaced {
+    pledge pay() -> Result<Unit, PayError>
+    pledge ship() -> Unit [term: 1d]
+    remedy refund for pay() -> Unit [term: 1d]
+}

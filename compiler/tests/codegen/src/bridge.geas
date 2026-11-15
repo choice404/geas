@@ -1,0 +1,103 @@
+// The bridge surface past what the skeleton programs spell: several public
+// contracts in one file, so every contract scoped message takes a prefix,
+// an internal contract that publishes nothing, a pledge named sign, sums
+// with and without payloads, tuples, maps, lists of records, nested
+// options, subcontracts named, anonymous, and transactional, and an
+// explicit requirements block
+
+import std.store
+
+record Item {
+    id: Int
+    tags: List<String>
+    note: Option<String>
+    kind: Option<Kind>
+    extra: Option<Item2>
+}
+
+record Item2 {
+    weight: Float
+    codes: Map<Int, String>
+}
+
+Kind is either Small or Large
+
+Problem is either Missing(what: String, where: List<Int>) or Denied or Broken(code: Int)
+
+contract Shop [version: 2] {
+    vow city: String
+    vow open: Bool = true
+    vow rate: Float = 0.25
+
+    clause nothing() -> Unit {
+        let ignored = 0
+    }
+
+    pledge sign(who: String) -> Result<Unit, Problem> {
+        return Ok(nothing())
+    }
+
+    pledge list_items(limit: Int, kinds: List<Kind>) -> Result<List<Item>, Problem> {
+        return Err(Denied)
+    }
+
+    pledge find_item(id: Int, hint: Option<String>) -> Option<Item> {
+        return None
+    }
+
+    subcontract Checkout {
+        pledge pay(amount: Float, memo: Tuple<Int, String>) -> Result<Tuple<Int, Bool>, Problem> {
+            return Ok((1, true))
+        }
+
+        pledge refund(id: Int) -> Result<Map<String, Int>, String> {
+            return Err("no")
+        }
+    }
+
+    subcontract {
+        pledge audit(flags: Map<String, Bool>) -> Result<Option<List<Int>>, Kind> {
+            return Ok(None)
+        }
+    }
+
+    requirements {
+        fulfill: Checkout && sign && !find_item
+        partial: Checkout || list_items
+        break: !Checkout && !sign
+    }
+}
+
+internal contract Hidden {
+    pledge peek(x: Int) -> Result<Int, Int> {
+        return Ok(x)
+    }
+}
+
+contract Depot {
+    vow dsn: String = "file:target/depot.db"
+
+    schema Crates {
+        id: Int
+        label: String
+    }
+
+    pledge stock(item: Item) -> Result<UInt, Problem> {
+        return Ok(1)
+    }
+
+    subcontract Move transactional {
+        pledge out(n: Int) -> Result<Int, Int> {
+            return Ok(n)
+        }
+    }
+
+    subcontract Idle {
+        pledge wait(n: Int) -> Result<Int, Int> {
+            return Ok(n)
+        }
+    }
+}
+
+contract Empty {
+}

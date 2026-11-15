@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/faults_bridge.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Shapes the module emitter lowers and the bridge refuses: a Byte and a
+  ^

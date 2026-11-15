@@ -1,0 +1,9 @@
+// The eleven workflow keywords, then the contextual words that stay plain
+// identifiers, then the near misses that are identifiers too
+remedy signal course await sleep together
+select amends within after retry
+fulfill partial every backoff cap on as timeout
+rename retire latch prior fulfilled pending broken
+version abi symbol term sign resume status park
+List Map Option Result Tuple
+afterwards retrying selected _await Sleep

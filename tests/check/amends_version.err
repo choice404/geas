@@ -1,0 +1,5 @@
+amends 0 names no version; versions start at 1
+amends 2 must name a version older than contract 'Saga', which is at version 2
+amends 5 must name a version older than contract 'Saga', which is at version 2
+duplicate amends 1 in contract 'Saga'
+amends 1 must name a version older than contract 'Fresh', which is at version 1

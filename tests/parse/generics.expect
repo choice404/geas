@@ -1,0 +1,116 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Generics",
+            attrs: [],
+            members: [
+                Clause {
+                    name: "build",
+                    params: [],
+                    ret: Named("Int"),
+                    body: Block {
+                        stmts: [
+                            Let {
+                                mutable: false,
+                                name: "empty",
+                                ty: None,
+                                value: MapNew(
+                                    Named("Map", [
+                                        Named("String"),
+                                        Named("Int"),
+                                    ]),
+                                ),
+                            },
+                            Let {
+                                mutable: false,
+                                name: "xs",
+                                ty: None,
+                                value: GenericNew {
+                                    ty: Named("List", [
+                                        Named("Int"),
+                                    ]),
+                                    args: [
+                                        Arg {
+                                            label: None,
+                                            expr: Int(1),
+                                        },
+                                        Arg {
+                                            label: None,
+                                            expr: Int(2),
+                                        },
+                                        Arg {
+                                            label: None,
+                                            expr: Int(3),
+                                        },
+                                    ],
+                                },
+                            },
+                            Let {
+                                mutable: false,
+                                name: "none",
+                                ty: None,
+                                value: GenericNew {
+                                    ty: Named("Option", [
+                                        Named("Int"),
+                                    ]),
+                                    args: [],
+                                },
+                            },
+                            Let {
+                                mutable: false,
+                                name: "pair",
+                                ty: None,
+                                value: GenericNew {
+                                    ty: Named("Tuple", [
+                                        Named("Int"),
+                                        Named("String"),
+                                    ]),
+                                    args: [
+                                        Arg {
+                                            label: "first",
+                                            expr: Int(1),
+                                        },
+                                        Arg {
+                                            label: "second",
+                                            expr: Str("two"),
+                                        },
+                                    ],
+                                },
+                            },
+                            Let {
+                                mutable: false,
+                                name: "r",
+                                ty: None,
+                                value: GenericNew {
+                                    ty: Named("Result", [
+                                        Named("Int"),
+                                        Named("String"),
+                                    ]),
+                                    args: [
+                                        Arg {
+                                            label: None,
+                                            expr: Ok(
+                                                Int(1),
+                                            ),
+                                        },
+                                    ],
+                                },
+                            },
+                            Return(
+                                Call {
+                                    callee: Member(
+                                        Ident("xs"),
+                                        "len",
+                                    ),
+                                    args: [],
+                                },
+                            ),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

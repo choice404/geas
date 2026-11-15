@@ -1,0 +1,10 @@
+exit 1
+compiler/tests/codegen/src/faults_body.geas: 16:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow items: List<Int>
+      ^~~~~~~~~
+compiler/tests/codegen/src/faults_body.geas: 23:27: error: codegen: the version attribute must be an integer literal
+  contract Faulty [version: "two"] {
+                            ^~~~~
+compiler/tests/codegen/src/faults_body.geas: 24:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow pair: Pair
+      ^~~~~~~~

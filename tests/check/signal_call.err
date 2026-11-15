@@ -1,0 +1,5 @@
+signal 'delivered' is delivered through a signed instance; a course awaits it
+signal 'delivered' is not a value; await it in a course or deliver it through a signed instance
+signal 'delivered' takes 1 arguments, got 0
+argument 1 of 'delivered' expects 'String', got 'Int'
+signal 'delivered' is delivered with a call, it is not a value

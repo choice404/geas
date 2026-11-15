@@ -1,0 +1,2 @@
+signal 'rated' is declared inside a subcontract and cannot be named in requirements
+signal 'seen' is declared inside a subcontract and cannot be named in requirements

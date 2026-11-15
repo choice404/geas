@@ -1,0 +1,24 @@
+// await, select, sleep, and together belong to a course alone
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Flow {
+    signal approved(by: String)
+    pledge step() -> Unit {
+        let who = await approved
+        let verdict = select {
+            timeout 1s -> 1
+        }
+        sleep 1s
+        together {
+            let a = 1
+        }
+    }
+}

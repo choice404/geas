@@ -1,8 +1,8 @@
 # Maintainer: Austin Choi <austin.c.percussion@gmail.com>
 pkgname=geas
-pkgver=0.7.3
+pkgver=0.8.0
 pkgrel=1
-pkgdesc="Contract oriented interop language: contracts compile to in process C ABI modules and a gRPC bridge"
+pkgdesc="Language for durable obligations: contracts with deadlines, remedies, and signals, enforced by a C runtime any language can load"
 arch=('x86_64')
 url="https://github.com/choice404/geas"
 license=('MIT')
@@ -10,8 +10,9 @@ license=('MIT')
 # runtime dependency, not just a build one. The runtime's SQLite is vendored
 # and compiled in, so the store adds nothing here.
 depends=('gcc')
-# The compiler is written in dusk; dusk-lang-git provides dusk-lang.
-makedepends=('dusk-lang')
+# The compiler is C++23 built by CMake; the g++ it needs comes with gcc above,
+# which has to be 13 or newer for std::expected.
+makedepends=('cmake')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -22,6 +23,8 @@ build() {
 
 check() {
   cd "$pkgname-$pkgver"
+  # The binary must agree with the package about what version it is.
+  test "$(target/bin/geas version)" = "geas $pkgver"
   make test-lang test-std
 }
 

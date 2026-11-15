@@ -1,0 +1,47 @@
+// Duration and Time are builtin scalars: literals, vows, params, arithmetic,
+// comparison, and now() inside a course
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Clock {
+    vow grace: Duration = 30s
+    vow started: Time
+
+    signal tick(at: Time)
+
+    pledge wait(limit: Duration) -> Result<Duration, PayError> {
+        let doubled = limit * 2
+        let total = doubled + grace - 1s
+        if total > 1h || total == 90m {
+            return Ok(total)
+        }
+        return Ok(-limit)
+    }
+
+    clause elapsed(from: Time, to: Time) -> Duration {
+        return to - from
+    }
+
+    clause deadline(from: Time) -> Time {
+        return from + grace - 500ms
+    }
+
+    clause isLate(at: Time) -> Bool {
+        return at >= started + grace
+    }
+
+    course {
+        let begun = now()
+        let spent = now() - begun
+        sleep spent + 1s
+        let at = await tick
+        let late = isLate(at)
+    }
+}

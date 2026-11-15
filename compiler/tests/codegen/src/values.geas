@@ -1,0 +1,174 @@
+// The value forms the skeleton programs leave thin: maps read, written, and
+// walked, tuples, nested records behind lvalue chains, short circuits,
+// string and deep equality, every scalar literal, clauses calling clauses,
+// nested patterns with literals, and a block bodied match in value position
+
+record Inner {
+    tag: String
+    weights: List<Int>
+}
+
+record Outer {
+    name: String
+    inner: Inner
+    seen: Map<String, Int>
+}
+
+Shape is either Circle(radius: Float) or Rect(w: Float, h: Float) or Dot
+
+Mood is either Calm or Loud
+
+contract Values [version: 3] {
+    vow limit: Int = -4
+    vow ratio: Float = -1.5
+    vow on: Bool = true
+    vow mark: Char = 'x'
+    vow small: Byte = 7
+    vow count: UInt = 9
+    vow title: String = "tab\there \"quoted\" \\ caf\u{e9} \u{1F600}"
+    vow bare: Int
+
+    clause area(s: Shape) -> Float {
+        return match s {
+            Circle(r) -> r * r * 3.14
+            Rect(w, h) -> w * h
+            Dot -> 0.0
+        }
+    }
+
+    clause twice(s: Shape) -> Float {
+        let once = area(s)
+        return once + area(s)
+    }
+
+    clause nothing() -> Unit {
+        let ignored = 1
+    }
+
+    pledge maps(key: String) -> Result<Int, Int> {
+        let mut m = Map<String, Int>()
+        m["a"] = 1
+        m[key] = 2
+        let mut total = 0
+        for k in m {
+            match m[k] {
+                Some(v) -> { total = total + v }
+                None -> { total = total - 1 }
+            }
+        }
+        let hit = m["zz"]
+        match hit {
+            Some(v) -> { return Err(v) }
+            None -> {}
+        }
+        return Ok(total + len(m))
+    }
+
+    pledge chains(n: Int) -> Result<Int, String> {
+        let mut o = Outer { name: "o", inner: Inner { tag: "t", weights: [1, 2, 3] }, seen: Map<String, Int>() }
+        o.inner.weights[1] = n
+        o.inner.tag = o.inner.tag + "!"
+        o.seen["k"] = n
+        let mut grid = [[1, 2], [3, 4]]
+        grid[1][0] = n
+        let mut lookup = Map<String, List<Int>>()
+        lookup["row"] = [5, 6]
+        lookup["row"][1] = n
+        let copy = o.inner
+        if copy == o.inner && o.name != "x" {
+            return Ok(o.inner.weights[1] + grid[1][0] + len(o.inner.weights))
+        }
+        return Err(o.inner.tag)
+    }
+
+    pledge tuples(a: Int, b: String) -> Result<Tuple<Int, String>, Int> {
+        let pair = (a, b)
+        let wide: Tuple<UInt, Byte, Float> = (1, 2, 3.5)
+        let same = pair == (a, b)
+        if !same || a < 0 {
+            return Err(1)
+        }
+        return Ok(pair)
+    }
+
+    pledge scalars(u: UInt, c: Char, y: Byte, f: Float) -> Result<Float, Int> {
+        let bigger: UInt = u + 1
+        let next: Byte = y
+        let isMark = c == mark || c == 'q'
+        let quiet = on && !isMark
+        let scaled = f * ratio - 2.0 / f
+        if bigger >= count && quiet {
+            return Ok(scaled)
+        }
+        if -limit > 3 && f <= 0.5 {
+            return Ok(-f)
+        }
+        return Err(limit % 3)
+    }
+
+    pledge shapes(kind: Int) -> Result<Float, Int> {
+        let s: Shape = match kind {
+            0 -> Dot
+            1 -> Circle(2.0)
+            _ -> Rect(1.5, 4.0)
+        }
+        nothing()
+        let both = twice(s)
+        let mood: Mood = match both > 10.0 {
+            true -> Loud
+            false -> Calm
+        }
+        let label = match mood {
+            Loud -> "loud"
+            Calm -> {
+                let base = "ca"
+                base + "lm"
+            }
+        }
+        if label == "calm" {
+            return Ok(both)
+        }
+        return Ok(area(s))
+    }
+
+    pledge nested(w: Result<Option<Shape>, String>) -> Option<Float> {
+        let inner = match w {
+            Ok(Some(Circle(r))) -> Some(r)
+            Ok(Some(Rect(1.0, h))) -> Some(h)
+            Ok(Some(other)) -> None
+            Ok(None) -> Some(0.0)
+            Ok(_) -> None
+            Err("soft") -> Some(1.0)
+            Err(_) -> None
+        }
+        let got = inner?
+        if bare > 0 {
+            return None
+        }
+        return Some(got)
+    }
+
+    pledge lists(xs: List<String>) -> Result<Int, Int> {
+        let empty: List<Int> = []
+        let names = ["a", "b"]
+        let mut n = len(empty) + len(names)
+        for x in xs {
+            if x == names[0] {
+                continue
+            }
+            n = n + 1
+        }
+        let options = [Some(1), None]
+        let first = match options[0] {
+            Some(v) -> v
+            None -> 0
+        }
+        return Ok(n + first)
+    }
+
+    pledge silent(x: Int) -> Unit {
+        let y = x
+    }
+
+    pledge abstract_one(x: Int) -> Result<Int, Int>
+}

@@ -1,0 +1,35 @@
+// A contract with none of the workflow surface. Its shape string, shape
+// hash, and mangled names are the ones every release has given this
+// source, so this golden guards every older contract's identity
+record Card {
+    number: String
+    expiry: String
+}
+
+PayError is either Declined(reason: String) or Timeout
+
+internal contract Audit {
+    pledge note(text: String) -> Unit
+}
+
+contract Ledger [version: 4] {
+    vow dsn: String = "file:ledger.db"
+    vow limit: UInt
+
+    schema Accounts {
+        id: Int
+        balance: Float
+        owner: String
+    }
+
+    subcontract Payment {
+        pledge charge(card: Card, amount: Float) -> Result<Tuple<Int, Bool>, PayError>
+    }
+
+    subcontract {
+        pledge seen(tags: List<Byte>, by: Map<String, Char>) -> Option<Card>
+    }
+
+    pledge close() -> Unit
+    pledge hand(next: pledge(Int) -> Unit) -> Unit
+}

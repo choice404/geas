@@ -1,0 +1,18 @@
+// Every duration unit alone, the compound forms in descending order, the
+// longest match picking ms over m, underscores in a part, and the prefixed
+// and float literals that never become durations
+let a = 7d
+let b = 1h
+let c = 30m
+let d = 30s
+let e = 250ms
+let f = 1h30m
+let g = 2d12h30m15s500ms
+let h = 1m500ms
+let i = 0s
+let j = 1_000ms
+let k = 0x1d
+let l = 0b1
+let m = 1.5
+let n = 106751991167d
+let o = x.retry(5s)

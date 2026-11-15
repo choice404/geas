@@ -1,0 +1,2 @@
+'Refused' is not a variant of 'PayError', the error type of pledge 'pay'
+variant 'Timeout' is listed more than once in retry on

@@ -1,0 +1,475 @@
+File {
+    imports: [],
+    decls: [
+        Record {
+            name: "Card",
+            fields: [
+                Field {
+                    name: "number",
+                    ty: Named("String"),
+                },
+                Field {
+                    name: "expiry",
+                    ty: Named("String"),
+                },
+            ],
+        },
+        Record {
+            name: "Item",
+            fields: [
+                Field {
+                    name: "sku",
+                    ty: Named("String"),
+                },
+                Field {
+                    name: "quantity",
+                    ty: Named("Int"),
+                },
+            ],
+        },
+        Record {
+            name: "Order",
+            fields: [
+                Field {
+                    name: "card",
+                    ty: Named("Card"),
+                },
+                Field {
+                    name: "total",
+                    ty: Named("Float"),
+                },
+                Field {
+                    name: "items",
+                    ty: Named("List", [
+                        Named("Item"),
+                    ]),
+                },
+            ],
+        },
+        Record {
+            name: "AuthId",
+            fields: [
+                Field {
+                    name: "token",
+                    ty: Named("String"),
+                },
+            ],
+        },
+        Record {
+            name: "Receipt",
+            fields: [
+                Field {
+                    name: "id",
+                    ty: Named("String"),
+                },
+            ],
+        },
+        Record {
+            name: "Reservation",
+            fields: [
+                Field {
+                    name: "id",
+                    ty: Named("String"),
+                },
+            ],
+        },
+        Record {
+            name: "Tracking",
+            fields: [
+                Field {
+                    name: "carrier",
+                    ty: Named("String"),
+                },
+                Field {
+                    name: "code",
+                    ty: Named("String"),
+                },
+            ],
+        },
+        Sum {
+            name: "PayError",
+            variants: [
+                Variant {
+                    name: "Declined",
+                    fields: [
+                        Field {
+                            name: "reason",
+                            ty: Named("String"),
+                        },
+                    ],
+                },
+                Variant {
+                    name: "Timeout",
+                    fields: [],
+                },
+                Variant {
+                    name: "Gateway",
+                    fields: [
+                        Field {
+                            name: "code",
+                            ty: Named("Int"),
+                        },
+                    ],
+                },
+            ],
+        },
+        Sum {
+            name: "StockError",
+            variants: [
+                Variant {
+                    name: "OutOfStock",
+                    fields: [
+                        Field {
+                            name: "sku",
+                            ty: Named("String"),
+                        },
+                    ],
+                },
+                Variant {
+                    name: "Unavailable",
+                    fields: [],
+                },
+            ],
+        },
+        Sum {
+            name: "ShipError",
+            variants: [
+                Variant {
+                    name: "NoCarrier",
+                    fields: [],
+                },
+                Variant {
+                    name: "Refused",
+                    fields: [
+                        Field {
+                            name: "reason",
+                            ty: Named("String"),
+                        },
+                    ],
+                },
+            ],
+        },
+        Contract {
+            internal: false,
+            name: "OrderSaga",
+            attrs: [
+                Attr {
+                    key: "version",
+                    value: Int(2),
+                },
+                Attr {
+                    key: "term",
+                    value: Duration(604800000),
+                },
+            ],
+            members: [
+                Vow {
+                    name: "order",
+                    ty: Named("Order"),
+                    init: None,
+                },
+                Vow {
+                    name: "dsn",
+                    ty: Named("String"),
+                    init: None,
+                },
+                Subcontract {
+                    name: "Payment",
+                    pledges: [
+                        Pledge {
+                            name: "authorize",
+                            params: [
+                                Field {
+                                    name: "card",
+                                    ty: Named("Card"),
+                                },
+                                Field {
+                                    name: "amount",
+                                    ty: Named("Float"),
+                                },
+                            ],
+                            ret: Named("Result", [
+                                Named("AuthId"),
+                                Named("PayError"),
+                            ]),
+                            terms: [
+                                Within(Duration(30000)),
+                                Retry {
+                                    count: 3,
+                                    every: Duration(2000),
+                                    backoff: Float("2.0"),
+                                    cap: Duration(30000),
+                                    on: [
+                                        "Timeout",
+                                        "Gateway",
+                                    ],
+                                },
+                            ],
+                            attrs: [],
+                            body: None,
+                        },
+                        Pledge {
+                            name: "capture",
+                            params: [
+                                Field {
+                                    name: "auth",
+                                    ty: Named("AuthId"),
+                                },
+                            ],
+                            ret: Named("Result", [
+                                Named("Receipt"),
+                                Named("PayError"),
+                            ]),
+                            terms: [
+                                After([
+                                    "authorize",
+                                ]),
+                                Within(Duration(60000)),
+                            ],
+                            attrs: [],
+                            body: None,
+                        },
+                    ],
+                },
+                Pledge {
+                    name: "reserve",
+                    params: [
+                        Field {
+                            name: "items",
+                            ty: Named("List", [
+                                Named("Item"),
+                            ]),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Reservation"),
+                        Named("StockError"),
+                    ]),
+                    terms: [
+                        Within(Duration(300000)),
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Pledge {
+                    name: "ship",
+                    params: [
+                        Field {
+                            name: "res",
+                            ty: Named("Reservation"),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Tracking"),
+                        Named("ShipError"),
+                    ]),
+                    terms: [
+                        After([
+                            "Payment",
+                            "reserve",
+                        ]),
+                        Within(Duration(172800000)),
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Signal {
+                    name: "delivered",
+                    params: [
+                        Field {
+                            name: "tracking",
+                            ty: Named("Tracking"),
+                        },
+                    ],
+                    terms: [
+                        After([
+                            "ship",
+                        ]),
+                        Within(Duration(1209600000)),
+                    ],
+                },
+                Remedy {
+                    name: "refund",
+                    target: "capture",
+                    param: Field {
+                        name: "receipt",
+                        ty: Named("Receipt"),
+                    },
+                    ret: Named("Result", [
+                        Named("Unit"),
+                        Named("PayError"),
+                    ]),
+                    terms: [
+                        Retry {
+                            count: 10,
+                            every: Duration(60000),
+                            backoff: Float("2.0"),
+                            cap: Duration(3600000),
+                            on: [],
+                        },
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Remedy {
+                    name: "release",
+                    target: "reserve",
+                    param: Field {
+                        name: "r",
+                        ty: Named("Reservation"),
+                    },
+                    ret: Named("Unit"),
+                    terms: [],
+                    attrs: [],
+                    body: None,
+                },
+                Requirements {
+                    fulfill: And(
+                        And(
+                            And(
+                                Atom("Payment"),
+                                Atom("reserve"),
+                            ),
+                            Atom("ship"),
+                        ),
+                        Atom("delivered"),
+                    ),
+                    partial: Or(
+                        Atom("Payment"),
+                        Atom("reserve"),
+                    ),
+                    break: Or(
+                        Or(
+                            Or(
+                                Not(
+                                    Atom("Payment"),
+                                ),
+                                Not(
+                                    Atom("reserve"),
+                                ),
+                            ),
+                            Not(
+                                Atom("ship"),
+                            ),
+                        ),
+                        Not(
+                            Atom("delivered"),
+                        ),
+                    ),
+                },
+                Course {
+                    body: Block {
+                        stmts: [
+                            Let {
+                                mutable: false,
+                                name: "auth",
+                                ty: None,
+                                value: Question(
+                                    Call {
+                                        callee: Ident("authorize"),
+                                        args: [
+                                            Arg {
+                                                label: None,
+                                                expr: Member(
+                                                    Ident("order"),
+                                                    "card",
+                                                ),
+                                            },
+                                            Arg {
+                                                label: None,
+                                                expr: Member(
+                                                    Ident("order"),
+                                                    "total",
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                ),
+                            },
+                            Together {
+                                body: Block {
+                                    stmts: [
+                                        Let {
+                                            mutable: false,
+                                            name: "receipt",
+                                            ty: None,
+                                            value: Question(
+                                                Call {
+                                                    callee: Ident("capture"),
+                                                    args: [
+                                                        Arg {
+                                                            label: None,
+                                                            expr: Ident("auth"),
+                                                        },
+                                                    ],
+                                                },
+                                            ),
+                                        },
+                                        Let {
+                                            mutable: false,
+                                            name: "res",
+                                            ty: None,
+                                            value: Question(
+                                                Call {
+                                                    callee: Ident("reserve"),
+                                                    args: [
+                                                        Arg {
+                                                            label: None,
+                                                            expr: Member(
+                                                                Ident("order"),
+                                                                "items",
+                                                            ),
+                                                        },
+                                                    ],
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                },
+                            },
+                            Expr(
+                                Question(
+                                    Call {
+                                        callee: Ident("ship"),
+                                        args: [
+                                            Arg {
+                                                label: None,
+                                                expr: Ident("res"),
+                                            },
+                                        ],
+                                    },
+                                ),
+                            ),
+                            Expr(
+                                Await {
+                                    signal: "delivered",
+                                    within: None,
+                                },
+                            ),
+                        ],
+                    },
+                },
+                Amends {
+                    version: 1,
+                    items: [
+                        AmendVow {
+                            name: "dsn",
+                            value: Member(
+                                Ident("prior"),
+                                "store_url",
+                            ),
+                        },
+                        Rename {
+                            from: "dispatch",
+                            to: "ship",
+                        },
+                        Latch {
+                            name: "delivered",
+                            state: Pending,
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

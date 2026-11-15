@@ -1,0 +1,19 @@
+// Signals in a contract and in a subcontract, with and without terms
+contract Delivery {
+    pledge ship() -> Unit
+
+    signal delivered(tracking: Tracking) after ship within 14d
+    signal cancelled()
+    signal scanned(at: Time, by: String)
+        within 2h
+
+    subcontract Approval {
+        signal approved(by: String) within 24h
+        pledge note(by: String) -> Unit after approved
+    }
+
+    requirements {
+        fulfill: ship && delivered && Approval
+        break: cancelled
+    }
+}

@@ -1,0 +1,74 @@
+// The workflow surface from the Geas side of the host line. Desk signs a
+// Courier from inside its own pledge bodies the way any host would, calls
+// its pickup, and hands it the scanned signal through the instance, so the
+// delivery rides geas_signal from compiled code and a refused one faults the
+// body. The rest of Desk is the value surface a host driven workflow leans
+// on: Time and Duration arithmetic and comparison, and the generic
+// constructors, each answered back to the host so the gate can read it.
+
+record Parcel {
+    code: String
+    weight: Int
+}
+
+contract Courier [term: 1d] {
+    pledge pickup(code: String) -> Result<Parcel, Int> {
+        return Ok(Parcel { code: code, weight: 3 })
+    }
+
+    signal scanned(at: Time) after pickup within 2h
+
+    remedy unpick for pickup(parcel: Parcel) -> Unit {
+        return
+    }
+}
+
+contract Desk {
+    // A parcel through a Courier, answered with the state the courier
+    // reads once the scan landed
+    pledge dispatch(code: String, at: Time) -> Result<String, Int> {
+        let courier = Courier.sign()
+        let parcel = courier.pickup(code)?
+        courier.scanned(at)
+        let state = courier.status()
+        courier.break()
+        return Ok(state + ":" + parcel.code)
+    }
+
+    // A scan before the pickup is early, and the refusal faults this body
+    pledge early(at: Time) -> Result<String, Int> {
+        let courier = Courier.sign()
+        courier.scanned(at)
+        return Ok(courier.status())
+    }
+
+    pledge span(from: Time, to: Time) -> Result<Duration, Int> {
+        let gap = to - from
+        if gap < 0ms {
+            return Err(1)
+        }
+        return Ok(gap * 2 + 500ms)
+    }
+
+    pledge until(at: Time, limit: Duration) -> Result<Time, Int> {
+        return Ok(at + limit - 1s)
+    }
+
+    // List, Option, Result, and Tuple built by their generic constructors
+    pledge bundle(code: String) -> Result<Tuple<String, Int>, Int> {
+        let codes = List<String>(code, code + "-b")
+        let some = Option<String>(code)
+        let none = Option<String>()
+        let counted = Result<Int, Int>(Ok(len(codes)))
+        let total = counted?
+        let picked = match some {
+            Some(text) -> text
+            None -> ""
+        }
+        let empty = match none {
+            Some(text) -> text
+            None -> "none"
+        }
+        return Ok(Tuple<String, Int>(picked + "/" + empty, total))
+    }
+}

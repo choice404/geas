@@ -1,0 +1,18 @@
+// rename lands on a member of this version, latch on a pledge or a signal, and
+// retire on a name this version no longer has
+contract Saga [version: 2] {
+    vow dsn: String
+    pledge ship() -> Unit
+    signal delivered()
+    clause helper() -> Int {
+        return 1
+    }
+    amends 1 {
+        rename dispatch -> nothing
+        rename old -> helper
+        latch dsn as pending
+        latch nothing as fulfilled
+        retire ship
+        retire delivered
+    }
+}

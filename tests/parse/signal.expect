@@ -1,0 +1,102 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Delivery",
+            attrs: [],
+            members: [
+                Pledge {
+                    name: "ship",
+                    params: [],
+                    ret: Named("Unit"),
+                    attrs: [],
+                    body: None,
+                },
+                Signal {
+                    name: "delivered",
+                    params: [
+                        Field {
+                            name: "tracking",
+                            ty: Named("Tracking"),
+                        },
+                    ],
+                    terms: [
+                        After([
+                            "ship",
+                        ]),
+                        Within(Duration(1209600000)),
+                    ],
+                },
+                Signal {
+                    name: "cancelled",
+                    params: [],
+                    terms: [],
+                },
+                Signal {
+                    name: "scanned",
+                    params: [
+                        Field {
+                            name: "at",
+                            ty: Named("Time"),
+                        },
+                        Field {
+                            name: "by",
+                            ty: Named("String"),
+                        },
+                    ],
+                    terms: [
+                        Within(Duration(7200000)),
+                    ],
+                },
+                Subcontract {
+                    name: "Approval",
+                    pledges: [
+                        Pledge {
+                            name: "note",
+                            params: [
+                                Field {
+                                    name: "by",
+                                    ty: Named("String"),
+                                },
+                            ],
+                            ret: Named("Unit"),
+                            terms: [
+                                After([
+                                    "approved",
+                                ]),
+                            ],
+                            attrs: [],
+                            body: None,
+                        },
+                    ],
+                    signals: [
+                        Signal {
+                            name: "approved",
+                            params: [
+                                Field {
+                                    name: "by",
+                                    ty: Named("String"),
+                                },
+                            ],
+                            terms: [
+                                Within(Duration(86400000)),
+                            ],
+                        },
+                    ],
+                },
+                Requirements {
+                    fulfill: And(
+                        And(
+                            Atom("ship"),
+                            Atom("delivered"),
+                        ),
+                        Atom("Approval"),
+                    ),
+                    partial: None,
+                    break: Atom("cancelled"),
+                },
+            ],
+        },
+    ],
+}

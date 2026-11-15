@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/faults_body.geas: 23:27: error: codegen: the version attribute must be an integer literal
+  contract Faulty [version: "two"] {
+                            ^~~~~

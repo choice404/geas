@@ -1,0 +1,4 @@
+// The term attribute, a contract lifetime
+contract Saga [version: 2, term: 7d] {
+    pledge ship() -> Unit [abi: "c", symbol: "ship_it"]
+}

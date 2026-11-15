@@ -1,0 +1,1 @@
+expected a select arm, 'await SIGNAL' or 'timeout DURATION', found 'sleep'

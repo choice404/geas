@@ -1,0 +1,5 @@
+contract Bad [version: 2] {
+    amends 1 {
+        latch delivered as done
+    }
+}

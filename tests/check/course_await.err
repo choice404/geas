@@ -1,0 +1,4 @@
+unknown signal 'nothing' in await
+'step' is not a signal; await names a signal of this contract
+the let binding is annotated 'Int' but the value has type 'String'
+the let binding is annotated 'String' but the value has type 'Option<String>'

@@ -1,0 +1,4 @@
+operator '*' does not apply to 'Duration' and 'Float'
+operator '+' does not apply to 'Duration' and 'Int'
+operator '+' does not apply to 'Time' and 'Time'
+operator '<' needs matching numeric operands; got 'Duration' and 'Time'

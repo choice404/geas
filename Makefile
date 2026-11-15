@@ -1,17 +1,18 @@
-# The M6 build. Five artifacts: the geas binary built by the dusk toolchain,
-# the runtime shared library, the compiled hello and hello_v2 modules, and
-# the C host that drives them. make smoke runs the whole pipeline and is the
-# walking skeleton gate every later milestone keeps green. The runtime is
-# threaded, so every gate builds with -pthread and the tsan gate reruns the
-# concurrency surface under ThreadSanitizer; test-iname gates the discovery
-# table and the freeze, and test-determinism proves two builds of one source
-# emit byte identical module C.
+# The geas build. Five artifacts: the geas binary, a C++23 compiler CMake
+# builds from compiler/ into target/bin, the runtime shared library, the
+# compiled hello and hello_v2 modules, and the C host that drives them. make
+# smoke runs the whole pipeline and is the walking skeleton gate every
+# milestone keeps green. The runtime is threaded, so every gate builds with
+# -pthread and the tsan gate reruns the concurrency surface under
+# ThreadSanitizer; test-iname gates the discovery table and the freeze, and
+# test-determinism proves two builds of one source emit byte identical
+# module C.
 #
-# DUSK points at the dusk compiler. The compiler is written against dusk
-# 1.5's standard library, the two parameter map above all; point DUSK at a
-# 1.5.3 or newer binary when the installed one lags.
+# GEAS points at the compiler every gate runs, target/bin/geas unless told
+# otherwise. make compiler SANITIZE=ON builds the same sources under ASan and
+# UBSan into target/bin-asan, and GEAS=target/bin-asan/geas runs any gate
+# with that binary.
 
-DUSK    ?= dusk
 CC      ?= cc
 CFLAGS  ?= -Wall -Wextra -fPIC
 OUT     := target/geas-out
@@ -19,8 +20,13 @@ OUT     := target/geas-out
 # The runtime translation units a standalone gate compiles into its own binary,
 # the shared library split into sources: the runtime, its wire codec, and the
 # store driver. Kept as one list so a gate that links the runtime in gets the
-# wire codec and the store driver with it.
-RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c
+# wire codec and the store driver with it. The workflow units ride the same
+# list: terms.c carries the clock, ordering, deadlines, and retries, remedy.c
+# the remedy pass, signal.c signal delivery, and flowpark.c the workflow blob
+# of the park row, all over the structs runtime_internal.h shares out.
+RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
+    runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
+    runtime/src/flowpark.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -42,7 +48,7 @@ SQLITE_FLAGS := -fPIC -w -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION \
     -DSQLITE_DQS=0 -DSQLITE_DEFAULT_MEMSTATUS=0
 
 RT_SO      := $(OUT)/libgeasrt.so
-GEAS       := target/dusk-out/geas
+GEAS       ?= target/bin/geas
 MODULE     := $(OUT)/libhello.geas.so
 MODULE_V2  := $(OUT)/libhello_v2.geas.so
 MODULE_PAY := $(OUT)/libpayment.geas.so
@@ -54,6 +60,7 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
+.PHONY: test-terms test-remedy test-signal test-workflow-park test-saga test-saga-python tsan-workflow
 .PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
 
 # The full suite, one gate per surface the language carries: the walking
@@ -62,7 +69,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: smoke test-runtime test-wire test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle tsan
+all: smoke test-runtime test-wire test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-signal test-workflow-park test-saga test-saga-python tsan tsan-workflow
 
 runtime: $(RT_SO)
 
@@ -70,14 +77,38 @@ $(SQLITE_OBJ): runtime/third_party/sqlite3.c runtime/third_party/sqlite3.h
 	@mkdir -p $(OUT)
 	$(CC) $(SQLITE_FLAGS) -I runtime/third_party -c runtime/third_party/sqlite3.c -o $(SQLITE_OBJ)
 
-$(RT_SO): runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c runtime/include/geas/geas.h runtime/include/geas/geas_abi.h runtime/include/geas/geas_wire.h runtime/include/geas/geas_store.h runtime/third_party/sqlite3.h $(SQLITE_OBJ)
+$(RT_SO): $(RT_UNITS) runtime/src/runtime_internal.h runtime/include/geas/geas.h runtime/include/geas/geas_abi.h runtime/include/geas/geas_wire.h runtime/include/geas/geas_store.h runtime/third_party/sqlite3.h $(SQLITE_OBJ)
 	@mkdir -p $(OUT)
-	$(CC) $(CFLAGS) -fPIC -shared -pthread -I runtime/include -I runtime/src -I runtime/third_party runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c $(SQLITE_OBJ) -ldl -o $(RT_SO)
+	$(CC) $(CFLAGS) -fPIC -shared -pthread -I runtime/include -I runtime/src -I runtime/third_party $(RT_UNITS) $(SQLITE_OBJ) -ldl -o $(RT_SO)
 
-compiler: $(GEAS)
+# The compiler, C++23 with no exceptions and no RTTI, configured and built by
+# CMake. The plain binary lands in target/bin over the objects in
+# target/build, and SANITIZE=ON builds it under ASan and UBSan into
+# target/bin-asan over target/build-asan instead, so the plain binary is
+# never silently swapped for the instrumented one. CMake decides what needs
+# recompiling; the touch keeps make from asking again when nothing did.
+SANITIZE ?= OFF
+GEAS_PLAIN := target/bin/geas
+GEAS_ASAN  := target/bin-asan/geas
+COMPILER_SRC := compiler/CMakeLists.txt $(wildcard compiler/src/*.cpp compiler/src/*.hpp)
 
-$(GEAS): $(wildcard compiler/*.dusk)
-	$(DUSK) build compiler/geas.dusk
+ifeq ($(SANITIZE),ON)
+compiler: $(GEAS_ASAN)
+else
+compiler: $(GEAS_PLAIN)
+endif
+
+$(GEAS_PLAIN): $(COMPILER_SRC)
+	cmake -S compiler -B target/build -DGEAS_SANITIZE=OFF \
+	    -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$(abspath target/bin)
+	cmake --build target/build --parallel
+	@touch $@
+
+$(GEAS_ASAN): $(COMPILER_SRC)
+	cmake -S compiler -B target/build-asan -DGEAS_SANITIZE=ON \
+	    -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$(abspath target/bin-asan)
+	cmake --build target/build-asan --parallel
+	@touch $@
 
 module: $(MODULE)
 
@@ -286,6 +317,103 @@ test-park: $(MODULE_PAY) $(MODULE_LEDGER) $(SQLITE_OBJ)
 	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic $(RT_INC) \
 	    tests/runtime/test_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_park
 	./$(OUT)/test_park
+
+# The workflow gates, each under ASan, LSan, and UBSan with the runtime
+# compiled in, each over handwritten descriptors on a fake clock, so a
+# deadline is a number the test moves and a retry delay is an entry in a list
+# the test reads. WF_SAN is the one flag set the four share.
+WF_SAN := -fsanitize=address,leak,undefined -fno-sanitize-recover=undefined
+WF_DEPS := tests/runtime/workflow_util.h $(RT_UNITS) runtime/src/runtime_internal.h
+
+# The terms gate: after refused early and admitted once its items landed,
+# within counted from eligibility and lapsing the item, a subcontract's
+# deadline lapsing what inside it has not latched, the retry count, delay
+# sequence, cap, and "on" filter, the contract term, the descriptors a sign
+# refuses, and the V1 registrar reading a descriptor of the old size.
+test-terms: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_terms.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms
+	./$(OUT)/test_terms
+
+# The remedy gate: newest latch first with the pledge's Ok value, Remedying
+# seen from the body and from a second thread, a failing remedy recorded
+# without stopping the rest, the three roads into a break, the fulfilled
+# contract nothing is undone for, the unbound remedy, and a host break racing
+# the pass.
+test-remedy: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_remedy.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_remedy.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_remedy
+	./$(OUT)/test_remedy
+
+# The signal gate: delivery latches, the payload is the instance's own copy
+# and the first one wins, a signal is an atom and an after target, its own
+# after and within hold, and the pledge and signal surfaces refuse each
+# other's names.
+test-signal: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_signal.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_signal.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_signal
+	./$(OUT)/test_signal
+
+# The workflow park gate: eligibility times, lapses, Ok values, signal
+# payloads, and remedy progress across a park into a fresh runtime, a pass
+# parked in the middle finishing after the resume, a row in the format that
+# predates the workflow state still resuming, and an unknown blob version
+# refused.
+test-workflow-park: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_workflow_park.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_workflow_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_workflow_park
+	./$(OUT)/test_workflow_park
+
+# The saga gate, the workflow surface end to end: the compiler builds the
+# order saga and the flowdesk contracts, and the C host loads both, binds
+# the saga's abstract steps, and drives it on a fake clock through the happy
+# path, an early step, a retried authorize, a failed ship and its remedies,
+# a lapsed signal, the contract's term running out, and a park and resume,
+# then has a Geas body hand a signal to a contract it signed and checks the
+# Time, Duration, and generic constructor values.
+MODULE_SAGA := $(OUT)/libsaga.geas.so
+MODULE_DESK := $(OUT)/libflowdesk.geas.so
+
+test-saga: $(GEAS) $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_saga.c
+	@mkdir -p $(OUT)
+	$(GEAS) build skeleton/saga.geas
+	$(GEAS) build skeleton/flowdesk.geas
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_saga
+	./$(OUT)/test_saga
+
+# The saga from Python: geas.py loads the same saga module, binds
+# Python callables over the abstract steps, points the runtime at a Python
+# clock, and walks the happy path and a break path with its remedies.
+test-saga-python: $(GEAS) $(RT_SO)
+	$(GEAS) build skeleton/saga.geas
+	@if command -v python3 >/dev/null 2>&1; then \
+	    python3 interop/python/demo_saga.py; \
+	else \
+	    echo "[test-saga-python] python3 not found, skipping"; \
+	fi
+
+# The same four under ThreadSanitizer: the retry delay waited with the
+# instance lock released, the remedy pass a second thread reads and a host
+# break races, and signals delivered from several threads at once.
+tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS)
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
+	./$(OUT)/test_terms_tsan
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_remedy.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_remedy_tsan
+	./$(OUT)/test_remedy_tsan
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_signal.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_signal_tsan
+	./$(OUT)/test_signal_tsan
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_workflow_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_workflow_park_tsan
+	./$(OUT)/test_workflow_park_tsan
 
 # The threading gate under ASan: the pool, the per-instance serialization,
 # out-of-order waits, and the break race, with every allocation watched.

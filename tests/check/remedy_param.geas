@@ -1,0 +1,21 @@
+// The parameter is the target pledge Ok value, or absent when there is none
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge pay() -> Result<Receipt, PayError>
+    pledge notify() -> Unit
+    pledge lookup() -> Option<Item>
+    pledge log() -> Result<Unit, PayError>
+    remedy refund for pay(item: Item) -> Unit
+    remedy retract for notify(n: Int) -> Unit
+    remedy forget for lookup(item: Item) -> Unit
+    remedy erase for log(u: Unit) -> Unit
+}

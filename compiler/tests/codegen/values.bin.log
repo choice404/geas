@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/values.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The value forms the skeleton programs leave thin: maps read, written, and
+  ^

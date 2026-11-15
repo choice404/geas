@@ -1,0 +1,16 @@
+// A pledge has at most one remedy
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge pay() -> Result<Receipt, PayError>
+    remedy refund for pay(receipt: Receipt) -> Unit
+    remedy reverse for pay(receipt: Receipt) -> Unit
+}

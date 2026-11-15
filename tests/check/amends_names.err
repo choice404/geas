@@ -1,0 +1,6 @@
+rename target 'nothing' is not a pledge, a subcontract, a vow, or a signal of contract 'Saga'
+rename target 'helper' is not a pledge, a subcontract, a vow, or a signal of contract 'Saga'
+latch names 'dsn', which is not a pledge or a signal of contract 'Saga'
+latch names 'nothing', which is not a pledge or a signal of contract 'Saga'
+retire names 'ship', which is still a member of contract 'Saga'
+retire names 'delivered', which is still a member of contract 'Saga'

@@ -1,0 +1,10 @@
+// shape Saga v2: contract Saga;vow grace:D;pledge capture:(W)->R(NReceipt,NPayError);pledge audit:()->V;pledge ship:()->V;signal delivered:(S,I)->V;signal cancelled:()->V;remedy refund:capture:(NReceipt)->R(V,NPayError);remedy recall:ship:()->V;terms pledge capture:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout;terms pledge ship:after=Payment;terms subcontract Payment:within=600000;terms subcontract #1:after=capture;terms signal delivered:after=ship,within=1209600000;terms remedy refund:retry=10/every=60000;course;term 604800000;
+#define GEAS_HASH_Saga 0xd6b8eb98c41dbf8fULL
+#define GEAS_MANGLED_Saga_capture "__geas_ash_Saga_capture_46449ef3f6ca6eb1_v2"
+#define GEAS_MANGLED_Saga_audit "__geas_ash_Saga_audit_0e2ba22315b89a85_v2"
+#define GEAS_MANGLED_Saga_ship "__geas_ash_Saga_ship_0e2ba22315b89a85_v2"
+#define GEAS_MANGLED_Saga_refund "__geas_ash_Saga_refund_73b89f044b14c286_v2"
+#define GEAS_MANGLED_Saga_recall "__geas_ash_Saga_recall_0e2ba22315b89a85_v2"
+// shape Plain v1: contract Plain;pledge ship:()->V;
+#define GEAS_HASH_Plain 0x8afcc85ac86bf6c6ULL
+#define GEAS_MANGLED_Plain_ship "__geas_ash_Plain_ship_0e2ba22315b89a85_v1"

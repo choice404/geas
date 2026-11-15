@@ -1,0 +1,19 @@
+// The fulfill and break lines never hold together, signals included
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge ship() -> Unit
+    signal delivered()
+    requirements {
+        fulfill: ship && delivered
+        break: delivered
+    }
+}

@@ -1,0 +1,7 @@
+contract Bad {
+    course {
+        let v = select {
+            timeout soon -> 3
+        }
+    }
+}

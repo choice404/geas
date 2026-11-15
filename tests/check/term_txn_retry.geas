@@ -1,0 +1,18 @@
+// A retry inside a transactional subcontract: the episode is all or nothing
+// under one open transaction, so a failed attempt's writes have no undo
+PayError is either Declined or Timeout
+
+contract Ledger {
+    vow dsn: String = "file:ledger.db"
+
+    schema Accounts {
+        id: Int
+        balance: Int
+    }
+
+    subcontract Posting transactional {
+        pledge debit(amount: Int) -> Result<Int, PayError>
+            retry 3 every 1s on Timeout
+        pledge credit(amount: Int) -> Result<Int, PayError>
+    }
+}

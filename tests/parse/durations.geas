@@ -1,0 +1,19 @@
+// Duration literals in each spot the grammar takes a literal: an expression,
+// an attribute value, and a pattern, the negative form included
+contract Timer [version: 3, term: 7d] {
+    clause grace() -> Duration {
+        let base = 1h30m
+        return base + 250ms
+    }
+
+    clause label(d: Duration) -> String {
+        return match d {
+            0s -> "now"
+            30s -> "soon"
+            -1ms -> "late"
+            -2 -> "negative"
+            -0.5 -> "half"
+            _ -> "later"
+        }
+    }
+}

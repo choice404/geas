@@ -1,0 +1,3 @@
+pledge 'authorize' cannot be ordered after its own subcontract
+signal 'settled' cannot be ordered after its own subcontract
+subcontract 'Shipping' cannot be ordered after its own member 'pack'

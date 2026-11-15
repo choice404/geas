@@ -55,6 +55,50 @@ GeasStatus geas_module_load(GeasRuntime* rt, const char* so_path);
  * mangled name. GEAS_ERR_STATE once the runtime is frozen. */
 GeasStatus geas_register_contract(GeasRuntime* rt, const GeasContractDesc* desc);
 
+/* The sized registrar. desc_size is the byte size of the GeasContractDesc the
+ * caller was compiled with, and the runtime reads no further: a shorter struct
+ * is a descriptor from before a tail addition and every field past its end
+ * reads as zero, a longer one is from a newer header and the fields this
+ * runtime does not know are ignored. A size below GEAS_CONTRACT_DESC_V1_SIZE is
+ * GEAS_ERR_TYPE. The runtime keeps its own copy of the top level struct and
+ * borrows every table it points at, which must live as long as the module.
+ *
+ * The plain geas_register_contract symbol stays what every module built
+ * before the workflow surface links against, and it reads the V1 prefix and
+ * nothing else, so such a module loads into this runtime unchanged with no
+ * byte past its descriptor touched. Code compiled against this header passes
+ * its own size without spelling it: the macro below routes the same call
+ * through the sized form, which is why a regenerated module and a handwritten
+ * descriptor both get the whole struct read. Write (geas_register_contract)
+ * with the parentheses to reach the V1 symbol on purpose. */
+GeasStatus geas_register_contract_sized(GeasRuntime* rt,
+                                      const GeasContractDesc* desc,
+                                      size_t desc_size);
+
+#define geas_register_contract(rt, desc) \
+    geas_register_contract_sized((rt), (desc), sizeof(GeasContractDesc))
+
+/* ---- the clock ---- */
+
+/* The runtime's time source, wall clock milliseconds, and the sleep a retry
+ * delay waits through. The defaults read CLOCK_REALTIME and nanosleep; a host
+ * swaps either to drive deadlines and retry delays from its own scheduler, and
+ * a test swaps both to make time a variable. A NULL fn restores that default.
+ * user is passed through to both untouched. The functions are called with an
+ * instance lock possibly held and from any thread, so they must be thread
+ * safe and must not call back into the runtime. Set them before signing:
+ * instances already signed keep the timestamps they took. */
+typedef int64_t (*GeasClockFn)(void* user);
+typedef void    (*GeasSleepFn)(void* user, uint64_t ms);
+
+GeasStatus geas_runtime_set_clock(GeasRuntime* rt, GeasClockFn now_fn,
+                                GeasSleepFn sleep_fn, void* user);
+
+/* Runs the lazy deadline check over every live instance of the runtime, the
+ * call a host timer makes so a deadline lapses when it passes and not when the
+ * next call happens to arrive. See geas_instance_tick. */
+GeasStatus geas_runtime_tick(GeasRuntime* rt);
+
 /* ---- the iname table ---- */
 
 /* The iname table is the runtime's registry of contract types, one entry per
@@ -129,6 +173,16 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
 
 GeasContractState geas_contract_state(const GeasContract* c);
 
+/* Brings one instance up to the clock: every deadline that has passed lapses
+ * its item, earliest first, the policy is evaluated after each, a contract
+ * term that ran out breaks the contract, and remedies a break made due run to
+ * completion on this thread. Every entry point that reads or moves an instance
+ * runs the same check first, fulfill, signal, state, the partial surface,
+ * wait, and park, so a host with no timer still sees every lapse, only late.
+ * A call from inside a pledge or remedy body on its own instance is a no-op.
+ * GEAS_ERR_TYPE for a NULL instance, GEAS_OK otherwise. */
+GeasStatus geas_instance_tick(GeasContract* c);
+
 /* The signature the instance carries: the shape hash it was signed under and
  * the Unix time the signing happened. */
 uint64_t geas_contract_hash(const GeasContract* c);
@@ -143,7 +197,21 @@ GeasRuntime* geas_instance_runtime(const GeasContract* c);
 
 /* Frees every allocation the instance owns and latches the state at Broken.
  * Every later fulfillment on it reports GEAS_ERR_STATE. The instance itself
- * stays valid for state queries until shutdown. A break races in-flight
+ * stays valid for state queries until shutdown.
+ *
+ * A break of a contract still Signed or Partial is a break like any other, so
+ * the remedies run first: the state reads Remedying while they do, and the
+ * heap is reclaimed only after the last one returned. A contract already
+ * Fulfilled met its terms and nothing is undone, the break reclaims and that
+ * is all. A contract the policy already broke ran its remedies then, so the
+ * break only reclaims. A break that arrives while another thread is running
+ * the remedies waits for them. A break called from inside a body running on
+ * this instance is noted and returns GEAS_OK at once: from a pledge body the
+ * remedies and the reclaim happen when that body's fulfillment ends, its own
+ * pledge latched first so it is undone with the rest, and from a remedy body
+ * the reclaim happens when the pass ends.
+ *
+ * A break races in-flight
  * fulfillments safely: a thunk mid-run finishes first, a task not yet run
  * never runs, and every future not yet waited is forfeited so its wait
  * reports GEAS_ERR_STATE instead of touching freed memory. */
@@ -170,6 +238,16 @@ typedef enum GeasItemState {
 
 /* How many items currently read as k. */
 size_t geas_partial_count(GeasContract* c, GeasItemState k);
+
+/* Whether the named item is broken because its deadline lapsed, 1 or 0. name
+ * is a pledge or signal, subcontract members included, or a named
+ * subcontract, which reads 1 when any pledge inside it lapsed. A lapse is a
+ * latch with no Err payload: geas_partial_error reports the pledge with a
+ * zeroed Unit value, and this call is how a host tells the two apart. */
+int geas_partial_lapsed(GeasContract* c, const char* name);
+
+/* Whether the contract broke because its own term ran out, 1 or 0. */
+int geas_contract_term_lapsed(GeasContract* c);
 
 /* The name of the i-th item reading as k, in descriptor order: named
  * subcontracts in declaration order first, then loose pledges in declaration
@@ -198,12 +276,49 @@ GeasStatus geas_partial_error(GeasContract* c, size_t i,
  * as a zeroed Unit value. */
 GeasStatus geas_partial_value(GeasContract* c, GeasContract* owner, GeasValue* out);
 
+/* ---- remedies on the partial surface ---- */
+
+/* Where one remedy stands. IDLE is a remedy that has not run, either because
+ * the contract has not broken or because its pledge never latched fulfilled.
+ * RUNNING is visible from inside the remedy's own body and from another
+ * thread while it waits out a retry delay. DONE undid its pledge. FAILED ran
+ * out of retries, ran past its within, or was in flight when the instance
+ * was parked. */
+typedef enum GeasRemedyState {
+    GEAS_REMEDY_IDLE    = 0,
+    GEAS_REMEDY_RUNNING = 1,
+    GEAS_REMEDY_DONE    = 2,
+    GEAS_REMEDY_FAILED  = 3
+} GeasRemedyState;
+
+/* The state of the remedy named remedy_name, IDLE for an unknown name. */
+GeasRemedyState geas_remedy_state(GeasContract* c, const char* remedy_name);
+
+/* The failed remedies, in declaration order. count is how many failed; name,
+ * status, and error read the i-th. status is the status the last attempt's
+ * thunk returned: a lifecycle failure reads as that status, a remedy that
+ * failed by value reads GEAS_OK with the Err payload behind error, a remedy
+ * that was in flight at a park reads GEAS_ERR_STATE, and one whose Ok value
+ * was not there to hand it reads GEAS_ERR_TYPE. lapsed is 1 when the remedy
+ * stopped because its within ran out. The payload is instance owned and
+ * follows the rule of geas_partial_error: an explicit break zeroes it. An
+ * index out of range is NULL, GEAS_ERR_NAME, 0, and GEAS_ERR_NAME in turn. */
+size_t      geas_partial_remedy_count(GeasContract* c);
+const char* geas_partial_remedy_name(GeasContract* c, size_t i);
+GeasStatus  geas_partial_remedy_status(GeasContract* c, size_t i);
+int         geas_partial_remedy_lapsed(GeasContract* c, size_t i);
+GeasStatus  geas_partial_remedy_error(GeasContract* c, size_t i,
+                                    const GeasValue** err);
+
 /* ---- the parked instance ---- */
 
 /* Writes the instance's durable state under key into the store behind dsn:
  * the contract's name, version, and shape hash, the lifecycle state and the
  * signing time, every vow value, every pledge latch with the Err payload it
- * carries, and the fate of every transactional episode. The row is one
+ * carries, the fate of every transactional episode, and the workflow state:
+ * the signing time in milliseconds, when each item became eligible, which
+ * latches are lapses, the Ok value of every fulfilled pledge, every signal
+ * payload, the latch order, and how far the remedies got. The row is one
  * INSERT OR REPLACE into the runtime's own geas_park table, created on first
  * use, so a key parked twice holds the later instance. The instance itself
  * is untouched: parking is a write, not an ending, and the caller still
@@ -215,8 +330,14 @@ GeasStatus geas_partial_value(GeasContract* c, GeasContract* owner, GeasValue* o
  * GEAS_ERR_STATE, and so is one the caller already ended: an explicit break
  * reclaimed the heap the vows and payloads live on, so there is nothing
  * left to write down, while an automatically broken instance keeps that
- * heap and parks with its errors readable. A NULL argument is GEAS_ERR_TYPE;
- * a backend that will not take the row is GEAS_ERR_STORE. */
+ * heap and parks with its errors readable. A fulfillment waiting out a retry
+ * delay is a walk in the air too and refuses the same way. A Remedying
+ * instance parks: the remedies that finished are recorded with their
+ * outcomes, the ones not yet started resume where the pass left off, and the
+ * one in flight, if the park came from inside its body or during its retry
+ * delay, is recorded as failed with GEAS_ERR_STATE so no remedy ever runs
+ * twice. A NULL argument is GEAS_ERR_TYPE; a backend that will not take the
+ * row is GEAS_ERR_STORE. */
 GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key);
 
 /* Reads the row key names out of the store behind dsn and stands the
@@ -228,6 +349,13 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
  * instance read. The new signature is as live as any: pledges still pending
  * fulfill on latches set before the park, and a broken or fulfilled record
  * resumes readable with further fulfillment refused the way it always is.
+ * Deadlines keep counting across the park, the clock is wall time, so an item
+ * whose within ran out while the row sat in the store lapses at the first
+ * tick after the resume. A Remedying record resumes Remedying and the first
+ * tick runs the remedies still owed. A row written before the workflow state
+ * existed resumes as it always did: its signing time stands for the
+ * millisecond one, items with nothing to wait on are eligible from sign, the
+ * rest from the resume, and no latch reads as a lapse.
  *
  * The recorded version and shape hash must match the registered module's,
  * and a nonzero expected_hash must match as well, else GEAS_ERR_VERSION, the
@@ -249,7 +377,8 @@ GeasStatus geas_instance_resume_v(GeasRuntime* rt, const GeasValue* dsn,
                                 GeasContract** out);
 
 /* The canonical spelling of one lifecycle state: Unsigned, Signed,
- * Fulfilled, Partial, or Broken, static storage the caller never frees.
+ * Fulfilled, Partial, Broken, or Remedying, static storage the caller never
+ * frees.
  * geas_state_value wraps the current state of an instance as a String value
  * borrowing those static bytes, the language's instance.status() seen from
  * C. */
@@ -267,7 +396,12 @@ GeasValue    geas_state_value(const GeasContract* c);
  * through its own globals for now. Rebinding replaces. Bindings resolve at
  * sign: an instance signed before the bind keeps dispatching what it was
  * signed with, and a binding beats the compiled body for instances signed
- * after it. GEAS_ERR_STATE once the runtime is frozen. */
+ * after it. GEAS_ERR_STATE once the runtime is frozen.
+ *
+ * A remedy binds through the same call under "Contract.remedy" or its
+ * mangled symbol, and an abstract remedy nothing bound refuses the sign with
+ * GEAS_ERR_UNBOUND exactly as an abstract pledge does. A signal has no body,
+ * so binding one is GEAS_ERR_TYPE. */
 GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
                           GeasPledgeFn fn);
 
@@ -284,7 +418,17 @@ GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
  * pass trailing parameters by reference; nargs plus nrefs must equal the
  * pledge's declared parameter count. Each ref is copied in here and written
  * back to host memory by the wait that delivers the outcome, on the waiting
- * thread, never in between. Pass NULL and 0 for a call with no refs. */
+ * thread, never in between. Pass NULL and 0 for a call with no refs.
+ *
+ * The terms are enforced here. A pledge whose after has not landed is not
+ * eligible and its fulfillment is GEAS_ERR_STATE with the body never run. A
+ * pledge whose within ran out is latched broken by the lapse, and a
+ * fulfillment that arrives after it is GEAS_ERR_STATE with the body never
+ * run. A pledge with a retry term runs its body again inside this one
+ * fulfillment when an attempt fails, waiting the term's delay between
+ * attempts on the worker with the instance lock released, and only the last
+ * attempt's outcome latches and is delivered. Fulfilling a signal is
+ * GEAS_ERR_TYPE; a signal is delivered, see geas_signal. */
 GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
                               const GeasValue* args, size_t nargs,
                               const GeasRef* refs, size_t nrefs);
@@ -313,6 +457,31 @@ GeasStatus geas_pledge_fulfill_sync(GeasContract* c, const char* pledge_name,
                                   const GeasValue* args, size_t nargs,
                                   const GeasRef* refs, size_t nrefs,
                                   GeasValue* out);
+
+/* ---- signals ---- */
+
+/* Delivers a signal into a live instance. name is the signal's declared
+ * name; args are its payload, nargs matching the declared parameter count.
+ * The signal latches fulfilled on this thread, under the instance lock, and
+ * the policy is evaluated before the call returns; no future is involved.
+ * The payload is deep copied onto the instance: Unit for no parameters, the
+ * value itself for one, a Tuple for several.
+ *
+ * The first delivery wins. A second delivery of a signal already latched
+ * returns GEAS_OK and changes nothing, the latch and the payload are the
+ * first one's. A signal whose after has not landed, a signal that lapsed,
+ * and any delivery to a contract that is not Signed, Partial, or Fulfilled
+ * are GEAS_ERR_STATE. A name that is a pledge is GEAS_ERR_TYPE, an unknown
+ * name GEAS_ERR_NAME, a wrong argument count GEAS_ERR_TYPE. */
+GeasStatus geas_signal(GeasContract* c, const char* name,
+                     const GeasValue* args, size_t nargs);
+
+/* The payload a delivered signal carried, instance owned, dead at an explicit
+ * break. GEAS_ERR_STATE while the signal is undelivered or after the heap
+ * was reclaimed, GEAS_ERR_TYPE when name is a pledge, GEAS_ERR_NAME when it
+ * is neither. */
+GeasStatus geas_signal_payload(GeasContract* c, const char* name,
+                             const GeasValue** out);
 
 /* ---- vows ---- */
 

@@ -1,0 +1,65 @@
+// The Store forms the ledger leaves out: delete, the equality form of
+// query, a || predicate with no order and with a bound, double negation,
+// De Morgan over &&, a || under sum, and min and max over a pure &&
+
+import std.store
+
+contract Stock {
+    vow dsn: String = "file:target/stock.db"
+
+    schema Parts {
+        id: Int
+        name: String
+        qty: Int
+        price: Float
+        live: Bool
+    }
+
+    schema Bins {
+        code: String
+        part: Int
+    }
+
+    pledge drop(id: Int) -> Result<Unit, StoreError> {
+        return Store.delete(Parts, id)
+    }
+
+    pledge named(n: String) -> Result<List<Parts>, StoreError> {
+        return Store.query(Parts, name, n)
+    }
+
+    pledge outside(a: Int, b: Int) -> Result<List<Parts>, StoreError> {
+        return Store.query(Parts, qty < a || qty > b)
+    }
+
+    pledge top(a: Int, b: Int, k: Int) -> Result<List<Parts>, StoreError> {
+        return Store.query(Parts, (qty < a || qty > b) && live == true, desc(price), limit(k))
+    }
+
+    pledge not_not(a: Int) -> Result<List<Parts>, StoreError> {
+        return Store.query(Parts, !!(qty >= a) && !(price > 2.5) && !(name != "x"))
+    }
+
+    pledge de_morgan(a: Int, b: Int) -> Result<Int, StoreError> {
+        return Store.count(Parts, !(qty < a && (qty > b || live == false)))
+    }
+
+    pledge total(a: Int) -> Result<Float, StoreError> {
+        return Store.sum(Parts, price, qty == a || !(qty <= 100))
+    }
+
+    pledge edges(a: Int) -> Result<Option<Int>, StoreError> {
+        let low = Store.min(Parts, qty, qty >= a && live == true)?
+        return Store.max(Parts, qty, qty >= a || live == false)
+    }
+
+    pledge mean(a: Int) -> Result<Option<Float>, StoreError> {
+        return Store.avg(Parts, qty, !(qty < a))
+    }
+
+    pledge bin(code: String, part: Int) -> Result<Unit, StoreError> {
+        let made = Store.insert(Bins, Bins { code: code, part: part })?
+        let found = Store.find(Bins, code)?
+        return Store.update(Bins, code, Bins { code: code, part: part + 1 })
+    }
+}

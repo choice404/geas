@@ -1,0 +1,15 @@
+// retry on names variants of the pledge error sum, each once
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge pay() -> Result<Receipt, PayError>
+        retry 3 on Timeout, Refused, Timeout
+}

@@ -1,0 +1,15 @@
+// A signal inside a transactional subcontract: it arrives from outside and
+// never inside an open transaction
+contract Ledger {
+    vow dsn: String = "file:ledger.db"
+
+    schema Accounts {
+        id: Int
+        balance: Int
+    }
+
+    subcontract Posting transactional {
+        pledge debit(amount: Int) -> Result<Int, Int>
+        signal cleared()
+    }
+}

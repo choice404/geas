@@ -1,11 +1,13 @@
-# An Geas Tutorial
+# A Geas Tutorial
 
-Geas is a language for the space between languages. You write a contract
-once, and any language that can call a C library can sign it, fulfill its
-pledges, and read the results, with the runtime holding every allocation that
-crosses the line. This tutorial walks the whole language surface and then the
-part that is the point of it: driving one contract from C and from Python with
-no generated bindings on either side.
+Geas is a language for durable obligations. You write a contract once, its
+steps, its deadlines, its remedies, and the policy that decides when it is
+kept, and any language that can call a C library can sign it, fulfill its
+pledges, deliver events into it, and read where it stands, with the runtime
+holding every term and every allocation that crosses the line. This tutorial
+walks the whole language surface, drives one contract from C and from Python
+with no generated bindings on either side, and then walks an order saga, host
+driven, through its deadlines and its remedies.
 
 The bridge, contracts served over gRPC to other processes, is a real part of
 Geas and is out of scope here on purpose. Everything below is the in
@@ -17,24 +19,24 @@ every command is a real `make` target. Nothing here is pseudocode.
 
 ## Before you start
 
-You need the dusk toolchain to build the compiler, and `cc` and `clang` to
-compile the emitted C and the runtime. Build everything and run the walking
-skeleton:
+You need a C++23 compiler, gcc or clang, and CMake to build the compiler, and
+`cc` to compile the emitted C and the runtime. Build everything and run the
+walking skeleton:
 
 ```sh
 make smoke
 ```
 
-That compiles the runtime into `libgeasrt.so`, builds `geas` through dusk,
-compiles a contract module, and runs a C host that signs it and fulfills a
-pledge end to end. If the installed dusk lags, point `DUSK` at a newer build:
-
-```sh
-make smoke DUSK=~/projects/cool-lang/target/release/dusk
-```
+That compiles the runtime into `libgeasrt.so`, builds `geas` with CMake from
+`compiler/` into `target/bin/geas`, compiles a contract module, and runs a C
+host that signs it and fulfills a pledge end to end. `make compiler` builds the
+compiler on its own, and `make compiler SANITIZE=ON` builds it under the
+address and undefined behavior sanitizers into `target/bin-asan/geas`.
 
 The compiler is `geas`, source files end in `.geas`, and a compiled module ends
-in `.geas.so`. Everything lands under `target/`.
+in `.geas.so`. Everything lands under `target/`. `geas check file.geas` runs the
+whole front end without building anything, which is the fastest way to try an
+example out.
 
 ## 1. Your first contract
 
@@ -78,14 +80,19 @@ either Empty` declares a sum type with a single variant, the error slot of the
 
 ## 2. The lifecycle
 
-A contract moves through five states, and the whole runtime is built around this
+A contract moves through six states, and the whole runtime is built around this
 progression:
 
 ```text
 Unsigned -> Signed -> Fulfilled
-                   -> PartiallyFulfilled
-                   -> Broken
+                   -> Partial
+                   -> Remedying -> Broken
+                   -> Broken                (no remedies due)
 ```
+
+`Remedying` belongs to the saga half of the language and gets its own section
+at the end; a contract with no remedies goes straight from its break to
+`Broken`.
 
 Signing validates the contract's shape, locks its vows, and activates it.
 Fulfilling a pledge runs it and records the outcome. A pledge latches on its
@@ -367,8 +374,7 @@ That is the language. Now the reason it exists.
 
 ## 10. The boundary
 
-Here is what makes Geas an interop language and not just another small
-language.
+Here is how any language gets to be a party to a contract.
 
 A compiled `.geas.so` module carries **descriptors**, tables that spell every
 contract, every pledge and its signature, and every vow and its default. When
@@ -493,7 +499,7 @@ make smoke-asan
 hand, but `geas` will generate the header for you:
 
 ```sh
-target/dusk-out/geas emit-header skeleton/hello.geas
+target/bin/geas emit-header skeleton/hello.geas
 ```
 
 That writes the shape hash and every mangled pledge name as C defines, read from
@@ -574,15 +580,206 @@ make test-python
 Read the two demos side by side and the point lands. The C host and the Python
 host drive the same contracts, sign the same vows, bind the same abstract
 pledges, and read the same partial surface. Neither generated a line of binding
-code. That is the whole thesis of the language: the contract is the shared
-artifact, and every language meets at it.
+code. The contract is the shared artifact, and every language meets at it.
+
+## 13. A saga, host driven
+
+So far every contract has been quick: sign, fulfill, read, break. Now for the
+kind of contract Geas is really for, one that takes days, waits on the outside
+world, and has to clean up after itself when it fails. `skeleton/saga.geas` is
+an online order: authorize the card, capture the charge, reserve the stock,
+ship the box, and wait for the delivery scan.
+
+Read the whole file once, it is short. The part worth slowing down on is the
+contract header and the steps:
+
+```text
+contract OrderSaga [version: 1, term: 7d] {
+    vow amount: Int = 100
+    vow grace: Duration = 30m
+
+    subcontract Payment {
+        pledge authorize(card: Card) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    pledge ship(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+
+    signal delivered(tracking: Tracking) after ship within 3d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 2 every 1m
+}
+```
+
+Those trailing lines are **terms**. `within 30s` is a deadline, counted from
+the moment the step became eligible. `after authorize` is ordering, `capture`
+cannot run until `authorize` latched fulfilled. `retry 3 every 2s backoff 2.0
+cap 30s on Timeout, Gateway` is the retry policy: up to three more attempts,
+waiting 2s, then 4s, then 8s, never more than 30s, and only for a `Timeout` or a
+`Gateway` error, because a declined card is an answer and not an accident.
+`[term: 7d]` is the contract's whole lifetime. `30m` and `7d` are duration
+literals, type `Duration`, which cross the boundary as plain milliseconds.
+
+`delivered` is a **signal**, an outside event with no body. The carrier's
+webhook delivers it, and it has three days from the moment `ship` landed.
+
+`refund` is a **remedy**, the step that undoes `capture`. If the saga breaks,
+by an `Err` its policy cannot live with, by a deadline passing, or by the week
+running out, every step that landed gets its remedy run, newest first, each
+handed the `Ok` value its step produced. `reserve` and its remedy `release` are
+written in Geas right in the file, so you can see a remedy body check the value
+it was handed before it lets the stock go.
+
+This contract has no `course`, so it is **host driven**: the host calls the
+steps in whatever order it likes, and the runtime enforces the terms. Calling
+`ship` before `Payment` and `reserve` landed is a state error and the body never
+runs; that is the whole point, the order lives in the contract and not in the
+host's discipline.
+
+### From C
+
+`tests/runtime/test_saga.c` drives every road the saga can take. The host binds
+the four abstract steps, `authorize`, `capture`, `ship`, and `refund`, the same
+way `Greeter.shout` was bound, and points the runtime at a fake clock so a
+three day deadline is a number the test moves:
+
+```c
+static int64_t fake_now(void* user) {
+    (void)user;
+    return (int64_t)atomic_load(&g_now_ms);
+}
+
+GeasRuntimeConfig cfg = { .max_threads = 2 };
+geas_runtime_init(&cfg, &rt);
+geas_runtime_set_clock(rt, fake_now, fake_sleep, NULL);
+geas_module_load(rt, "target/geas-out/libsaga.geas.so");
+geas_pledge_bind(rt, "OrderSaga.authorize", fn_authorize);
+geas_pledge_bind(rt, "OrderSaga.capture", fn_capture);
+geas_pledge_bind(rt, "OrderSaga.ship", fn_ship);
+geas_pledge_bind(rt, "OrderSaga.refund", fn_refund);
+geas_runtime_freeze(rt);
+```
+
+A remedy binds with the same call a pledge does. The fake sleep moves the clock
+by whatever it is asked to wait and logs it, so a retry costs no real time and
+the test can read the delays back: two timeouts from `authorize` show up as
+`2000` then `4000`.
+
+A signal is delivered with `geas_signal`, no body runs, the latch lands, and
+the policy moves the contract:
+
+```c
+GeasValue fields[2] = { str_val("ACME"), str_val("T-1") };
+GeasValue tracking = record_of(fields, 2);
+geas_signal(c, "delivered", &tracking, 1);
+// geas_contract_state(c) == GEAS_FULFILLED
+```
+
+Now the break. The host's carrier refuses, `ship` answers `Err(NoCarrier)`,
+the break line `!ship` holds, and the remedies run before the fulfillment
+returns: `release` first, since `reserve` landed last, then `refund`, handed
+the receipt `capture` produced. Inside the refund body the saga reads
+`GEAS_REMEDYING`, and once the pass ends it reads `GEAS_BROKEN`:
+
+```c
+geas_contract_state(c) == GEAS_BROKEN;
+geas_remedy_state(c, "release") == GEAS_REMEDY_DONE;
+geas_remedy_state(c, "refund") == GEAS_REMEDY_DONE;
+geas_partial_remedy_count(c) == 0;   // no remedy failed
+```
+
+A deadline needs no call at all to pass, but the runtime only notices on the
+next call that touches the instance, or on a tick. Move the fake clock three
+days past `ship` and tick, and `delivered` lapses, which breaks the saga and
+runs the remedies the same way:
+
+```c
+clock_advance(3 * DAY_MS);
+geas_instance_tick(c);
+geas_partial_lapsed(c, "delivered") == 1;   // a lapse, not an Err
+```
+
+A real host calls `geas_runtime_tick(rt)` from whatever timer it already has
+when it wants a lapse the moment it falls due. And since the saga's whole point
+is surviving days, the gate also parks it mid flight with
+`geas_instance_park(c, dsn, "saga-1")`, shuts the runtime down, stands a fresh
+one up an hour later, resumes, and finishes the saga there; the eligibility
+stamps, the `Ok` values the remedies will need, and every latch cross with it.
+
+```sh
+make test-saga
+```
+
+### From Python
+
+`interop/python/demo_saga.py` walks the same saga with the same binding as
+before. The clock is two Python callables, and the steps are Python methods:
+
+```python
+rt = Runtime(OUT / "libgeasrt.so")
+rt.set_clock(clock.now, clock.sleep)
+rt.load(OUT / "libsaga.geas.so")
+rt.bind("OrderSaga.authorize", host.authorize)
+rt.bind("OrderSaga.capture", host.capture)
+rt.bind("OrderSaga.ship", host.ship)
+rt.bind("OrderSaga.refund", host.refund)
+rt.freeze()
+
+saga = rt.sign("OrderSaga")
+```
+
+The happy path answers one `Timeout` from `authorize`, which the retry term
+absorbs, `clock.sleeps == [2000]`, then reserves through the compiled Geas
+body, ships, and delivers:
+
+```python
+shipped = saga.fulfill_sync("ship", Record(*res))
+saga.signal("delivered", Record(*shipped.value))
+# saga.state() == GEAS_FULFILLED
+```
+
+An early delivery raises a `GeasError` with `GEAS_ERR_STATE`, because
+`delivered` waits on `ship`. The break path has the carrier refuse and reads
+the remedies back from Python:
+
+```python
+shipped = saga.fulfill_sync("ship", Record(*res))
+# shipped is an Err carrying NoCarrier, and saga.state() == GEAS_BROKEN
+saga.remedy_state("release") == GEAS_REMEDY_DONE
+saga.remedy_failures() == []
+saga.lapsed("ship") == False   # ship broke by its Err, not by a deadline
+```
+
+```sh
+make test-saga-python
+```
+
+Two hosts, two clocks, one saga, and the rules never moved out of the
+contract.
+
+### What comes next
+
+The saga above is host driven. The next step on the roadmap is the engine
+driven mode, where the contract carries a `course` block, its orchestration
+written out, and the engine runs it, journaling every step so a parked instance
+resumes at the step it stopped on. The compiler already parses and checks a
+course, `geas check` holds every rule, and `geas build` refuses one with
+`workflow constructs are not emitted yet` until the engine runs it.
+[docs/grammar.md](grammar.md) has the course and amendment sections.
 
 ## Where to go next
 
 - [docs/grammar.md](grammar.md) is the normative language grammar, every rule
   this tutorial showed and the ones it did not.
 - [docs/abi.md](abi.md) is the ABI a foreign host compiles against, the value
-  layouts, the thunk frame, ownership, mangling, and the hash.
+  layouts, the thunk frame, ownership, mangling, the hash, and the workflow
+  surface: the clock and the tick, terms, signals, remedies, and the park row.
 - [docs/bridge.md](bridge.md) is the layer this tutorial skipped: the same
   contracts served over gRPC, the wire surface emitted by the compiler and
   driven from any language with stock tooling.

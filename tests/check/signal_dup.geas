@@ -1,0 +1,19 @@
+// A signal name is unique the way a pledge name is
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge ship() -> Unit
+    signal ship()
+    subcontract Feedback {
+        signal rated()
+        pledge rated() -> Unit
+    }
+}

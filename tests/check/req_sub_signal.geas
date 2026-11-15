@@ -1,0 +1,22 @@
+// A signal inside a subcontract is named through the subcontract, like a pledge
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    subcontract Feedback {
+        signal rated()
+    }
+    subcontract {
+        signal seen()
+    }
+    requirements {
+        fulfill: rated && seen
+    }
+}

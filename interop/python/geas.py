@@ -79,6 +79,7 @@ GEAS_SIGNED = 1
 GEAS_FULFILLED = 2
 GEAS_PARTIAL = 3
 GEAS_BROKEN = 4
+GEAS_REMEDYING = 5
 
 STATE_NAMES = {
     GEAS_UNSIGNED: "unsigned",
@@ -86,6 +87,20 @@ STATE_NAMES = {
     GEAS_FULFILLED: "fulfilled",
     GEAS_PARTIAL: "partial",
     GEAS_BROKEN: "broken",
+    GEAS_REMEDYING: "remedying",
+}
+
+# A remedy's progress, docs/abi.md, Remedies.
+GEAS_REMEDY_IDLE = 0
+GEAS_REMEDY_RUNNING = 1
+GEAS_REMEDY_DONE = 2
+GEAS_REMEDY_FAILED = 3
+
+REMEDY_STATE_NAMES = {
+    GEAS_REMEDY_IDLE: "idle",
+    GEAS_REMEDY_RUNNING: "running",
+    GEAS_REMEDY_DONE: "done",
+    GEAS_REMEDY_FAILED: "failed",
 }
 
 GEAS_ITEM_PENDING = 0
@@ -175,6 +190,11 @@ GeasPledgeFn = C.CFUNCTYPE(C.c_int, C.c_void_p, C.POINTER(GeasValue), C.c_size_t
 
 GeasWriteBackFn = C.CFUNCTYPE(None, C.c_void_p, C.POINTER(GeasValue), C.c_void_p)
 
+# The clock pair a host may hand the runtime, docs/abi.md, The clock and the
+# tick: now in wall clock milliseconds, and a sleep through a retry delay.
+GeasClockFn = C.CFUNCTYPE(C.c_int64, C.c_void_p)
+GeasSleepFn = C.CFUNCTYPE(None, C.c_void_p, C.c_uint64)
+
 
 class GeasRef(C.Structure):
     """A by-reference argument: host storage, its type, and the write back."""
@@ -241,6 +261,29 @@ class Some:
 
     def __eq__(self, other):
         return isinstance(other, Some) and other.value == self.value
+
+
+class Record:
+    """A record value built from Python, its fields in declaration order.
+    A record decodes back as a plain list, so this is only needed going in."""
+
+    def __init__(self, *fields):
+        self.fields = list(fields)
+
+    def __repr__(self):
+        return f"Record({', '.join(repr(f) for f in self.fields)})"
+
+
+class Variant:
+    """A sum value built from Python: the variant's declaration index in its
+    sum and its fields. A sum decodes back as the (tag, fields) pair."""
+
+    def __init__(self, tag, *fields):
+        self.tag = tag
+        self.fields = list(fields)
+
+    def __repr__(self):
+        return f"Variant({self.tag}, {self.fields})"
 
 
 class _NoneVariant:
@@ -474,6 +517,36 @@ class Runtime:
         lib.geas_list_new.restype = i
         lib.geas_list_push.argtypes = [v, VP, VP]
         lib.geas_list_push.restype = i
+        lib.geas_bytes.argtypes = [v, C.c_uint64]
+        lib.geas_bytes.restype = C.c_void_p
+        # The workflow surface: signals, the clock and the tick, lapses, and
+        # the remedy partial surface
+        lib.geas_signal.argtypes = [v, s, VP, z]
+        lib.geas_signal.restype = i
+        lib.geas_signal_payload.argtypes = [v, s, C.POINTER(VP)]
+        lib.geas_signal_payload.restype = i
+        lib.geas_runtime_set_clock.argtypes = [v, GeasClockFn, GeasSleepFn, v]
+        lib.geas_runtime_set_clock.restype = i
+        lib.geas_instance_tick.argtypes = [v]
+        lib.geas_instance_tick.restype = i
+        lib.geas_runtime_tick.argtypes = [v]
+        lib.geas_runtime_tick.restype = i
+        lib.geas_partial_lapsed.argtypes = [v, s]
+        lib.geas_partial_lapsed.restype = C.c_int
+        lib.geas_contract_term_lapsed.argtypes = [v]
+        lib.geas_contract_term_lapsed.restype = C.c_int
+        lib.geas_remedy_state.argtypes = [v, s]
+        lib.geas_remedy_state.restype = C.c_int
+        lib.geas_partial_remedy_count.argtypes = [v]
+        lib.geas_partial_remedy_count.restype = z
+        lib.geas_partial_remedy_name.argtypes = [v, z]
+        lib.geas_partial_remedy_name.restype = s
+        lib.geas_partial_remedy_status.argtypes = [v, z]
+        lib.geas_partial_remedy_status.restype = i
+        lib.geas_partial_remedy_lapsed.argtypes = [v, z]
+        lib.geas_partial_remedy_lapsed.restype = C.c_int
+        lib.geas_partial_remedy_error.argtypes = [v, z, C.POINTER(VP)]
+        lib.geas_partial_remedy_error.restype = i
 
     # ---- lifecycle ----
 
@@ -483,6 +556,37 @@ class Runtime:
 
     def freeze(self):
         _check(self._lib.geas_runtime_freeze(self._rt), "geas_runtime_freeze")
+
+    def set_clock(self, now=None, sleep=None):
+        """Points the runtime at a Python clock: now() answers wall clock
+        milliseconds and sleep(ms) waits out a retry delay. Either left None
+        restores the runtime's default. Both are called from any runtime
+        thread and must not call back into the runtime, and both callbacks are
+        anchored on this Runtime for its life, the same rule a trampoline
+        keeps. An exception inside one is swallowed to a 0 reading and a
+        skipped sleep, since a clock has no status to report it through."""
+        def now_tramp(user):
+            try:
+                return int(now())
+            except Exception:
+                return 0
+
+        def sleep_tramp(user, ms):
+            try:
+                sleep(ms)
+            except Exception:
+                pass
+
+        now_fn = GeasClockFn(now_tramp) if now else GeasClockFn()
+        sleep_fn = GeasSleepFn(sleep_tramp) if sleep else GeasSleepFn()
+        self._thunks.extend([now_fn, sleep_fn])
+        _check(self._lib.geas_runtime_set_clock(self._rt, now_fn, sleep_fn,
+                                                None),
+               "geas_runtime_set_clock")
+
+    def tick(self):
+        """Applies every deadline that has passed, over every instance."""
+        _check(self._lib.geas_runtime_tick(self._rt), "geas_runtime_tick")
 
     def shutdown(self):
         if self._rt:
@@ -677,6 +781,10 @@ class Runtime:
             target.as_.box = C.cast(box, C.c_void_p)
         elif py is NONE:
             target.ty = GEAS_TY_OPTION
+        elif isinstance(py, (Record, Variant)):
+            self._encode_fields(ctx, target, py.fields)
+            target.ty = GEAS_TY_RECORD if isinstance(py, Record) else GEAS_TY_SUM
+            target.tag = py.tag if isinstance(py, Variant) else 0
         elif isinstance(py, list):
             if not py:
                 raise GeasError(GEAS_ERR_TYPE, "cannot infer an empty list's "
@@ -698,6 +806,23 @@ class Runtime:
         else:
             raise GeasError(GEAS_ERR_TYPE,
                            f"cannot encode {type(py).__name__}")
+
+
+    def _encode_fields(self, ctx, target, fields):
+        """Lays a record's or a variant's fields out in an instance owned
+        array, the shape both carry on the wire."""
+        if not fields:
+            return
+        n = len(fields)
+        raw = self._lib.geas_bytes(ctx, n * C.sizeof(GeasValue))
+        if not raw:
+            raise GeasError(GEAS_ERR_OOM, "geas_bytes")
+        arr = C.cast(raw, C.POINTER(GeasValue))
+        for k, field in enumerate(fields):
+            self._encode_owned(ctx, arr[k], field)
+        target.as_.list.data = raw
+        target.as_.list.len = n
+        target.as_.list.cap = n
 
 
 # ---------------------------------------------------------------------------
@@ -786,7 +911,7 @@ class Contract:
         if n:
             arr = (GeasValue * n)()
             for k, a in enumerate(args):
-                if isinstance(a, list):
+                if isinstance(a, (list, Record, Variant)):
                     self._rt._encode_owned(self._ptr, arr[k], a)
                 else:
                     self._rt._encode_host(arr[k], a, keep)
@@ -848,3 +973,58 @@ class Contract:
         return PartialResult(names(GEAS_ITEM_PENDING),
                              names(GEAS_ITEM_FULFILLED),
                              names(GEAS_ITEM_BROKEN), errors)
+
+    # ---- the workflow surface ----
+
+    def signal(self, name, *args):
+        """Delivers the named signal into this instance. The runtime copies
+        the arguments at the call; a delivery the terms refuse, an early one
+        or one past its deadline, raises GEAS_ERR_STATE, and a repeat of one
+        that already landed is quietly a no op."""
+        arr, n, _, _, keep = self._frame(args, None)
+        _check(self._rt._lib.geas_signal(self._ptr, name.encode(), arr, n),
+               f"signal {name}")
+        del keep
+
+    def signal_payload(self, name):
+        """The payload the named signal was delivered with, decoded."""
+        p = C.POINTER(GeasValue)()
+        _check(self._rt._lib.geas_signal_payload(self._ptr, name.encode(),
+                                                 C.byref(p)),
+               f"geas_signal_payload {name}")
+        return decode(p[0])
+
+    def tick(self):
+        """Applies every deadline of this instance that has passed."""
+        _check(self._rt._lib.geas_instance_tick(self._ptr), "geas_instance_tick")
+
+    def lapsed(self, name):
+        """Whether the named pledge, signal, or subcontract broke by its
+        deadline rather than by an Err."""
+        return bool(self._rt._lib.geas_partial_lapsed(self._ptr, name.encode()))
+
+    def term_lapsed(self):
+        """Whether the contract's own term is what broke it."""
+        return bool(self._rt._lib.geas_contract_term_lapsed(self._ptr))
+
+    def remedy_state(self, name):
+        """The named remedy's progress, one of the GEAS_REMEDY_* values."""
+        return self._rt._lib.geas_remedy_state(self._ptr, name.encode())
+
+    def remedy_failures(self):
+        """Every failed remedy in declaration order, as dicts of its name,
+        the last attempt's status, whether its deadline stopped it, and its
+        decoded Err payload, None when it failed by status."""
+        lib = self._rt._lib
+        out = []
+        for i in range(lib.geas_partial_remedy_count(self._ptr)):
+            nm = lib.geas_partial_remedy_name(self._ptr, i)
+            ev = C.POINTER(GeasValue)()
+            st = lib.geas_partial_remedy_error(self._ptr, i, C.byref(ev))
+            out.append({
+                "name": nm.decode() if nm else None,
+                "status": lib.geas_partial_remedy_status(self._ptr, i),
+                "lapsed": bool(lib.geas_partial_remedy_lapsed(self._ptr, i)),
+                "err": decode(ev[0]) if st == GEAS_OK and ev else None,
+            })
+        return out

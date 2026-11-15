@@ -2,25 +2,32 @@
 
 ## Status
 
-This is the language reference for Geas, a statically typed, contract
-oriented language that sits between other languages. A program declares
-contracts, other languages sign and fulfill them across the C ABI, and a shared
-runtime enforces the terms. This document describes the language as it stands
-today: contracts with vows, pledges, clauses, subcontracts, and a requirements
-policy, records and sums, the full statement and expression core with exhaustive
-match and error propagation, value semantics with one named exception for a
-signed instance, a package aware module system, a first standard library, and
-the interop surface that is the point of the language, a foreign host driving a
-contract through the ABI with no generated bindings. Where this spec states a
-rule, the rule is the one `geas` enforces and the runtime holds.
+This is the language reference for Geas, a statically typed language for
+durable obligations. A contract declares its steps, their deadlines, ordering,
+and retries, the remedies that undo what landed, the outside events it waits
+on, and the policy that decides when the whole is fulfilled, partially
+fulfilled, or broken. Any language that can load a C library signs and drives
+that contract across the C ABI, and a shared runtime holds every term while it
+does. This document describes the language as it stands today: contracts with
+vows, pledges, clauses, subcontracts, and a requirements policy, durations and
+times, terms, remedies, and signals, records and sums, the full statement and
+expression core with exhaustive match and error propagation, value semantics
+with one named exception for a signed instance, a package aware module system,
+a first standard library, and the host surface that lets any language take
+part with no generated bindings. Where this spec states a rule, the rule is the
+one `geas` enforces and the runtime holds.
 
-Geas is built in three layers. Layer 1, the core language and the in process
-runtime, is complete. Layer 2, the network runtime, runs: the same contracts
-served over a socket and fulfilled across a machine boundary with the host code
-unchanged. Layer 3, the store runtime, contracts backed by a database, is in
-progress; the store surface is described here and marked where it is still
-landing. The compiler is `geas`, source files end in `.geas`, a compiled module
-ends in `.geas.so`, and the runtime is a shared C library, `libgeasrt`.
+Geas runs in layers that share one lifecycle. The core language and the in
+process runtime carry the contract itself. The workflow surface, terms,
+remedies, signals, and the contract term, runs host driven today, the host
+calling the steps and the runtime enforcing the rules. The store layer backs a
+contract with a database and parks an instance into a row another process can
+resume, and the bridge serves the same contracts over gRPC. The engine driven
+mode, a contract that carries its own `course`, and typed amendment between
+versions are parsed and checked today and are the next steps on the roadmap;
+their sections say where they stand. The compiler is `geas`, written by hand
+in C++23 and emitting C, source files end in `.geas`, a compiled module ends in
+`.geas.so`, and the runtime is a shared C library, `libgeasrt`.
 
 ---
 
@@ -29,17 +36,22 @@ ends in `.geas.so`, and the runtime is a shared C library, `libgeasrt`.
 1. [Core Philosophy](#core-philosophy)
 2. [Source Files, Imports, Packages](#source-files-imports-packages)
 3. [Contracts](#contracts)
-4. [The Lifecycle](#the-lifecycle)
-5. [The Requirements Policy](#the-requirements-policy)
-6. [Type System](#type-system)
-7. [Statements and Expressions](#statements-and-expressions)
-8. [Provisional Clauses](#provisional-clauses)
-9. [Cross Contract Calls](#cross-contract-calls)
-10. [Standalone Programs](#standalone-programs)
-11. [The Standard Library](#the-standard-library)
-12. [Interop and the ABI](#interop-and-the-abi)
-13. [The Store Layer](#the-store-layer)
-14. [The Network Layer](#the-network-layer)
+4. [Terms](#terms)
+5. [Remedies](#remedies)
+6. [Signals](#signals)
+7. [The Lifecycle](#the-lifecycle)
+8. [The Requirements Policy](#the-requirements-policy)
+9. [Driving a Contract](#driving-a-contract)
+10. [Amendment](#amendment)
+11. [Type System](#type-system)
+12. [Statements and Expressions](#statements-and-expressions)
+13. [Provisional Clauses](#provisional-clauses)
+14. [Cross Contract Calls](#cross-contract-calls)
+15. [Standalone Programs](#standalone-programs)
+16. [The Standard Library](#the-standard-library)
+17. [Interop and the ABI](#interop-and-the-abi)
+18. [The Store Layer](#the-store-layer)
+19. [The Bridge](#the-bridge)
 
 ---
 
@@ -52,12 +64,19 @@ ends in `.geas.so`, and the runtime is a shared C library, `libgeasrt`.
   `Result` or an `Option`.
 - Errors are values. There are no exceptions, and nothing throws across a
   language boundary. A failure is a value the caller matches on.
-- Interop is the primary goal. The runtime owns every heap allocation that
+- Obligations have terms. Deadlines, ordering, retries, and a contract's whole
+  lifetime are declarations the runtime enforces, not code a host has to get
+  right, and a missed deadline is a lifecycle fact, never a value of the
+  pledge's own error type.
+- Breaking has consequences. A remedy undoes a step that landed, and a contract
+  that breaks runs its remedies newest first, each handed the value its step
+  produced.
+- Any language can be a party. The runtime owns every heap allocation that
   crosses a boundary, data passes by value in both directions, and a reference
   is copied on entry and written back on return, never held by Geas.
 - The runtime enforces the terms. A contract's shape, its vows, its fulfillment
-  policy, and its version are checked at the boundary, so a mismatch is a
-  descriptive error and never silent corruption.
+  policy, its terms, and its version are checked at the boundary, so a mismatch
+  is a descriptive error and never silent corruption.
 
 ---
 
@@ -195,9 +214,10 @@ subcontract Validation {
 }
 ```
 
-A subcontract is satisfied when every pledge inside it has latched fulfilled. A
+A subcontract is satisfied when every member inside it has latched fulfilled. A
 pledge declared outside any subcontract is a loose pledge and stands on its own
-in the policy.
+in the policy. A subcontract may also hold signals, and it may carry `within`
+and `after` terms that cover every member inside it.
 
 ### Attributes
 
@@ -205,16 +225,151 @@ A contract carries an optional version attribute, `[version: N]`, default 1. The
 version is baked into every mangled name, so a host that signs against the wrong
 version is refused at discovery rather than corrupted at call time.
 
+A contract may also carry a term, `[term: 7d]`, its whole lifetime counted from
+sign. When the term runs out while the contract is still Signed or Partial, the
+contract breaks the way a matched break line breaks it, remedies included, and
+the host can read that the term is what broke it. A contract already Fulfilled
+when its term passes met its terms and is left alone.
+
+```text
+contract OrderSaga [version: 1, term: 7d] {
+    ...
+}
+```
+
+---
+
+## Terms
+
+Terms are the rules of an obligation in time: when a step may run, how long it
+has, and what happens when it fails. They trail a signature, one per line if
+you like:
+
+```text
+pledge authorize(card: Card) -> Result<AuthId, PayError>
+    within 30s
+    retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+    after authorize
+    within 1m
+```
+
+A pledge takes all three terms, a subcontract and a signal take `within` and
+`after`, and a remedy takes `within` and `retry`, each at most once.
+
+So the idea underneath all three is eligibility. Every item becomes eligible
+at some moment, at sign when it waits on nothing, otherwise the moment
+everything it waits on has latched fulfilled, and that stamp is written once
+and never moves.
+
+**`after`** is ordering. It names pledges, subcontracts, or signals of the same
+contract that must latch fulfilled first. Calling a step before it is eligible
+answers a state error and its body never runs, so nothing is latched and the
+call can be made again once the steps ahead of it land. An `Err` never
+satisfies an `after`, so a step waiting on one that broke never becomes
+eligible. The checker rejects a cycle and names the path.
+
+**`within`** is a deadline counted from eligibility. A step still pending when
+it passes lapses: it latches broken, with no error payload, because the
+pledge's own error type has no say over a deadline, and the runtime marks the
+latch as a lapse so a host can tell a missed deadline from an `Err`. A lapse
+arms the break line like any broken latch. A body started in time lands its
+outcome even if it returns late, since the work it did is real. A
+subcontract's `within` lapses every member inside it that has not latched.
+
+**`retry`** is the number of attempts after the first. The delay before each
+retry starts at `every`, multiplies by `backoff` each time, a float of at
+least `1.0`, and stops growing at `cap`. Without `on`, only lifecycle failures
+retry, a lost worker or a lapsed attempt, never a business `Err`, because a
+declined card is an answer and not an accident. With `on`, the listed variants
+of the pledge's error sum retry too. Only the last attempt's outcome is
+latched, and a delay is never waited past the step's own deadline.
+
+The runtime owns no timer. Every call that reads or moves an instance applies
+the deadlines that have passed first, in deadline order, and a host that wants
+a lapse the moment it falls due ticks the runtime from whatever scheduler it
+has. The clock itself is replaceable, which is how a test turns a three day
+deadline into a number it moves. [docs/abi.md](docs/abi.md) carries the exact
+rules under The clock and the tick and Terms.
+
+---
+
+## Remedies
+
+A remedy undoes one pledge that landed, the compensation step of a saga:
+
+```text
+remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+    retry 2 every 1m
+remedy release for reserve(res: Reservation) -> Result<Unit, StockError> {
+    if res.id != "R-" + res.sku {
+        return Err(Unavailable)
+    }
+    return Ok(released())
+}
+```
+
+The target after `for` is a pledge of the same contract, and a pledge has at
+most one remedy. The parameter receives the target's `Ok` value, so its type is
+the `T` of the target's `Result<T, E>`; a target returning `Unit` or an
+`Option` yields no `Ok` value and its remedy takes no parameter, and a remedy
+that has no use for the value may leave the parameter off. A remedy returns
+`Result<Unit, E>` or `Unit`, and it is bound the ways a pledge is, a Geas
+body, a foreign symbol, or a host binding, an unbound one refusing the sign.
+
+When a contract breaks, by its break line, by a lapse that matches it, by its
+term running out, or by an explicit break while it is still Signed or Partial,
+every pledge that latched fulfilled and carries a remedy gets it run, one at a
+time, newest latch first. While they run the contract reads `Remedying`, and
+`Broken` once the last one returns. A remedy that fails, by an `Err`, by
+running out of retries, or by its own `within`, is recorded on the partial
+surface and the pass moves on, so one stuck refund never strands a
+reservation. Every remedy runs at most once for the life of a signature, a
+park and a resume included. A pledge inside a transactional subcontract whose
+episode never committed has nothing to undo, the rollback already did.
+
+A remedy is never a requirements atom and never called through an instance; it
+belongs to the break, not to the host.
+
+---
+
+## Signals
+
+A signal is an outside event delivered into a live instance, a webhook, an
+approval, a delivery scan:
+
+```text
+signal delivered(tracking: Tracking) after ship within 3d
+```
+
+A signal has no body and no return type. It latches fulfilled the moment it is
+delivered, and the first delivery wins: a repeat is accepted and changes
+nothing, so a host passing a retried webhook along need not deduplicate first.
+The payload is kept on the instance, `Unit` with no parameters, the value with
+one, a `Tuple` with several, and it parks and resumes with the instance. A
+signal takes `within` and `after` like a pledge, so `delivered` above cannot
+arrive before `ship` landed and lapses if three days pass without it.
+
+A loose signal is a requirements atom like a loose pledge; a signal inside a
+subcontract counts toward its subcontract. From a host a signal is delivered
+with `geas_signal`, from Python with `instance.signal(name, ...)`, and from
+inside Geas through a signed instance, `courier.scanned(at)`, a call answering
+`Unit` whose refusal faults the calling body. A signal is never fulfilled like
+a pledge and a pledge is never delivered like a signal; the two surfaces refuse
+each other's names. A transactional subcontract holds no signal, since an
+outside event never belongs inside an open transaction.
+
 ---
 
 ## The Lifecycle
 
-A contract moves through five states:
+A contract moves through six states:
 
 ```text
 Unsigned -> Signed -> Fulfilled
-                   -> PartiallyFulfilled
-                   -> Broken
+                   -> Partial
+                   -> Remedying -> Broken
+                   -> Broken                (no remedies due)
 ```
 
 `sign()` validates the contract's shape, locks its vows, and activates it. It
@@ -225,23 +380,28 @@ the wrong type, and a hash that disagrees.
 Fulfilling a pledge runs it and records the outcome. A pledge latches on its
 first `Ok`: it becomes fulfilled and stays fulfilled, and later calls run and
 return results but never change the latched state. An `Err` before any `Ok`
-latches the pledge broken with the error payload kept readable. Contract state
-never regresses.
+latches the pledge broken with the error payload kept readable, and so does a
+lapse, a deadline that passed first, with no payload and the lapse marked.
+Delivering a signal latches it fulfilled. Contract state never regresses.
 
-`break()` tears the contract down and reclaims every allocation the runtime owns
-for it, in one walk. Every later fulfillment on a broken contract is a state
-error.
+When the contract breaks, by its policy, by its term, or by an explicit
+`break()` while it is still Signed or Partial, it reads `Remedying` while its
+due remedies run and `Broken` once they are done; with no remedy due it goes
+straight to `Broken`. A Fulfilled contract never runs a remedy. `break()` then
+tears the contract down and reclaims every allocation the runtime owns for it,
+in one walk. Every later fulfillment on a broken contract is a state error.
 
-The partial surface reports, at any moment, which subcontracts and loose pledges
-are fulfilled, which are pending, and which are broken, with the latched errors
-attached by name.
+The partial surface reports, at any moment, which subcontracts, loose pledges,
+and loose signals are fulfilled, which are pending, and which are broken, with
+the latched errors attached by name, which broken latches are lapses, and how
+every remedy went.
 
 ---
 
 ## The Requirements Policy
 
 The `requirements` block writes the contract's fulfillment as boolean logic over
-its subcontracts and loose pledges:
+its subcontracts, loose pledges, and loose signals:
 
 ```text
 requirements {
@@ -270,7 +430,89 @@ fulfill and the break line, naming a witness if one exists, and rejects a policy
 no state can satisfy. The requirements block compiles to a shared table the
 static checker and the runtime evaluator both read, so the two can never
 diverge. When a contract writes no requirements block, the grammar's defaults are
-synthesized into the same table form.
+synthesized into the same table form. A remedy is never an atom, and a contract
+holds at most sixteen.
+
+---
+
+## Driving a Contract
+
+A contract can be driven two ways, and the two share everything on the
+outside: the requirements, the terms, the remedies, and the lifecycle. So a
+contract can start in one and grow into the other without a host noticing its
+shape change.
+
+**Host driven** is the mode that runs today, and it is the mode of any
+contract with no `course`. A host signs the contract and calls its pledges in
+whatever order it likes, and the runtime enforces the terms: an early call
+answers a state error, a missed deadline latches the step broken, retries
+happen inside the runtime, and remedies run on break. This is the right shape
+for in process glue and for hosts that want to stay in charge of the order.
+
+**Engine driven** is the next step on the roadmap. A contract carries one
+`course` block, its orchestration written out, and the engine runs it from the
+moment the contract signs:
+
+```text
+course {
+    let auth = authorize(order.card)?
+    together {
+        let receipt = capture(auth)?
+        let res = reserve(order.sku, 1h)?
+    }
+    ship(res)?
+    await delivered
+}
+```
+
+Inside a course the contract's own pledges are called by bare name and each
+call is a durable step dispatched to its binding, a Geas body, a foreign
+symbol, or a worker, with every result journaled so a parked instance resumes
+at the step it stopped on. `await sig` waits for a signal and yields its
+payload, `await sig within 24h` yields an `Option`, `select` takes whichever of
+several awaits or a timeout is ready first, `sleep` pauses durably, and
+`together` runs its statements concurrently and finishes when all of them
+have. A `?` that fires ends the course, but the step it unwrapped has already
+latched, so the requirements decide the state, not the course. `now()` and
+anything else non deterministic is journaled on first run and replayed on
+resume. Hosts bind workers and deliver signals; they do not call the pledges
+of a course driven contract, and the checker refuses a body that tries.
+
+The compiler parses and checks all of this today, every rule above included,
+and `geas build` refuses a course with `workflow constructs are not emitted
+yet` until the engine runs it.
+
+---
+
+## Amendment
+
+A parked instance can outlive the version of the contract it was signed under,
+so a contract says how an older instance comes back. Inside a contract at
+version 2:
+
+```text
+amends 1 {
+    vow dsn = prior.store_url
+    rename dispatch -> ship
+    retire legacy
+    latch delivered as pending
+}
+```
+
+`vow` supplies a vow, reading the parked instance's old vows through `prior`,
+`rename` maps an old member name onto a new one, `retire` drops a member and
+its latched state, and `latch` sets the starting state of a pledge or signal
+the old version did not have. Blocks chain, so a version 3 contract carries
+`amends 1` and `amends 2`. The design is that the checker diffs the two shapes
+and refuses the build when a difference is left uncovered, which turns a
+resume nobody planned for into a compile error instead of a surprise in
+production.
+
+Amendment is on the roadmap with the engine. The checker holds amends blocks
+today to what the new version alone can verify, a real older version number,
+vows and targets that exist and agree in type, a retired name that is really
+gone, and `geas build` refuses one until the older shape is loaded and the
+resume runs it.
 
 ---
 
@@ -288,15 +530,38 @@ synthesized into the same table form.
 | `Byte` | one byte |
 | `Char` | a 32 bit Unicode scalar value |
 | `String` | UTF-8 bytes, a pointer and a byte length, no terminator |
+| `Duration` | a span of time, 64 bit signed milliseconds |
+| `Time` | a point in time, 64 bit signed milliseconds since the Unix epoch |
 
 Numeric widths are fixed and never convert implicitly. A widening or narrowing
 is a type error unless written explicitly, and there is no implicit conversion
 anywhere in the language, widths included.
 
+### Durations and times
+
+A duration is a literal of its own, `30s`, `250ms`, `1h30m`, `7d`, one token
+with its units running from largest to smallest, and it types as `Duration`.
+A `Time` has no literal; it comes from a vow, a parameter, a signal payload, or
+`now()` inside a course. Their arithmetic is small on purpose: durations add
+and subtract, a duration scales by an `Int` on its right, a time shifts by a
+duration, and two times subtract into the duration between them. Two durations
+or two times compare. `Duration * Float`, `Duration + Int`, and `Time + Time`
+are type errors, so a unit mistake is caught where it is written.
+
+To the checker both are types of their own, and they hash and mangle apart from
+`Int`. To everything past the checker they are milliseconds: both cross the
+boundary as an `Int`, a C host reads `v.as.i`, a Python host gets a plain int,
+and a `Time` a host hands in is directly comparable with a deadline the runtime
+computes, since the runtime clock answers milliseconds since the epoch too.
+
 ### Composite types
 
 - **`List<T>`**: a homogeneous, ordered sequence, written `[a, b, c]`.
 - **Tuples**: a fixed heterogeneous group whose elements need not agree in type.
+- **The generic constructors**: `List<T>(a, b)`, `Option<T>()` and
+  `Option<T>(v)`, `Result<T, E>(Ok(v))`, `Tuple<A, B>(a, b)`, and `Map<K, V>()`
+  spell their type and are held to it, which is how a value gets its type where
+  nothing else in the expression supplies one.
 - **`Map<K, V>`**: an ordered map, constructed `Map<K, V>()`, with a keyable
   scalar key. An index read answers `Option<V>`, `None` on a miss, and an index
   assignment inserts or updates. Entries keep insertion order, and that order is
@@ -340,8 +605,8 @@ on either to both arms.
 
 ### The contract type at the boundary
 
-A contract type is forbidden at every ABI position: a pledge signature, a vow, a
-record or variant field, at any nesting depth. A signed instance is a value only
+A contract type is forbidden at every ABI position: a pledge, remedy, or signal
+signature, a vow, a record or variant field, at any nesting depth. A signed instance is a value only
 inside a pledge body, never a value that crosses the boundary, so nothing a
 foreign host receives can carry an instance it cannot own. See
 [Cross Contract Calls](#cross-contract-calls).
@@ -350,8 +615,9 @@ foreign host receives can carry an instance it cannot own. See
 
 ## Statements and Expressions
 
-A pledge body, a clause body, and a subcontract pledge body are ordinary
-imperative code. A statement is terminated by a newline at the top group depth,
+A pledge body, a clause body, a remedy body, and a subcontract pledge body are
+ordinary imperative code, and so is a course, with the course statements on
+top. A statement is terminated by a newline at the top group depth,
 so a block inside an argument list keeps its statement semantics.
 
 ### Bindings
@@ -534,7 +800,7 @@ declared in another, fulfill its pledges, and break it.
 
 ## Interop and the ABI
 
-This is the reason the language exists. A compiled `.geas.so` module carries
+This is how every language takes part. A compiled `.geas.so` module carries
 descriptor tables that spell every contract, every pledge and its signature, and
 every vow and its default. When the runtime loads the module it registers all of
 it in the iname table, and a foreign host drives a contract through a handful of
@@ -584,7 +850,20 @@ GeasStatus (*GeasPledgeFn)(void* ctx, const GeasValue* args, size_t nargs,
 
 `ctx` is the signed instance the fulfillment runs against, and its allocation
 helpers make everything the pledge builds instance owned. The runtime marshals
-the frame and dispatches, and the network layer serializes the same frame.
+the frame and dispatches, and the bridge carries the same frame across processes.
+
+### Terms, signals, and remedies at the boundary
+
+The workflow surface rides the same descriptors as one more tail, so a module
+compiled before it loads unchanged and a contract that declares none of it
+behaves exactly as it did. A host replaces the clock with
+`geas_runtime_set_clock` and drives lapses with `geas_runtime_tick` or
+`geas_instance_tick`, delivers a signal with `geas_signal` and reads its payload
+with `geas_signal_payload`, binds an abstract remedy with the same
+`geas_pledge_bind` a pledge uses, and reads lapses and remedy outcomes off the
+partial surface with `geas_partial_lapsed`, `geas_contract_term_lapsed`,
+`geas_remedy_state`, and the `geas_partial_remedy_*` calls. The contract state
+gains `GEAS_REMEDYING` at the end of its enum, so every earlier number stands.
 
 ### Futures
 
@@ -624,15 +903,18 @@ The repository proves the claim with C and with Python. `skeleton/host.c` links
 `libgeasrt` and speaks the ABI header. `interop/python/geas.py` is a ctypes
 binding written against the ABI reference alone, no header parsed and no stubs
 generated. Both hosts sign the same contracts, override the same vows, bind the
-same abstract pledges, and read the same partial surface. The contract is the
-shared artifact, and every language meets at it.
+same abstract pledges, and read the same partial surface, and both walk the
+order saga on a clock of their own, `tests/runtime/test_saga.c` from C and
+`interop/python/demo_saga.py` from Python. The contract is the shared
+artifact, and every language meets at it.
 
 ---
 
 ## The Store Layer
 
-Layer 3 backs a contract with a database. It is in progress; the surface below is
-its normative design, and the parts still landing are marked.
+The store layer backs a contract with a database. The surface below is the
+language's view of it, and [docs/database.md](docs/database.md) is the normative
+design.
 
 A store backed contract declares the shape of a table as a schema, beside its
 vows:
@@ -690,7 +972,9 @@ SQL is a value and nothing else. The first column of a schema is its primary key
 A backend failure that the runtime cannot complete, a lost connection, a full
 disk, a refused constraint, is the status `GEAS_ERR_STORE` delivered through the
 fulfillment; a contract's own rules stay values in its own error type.
-`Store.query` and a partial record form of `update` are still landing.
+`Store.query`, `Store.count`, `Store.sum`, `Store.min`, `Store.max`, and
+`Store.avg` read sets through one predicate grammar, listed in
+[docs/database.md](docs/database.md).
 
 ### Transactions as subcontracts
 
@@ -711,6 +995,22 @@ contract.
 open transaction, closes the connection, and reclaims the heap, in that order, so
 no uncommitted write survives a break and no connection outlives its instance.
 
+A transactional subcontract holds no signal and no pledge with a `retry`, since
+a retried attempt would run inside the same open episode as the attempt it
+replaced. And when a contract breaks, a pledge whose transactional episode never
+committed has no remedy due, because the rollback already undid it.
+
+### Parking
+
+`instance.park(dsn, key)` writes the instance's durable state into one row of
+the runtime's own table behind `dsn`, and `Contract.resume(dsn, key)` stands it
+back up, in this process or another. The row carries the vows, the latches and
+their error payloads, the transactional fates, and a versioned workflow column
+holding the eligibility stamps, the lapses, the `Ok` values the remedies will
+need, the signal payloads, and the remedy progress, so a deadline keeps counting
+across the park and a break after a resume runs the same remedies in the same
+order it would have before.
+
 ---
 
 ## The Bridge
@@ -723,7 +1023,9 @@ runtime over the C ABI, and a client in any gRPC language builds from the
 emitted artifacts with stock tooling. A pledge's `Err` crosses as a value on
 an OK rpc, a Geas status crosses as a gRPC code, the shape hash pins both
 ends to one contract, and a park store lets a session survive its stream, its
-client, and its server. The bridge adds no language surface; it is the same
+client, and its server. Every signal is its own typed `Signal` rpc on the
+emitted surface, with a helper in each session wrapper, and serving those rpcs
+from the reference bridge server is next on the roadmap. The bridge adds no language surface; it is the same
 contracts, one emitted file wider. The canonical little endian value encoding
 remains the park row's format, so a parked value round trips exactly.
 [docs/bridge.md](docs/bridge.md) is the normative surface.

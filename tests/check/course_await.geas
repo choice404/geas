@@ -1,0 +1,21 @@
+// await names a signal of the contract and yields its payload, an Option under a deadline
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Flow {
+    pledge step() -> Unit
+    signal approved(by: String)
+    course {
+        await nothing
+        await step
+        let who: Int = await approved
+        let late: String = await approved within 1h
+    }
+}

@@ -1,0 +1,109 @@
+File {
+    imports: [],
+    decls: [
+        Sum {
+            name: "PayError",
+            variants: [
+                Variant {
+                    name: "Declined",
+                    fields: [
+                        Field {
+                            name: "reason",
+                            ty: Named("String"),
+                        },
+                    ],
+                },
+                Variant {
+                    name: "Timeout",
+                    fields: [],
+                },
+                Variant {
+                    name: "Gateway",
+                    fields: [
+                        Field {
+                            name: "code",
+                            ty: Named("Int"),
+                        },
+                    ],
+                },
+            ],
+        },
+        Sum {
+            name: "Short",
+            variants: [
+                Variant {
+                    name: "A",
+                    fields: [],
+                },
+                Variant {
+                    name: "B",
+                    fields: [],
+                },
+                Variant {
+                    name: "C",
+                    fields: [],
+                },
+            ],
+        },
+        Contract {
+            internal: false,
+            name: "Branch",
+            attrs: [],
+            members: [
+                Clause {
+                    name: "pick",
+                    params: [
+                        Field {
+                            name: "n",
+                            ty: Named("Int"),
+                        },
+                    ],
+                    ret: Named("Int"),
+                    body: Block {
+                        stmts: [
+                            If {
+                                cond: Binary(
+                                    Gt,
+                                    Ident("n"),
+                                    Int(0),
+                                ),
+                                then: Block {
+                                    stmts: [
+                                        Return(
+                                            Int(1),
+                                        ),
+                                    ],
+                                },
+                                els: Block {
+                                    stmts: [
+                                        If {
+                                            cond: Binary(
+                                                Lt,
+                                                Ident("n"),
+                                                Int(0),
+                                            ),
+                                            then: Block {
+                                                stmts: [
+                                                    Return(
+                                                        Int(2),
+                                                    ),
+                                                ],
+                                            },
+                                            els: Block {
+                                                stmts: [
+                                                    Return(
+                                                        Int(3),
+                                                    ),
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

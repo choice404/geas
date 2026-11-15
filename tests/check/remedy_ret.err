@@ -1,0 +1,2 @@
+remedy 'refund' must return Result<Unit, E> or Unit
+remedy 'recall' must return Result<Unit, E> or Unit

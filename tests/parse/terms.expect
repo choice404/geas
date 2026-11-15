@@ -1,0 +1,161 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Terms",
+            attrs: [],
+            members: [
+                Pledge {
+                    name: "authorize",
+                    params: [
+                        Field {
+                            name: "card",
+                            ty: Named("Card"),
+                        },
+                        Field {
+                            name: "amount",
+                            ty: Named("Float"),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("AuthId"),
+                        Named("PayError"),
+                    ]),
+                    terms: [
+                        Within(Duration(30000)),
+                        Retry {
+                            count: 3,
+                            every: Duration(2000),
+                            backoff: Float("2.0"),
+                            cap: Duration(30000),
+                            on: [
+                                "Timeout",
+                                "Gateway",
+                            ],
+                        },
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Pledge {
+                    name: "capture",
+                    params: [
+                        Field {
+                            name: "auth",
+                            ty: Named("AuthId"),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Receipt"),
+                        Named("PayError"),
+                    ]),
+                    terms: [
+                        After([
+                            "authorize",
+                        ]),
+                        Within(Duration(60000)),
+                    ],
+                    attrs: [
+                        Attr {
+                            key: "abi",
+                            value: Str("c"),
+                        },
+                    ],
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Ok(
+                                    Ident("auth"),
+                                ),
+                            ),
+                        ],
+                    },
+                },
+                Pledge {
+                    name: "bare",
+                    params: [],
+                    ret: Named("Unit"),
+                    terms: [
+                        Retry {
+                            count: 2,
+                            every: None,
+                            backoff: None,
+                            cap: None,
+                            on: [],
+                        },
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Pledge {
+                    name: "some",
+                    params: [],
+                    ret: Named("Unit"),
+                    terms: [
+                        Retry {
+                            count: 5,
+                            every: None,
+                            backoff: None,
+                            cap: Duration(3600000),
+                            on: [
+                                "Timeout",
+                            ],
+                        },
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Pledge {
+                    name: "waits",
+                    params: [],
+                    ret: Named("Unit"),
+                    terms: [
+                        After([
+                            "a",
+                            "b",
+                            "c",
+                        ]),
+                        Within(Duration(86400000)),
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Subcontract {
+                    name: "Shipping",
+                    transactional: true,
+                    terms: [
+                        After([
+                            "authorize",
+                        ]),
+                        Within(Duration(172800000)),
+                    ],
+                    pledges: [
+                        Pledge {
+                            name: "ship",
+                            params: [],
+                            ret: Named("Unit"),
+                            terms: [
+                                Within(Duration(3600000)),
+                            ],
+                            attrs: [],
+                            body: None,
+                        },
+                    ],
+                },
+                Subcontract {
+                    name: None,
+                    pledges: [
+                        Pledge {
+                            name: "loose",
+                            params: [],
+                            ret: Named("Unit"),
+                            attrs: [],
+                            body: None,
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

@@ -1,0 +1,3 @@
+contract Bad {
+    pledge pay() -> Unit within 30
+}

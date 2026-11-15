@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/faults_body.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Constructs the checker accepts and the module emitter names as build
+  ^

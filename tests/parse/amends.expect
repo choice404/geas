@@ -1,0 +1,62 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Saga",
+            attrs: [
+                Attr {
+                    key: "version",
+                    value: Int(3),
+                },
+            ],
+            members: [
+                Vow {
+                    name: "dsn",
+                    ty: Named("String"),
+                    init: None,
+                },
+                Amends {
+                    version: 1,
+                    items: [
+                        AmendVow {
+                            name: "dsn",
+                            value: Member(
+                                Ident("prior"),
+                                "store_url",
+                            ),
+                        },
+                        Rename {
+                            from: "dispatch",
+                            to: "ship",
+                        },
+                        Retire {
+                            name: "legacy",
+                        },
+                        Latch {
+                            name: "delivered",
+                            state: Pending,
+                        },
+                    ],
+                },
+                Amends {
+                    version: 2,
+                    items: [
+                        Latch {
+                            name: "audited",
+                            state: Fulfilled,
+                        },
+                        Latch {
+                            name: "flagged",
+                            state: Broken,
+                        },
+                    ],
+                },
+                Amends {
+                    version: 2,
+                    items: [],
+                },
+            ],
+        },
+    ],
+}

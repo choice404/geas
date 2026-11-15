@@ -1,0 +1,4 @@
+exit 1
+skeleton/lang.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The language gauntlet: one contract whose pledge bodies walk every
+  ^

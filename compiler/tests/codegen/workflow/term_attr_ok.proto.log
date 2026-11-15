@@ -1,0 +1,4 @@
+exit 1
+tests/check/term_attr_ok.geas: 3:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge ship() -> Unit [abi: "c", symbol: "ship_it"]
+      ^~~~~~~~~~~

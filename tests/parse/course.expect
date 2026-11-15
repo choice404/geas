@@ -1,0 +1,181 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Flow",
+            attrs: [],
+            members: [
+                Pledge {
+                    name: "step",
+                    params: [
+                        Field {
+                            name: "n",
+                            ty: Named("Int"),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Int"),
+                        Named("Err"),
+                    ]),
+                    attrs: [],
+                    body: None,
+                },
+                Signal {
+                    name: "approved",
+                    params: [
+                        Field {
+                            name: "by",
+                            ty: Named("String"),
+                        },
+                    ],
+                    terms: [],
+                },
+                Signal {
+                    name: "rejected",
+                    params: [],
+                    terms: [],
+                },
+                Course {
+                    body: Block {
+                        stmts: [
+                            Let {
+                                mutable: false,
+                                name: "first",
+                                ty: None,
+                                value: Question(
+                                    Call {
+                                        callee: Ident("step"),
+                                        args: [
+                                            Arg {
+                                                label: None,
+                                                expr: Int(1),
+                                            },
+                                        ],
+                                    },
+                                ),
+                            },
+                            Together {
+                                body: Block {
+                                    stmts: [
+                                        Let {
+                                            mutable: false,
+                                            name: "a",
+                                            ty: None,
+                                            value: Question(
+                                                Call {
+                                                    callee: Ident("step"),
+                                                    args: [
+                                                        Arg {
+                                                            label: None,
+                                                            expr: Int(2),
+                                                        },
+                                                    ],
+                                                },
+                                            ),
+                                        },
+                                        Let {
+                                            mutable: false,
+                                            name: "b",
+                                            ty: None,
+                                            value: Question(
+                                                Call {
+                                                    callee: Ident("step"),
+                                                    args: [
+                                                        Arg {
+                                                            label: None,
+                                                            expr: Int(3),
+                                                        },
+                                                    ],
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                },
+                            },
+                            Sleep(
+                                Duration(3600000),
+                            ),
+                            Sleep(
+                                Binary(
+                                    Mul,
+                                    Call {
+                                        callee: Ident("grace"),
+                                        args: [],
+                                    },
+                                    Int(2),
+                                ),
+                            ),
+                            Expr(
+                                Await {
+                                    signal: "approved",
+                                    within: None,
+                                },
+                            ),
+                            Let {
+                                mutable: false,
+                                name: "who",
+                                ty: None,
+                                value: Await {
+                                    signal: "approved",
+                                    within: Duration(86400000),
+                                },
+                            },
+                            Let {
+                                mutable: false,
+                                name: "verdict",
+                                ty: None,
+                                value: Select {
+                                    arms: [
+                                        AwaitArm {
+                                            signal: "approved",
+                                            bind: Bind("by"),
+                                            body: Ident("by"),
+                                        },
+                                        AwaitArm {
+                                            signal: "rejected",
+                                            bind: None,
+                                            body: Block {
+                                                stmts: [
+                                                    Return(None),
+                                                ],
+                                            },
+                                        },
+                                        AwaitArm {
+                                            signal: "approved",
+                                            bind: Some(
+                                                Bind("x"),
+                                            ),
+                                            body: Ident("x"),
+                                        },
+                                        TimeoutArm {
+                                            after: Duration(259200000),
+                                            body: Str("none"),
+                                        },
+                                    ],
+                                },
+                            },
+                            Expr(
+                                Question(
+                                    Call {
+                                        callee: Ident("step"),
+                                        args: [
+                                            Arg {
+                                                label: None,
+                                                expr: Binary(
+                                                    Add,
+                                                    Ident("a"),
+                                                    Ident("b"),
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                ),
+                            ),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

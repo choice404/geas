@@ -1,0 +1,4 @@
+amends vow 'missing' is not a vow of contract 'Saga'
+amends vow 'ship' is not a vow of contract 'Saga'
+amends vow 'dsn' has type 'Int' but the vow is 'String'
+unknown name 'nothing'

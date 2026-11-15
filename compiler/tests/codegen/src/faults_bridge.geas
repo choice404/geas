@@ -1,0 +1,34 @@
+// Shapes the module emitter lowers and the bridge refuses: a Byte and a
+// Char on the wire, a vow outside the scalar set, a pledge returning
+// neither Result nor Option, pledges whose rpc spelling the session surface
+// owns, and a version that is not an integer
+
+record Raw {
+    b: Byte
+    c: Char
+}
+
+contract Wire [version: 1.5] {
+    vow level: Byte = 3
+    vow who: String
+
+    pledge session(x: Int) -> Result<Int, Int> {
+        return Ok(x)
+    }
+
+    pledge get_partial(x: Int) -> Result<Int, Int> {
+        return Ok(x)
+    }
+
+    pledge raw(r: Raw) -> Result<Raw, Char> {
+        return Ok(r)
+    }
+
+    pledge bytes(xs: List<Byte>, m: Map<Char, Int>) -> Option<Tuple<Int, Byte>> {
+        return None
+    }
+
+    pledge plain(x: Int) -> Unit {
+        let y = x
+    }
+}

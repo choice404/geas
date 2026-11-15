@@ -1,0 +1,3 @@
+contract Bad {
+    pledge pay() -> Unit retry 3 every 1s backoff 2
+}

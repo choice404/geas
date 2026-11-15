@@ -1,0 +1,28 @@
+// The arithmetic Duration and Time do not have
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Clock {
+    clause scaled(d: Duration) -> Duration {
+        return d * 2.0
+    }
+
+    clause shifted(d: Duration) -> Duration {
+        return d + 1
+    }
+
+    clause summed(a: Time, b: Time) -> Time {
+        return a + b
+    }
+
+    clause compared(d: Duration, t: Time) -> Bool {
+        return d < t
+    }
+}

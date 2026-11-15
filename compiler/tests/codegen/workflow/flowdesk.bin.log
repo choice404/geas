@@ -1,0 +1,4 @@
+exit 1
+skeleton/flowdesk.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The workflow surface from the Geas side of the host line. Desk signs a
+  ^

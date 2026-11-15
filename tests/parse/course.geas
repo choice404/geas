@@ -1,0 +1,28 @@
+// The course and its statements and expressions: sleep, together, await,
+// await with a deadline, and select over await and timeout arms
+contract Flow {
+    pledge step(n: Int) -> Result<Int, Err>
+    signal approved(by: String)
+    signal rejected()
+
+    course {
+        let first = step(1)?
+        together {
+            let a = step(2)?
+            let b = step(3)?
+        }
+        sleep 1h
+        sleep grace() * 2
+        await approved
+        let who = await approved within 24h
+        let verdict = select {
+            await approved as by -> by
+            await rejected -> {
+                return
+            }
+            await approved as Some(x) -> x
+            timeout 3d -> "none"
+        }
+        step(a + b)?
+    }
+}

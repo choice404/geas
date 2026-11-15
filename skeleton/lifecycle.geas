@@ -59,7 +59,7 @@ contract Driver {
 
         let d = Counter.resume(park_dsn, "walk-1")
         let s2 = d.status()
-        let after = d.label
+        let later = d.label
         let r2 = d.bump(4)
         match r2 {
             Ok(v2) -> {
@@ -70,7 +70,7 @@ contract Driver {
             Err(e2) -> { return Err(e2) }
         }
         d.break()
-        return Ok(s0 + "," + s1 + "," + s2 + "," + before + "," + after)
+        return Ok(s0 + "," + s1 + "," + s2 + "," + before + "," + later)
     }
 
     // The partial surface as a value: the record before any fulfillment and

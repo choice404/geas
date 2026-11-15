@@ -1,0 +1,40 @@
+// Every workflow construct that joins the shape: signals, remedies, terms on
+// each kind of declaration, the course, and the term attribute. Each adds
+// its own segment after the segments an older contract already had
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout
+
+contract Saga [version: 2, term: 7d] {
+    vow grace: Duration = 30s
+
+    subcontract Payment within 10m {
+        pledge capture(at: Time) -> Result<Receipt, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.00 cap 30s on Timeout
+    }
+
+    subcontract after capture {
+        pledge audit() -> Unit
+    }
+
+    pledge ship() -> Unit
+        after Payment
+    signal delivered(code: String, count: Int) after ship within 14d
+    signal cancelled()
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 10 every 1m
+    remedy recall for ship() -> Unit
+
+    course {
+        ship()
+        await delivered
+    }
+}
+
+contract Plain {
+    pledge ship() -> Unit
+}

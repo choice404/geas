@@ -4,6 +4,95 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.8.0] the durable obligation
+
+Geas becomes what its name always said it was, a language for durable
+obligations: contracts that take a long time to keep, can be partly kept,
+can break, can make amends, and can be parked on one machine and picked
+back up on another. A contract now declares its deadlines, its ordering,
+and its retries as terms, the steps that undo what landed as remedies,
+and the outside events it waits on as signals, and the runtime holds all
+of it on a clock the host can replace. The compiler is written in C++23,
+by hand, under compiler/, the whole front end and the C emitter in one
+place with the new surface built in; the runtime stays C and grows the
+workflow tail beside everything it already enforced. The order
+saga runs host driven end to end from C and from Python, and the course
+and amends blocks, the engine driven mode and typed amendment, already
+parse and check so the next release builds on a front end that knows
+them.
+
+- write the compiler in C++23 under compiler/, a hand written recursive
+  descent parser over a lexer that marks each token with the line break
+  before it, a checker in passes, and the C emitter, built with CMake
+  through make compiler into target/bin/geas, and make compiler
+  SANITIZE=ON for the ASan and UBSan build in target/bin-asan
+- pin the front end with goldens: tests/run.sh drives the lex, parse,
+  check, and shape suites, every reject beside the diagnostics it must
+  produce, and compiler/tests/run_codegen.sh pins the emitted C
+- add Duration and Time: duration literals are one token, 30s, 250ms,
+  1h30m, 7d, units descending and each at most once, and both types
+  cross the boundary as an Int of milliseconds while hashing and
+  mangling apart from Int; the arithmetic is closed, a Duration scales by
+  an Int, a Time shifts by a Duration, and Time minus Time is a Duration
+- add terms: within is a deadline counted from eligibility, after is
+  ordering over pledges, subcontracts, and signals with cycles refused,
+  and retry carries every, backoff, cap, and on, where only lifecycle
+  failures retry unless on names the variants of the pledge's own error
+  sum that may
+- add the term attribute, a contract's whole lifetime from sign, which
+  breaks a Signed or Partial contract the way its break line would when
+  it runs out and leaves a Fulfilled one alone
+- add remedies: remedy NAME for PLEDGE(param) undoes a pledge that
+  landed, handed its Ok value, bound like a pledge as a Geas body, a
+  foreign symbol, or a host binding, and run newest latch first when the
+  contract breaks, a failing remedy recorded without stopping the rest
+- add the Remedying state at the end of GeasContractState, so every
+  earlier number stands, read while the remedies run and followed by
+  Broken
+- add signals: an outside event with no body, a requirements atom when
+  loose and an after target anywhere, delivered with geas_signal from a
+  host or through an instance from Geas, the first delivery winning and
+  its payload parking with the instance
+- teach the sum declaration to wrap, or continuing the line above, and
+  add the generic constructors List<T>(..), Option<T>(..),
+  Result<T, E>(..), and Tuple<..>(..) beside Map<K, V>()
+- grow the descriptor with the workflow tail, kinds, terms, remedies,
+  and the contract term, as pure additions, and add
+  geas_register_contract_sized so a module built against the older
+  descriptor loads with no byte past it touched
+- give the runtime a clock: geas_runtime_set_clock swaps the time and
+  the sleep, every entry point applies passed deadlines first, and
+  geas_instance_tick and geas_runtime_tick let a host lapse a deadline
+  the moment it falls due from its own scheduler
+- report the workflow on the partial surface: geas_partial_lapsed and
+  geas_contract_term_lapsed tell a lapse from an Err, and
+  geas_remedy_state and the geas_partial_remedy calls read how every
+  remedy went
+- carry the workflow across a park: the park row gains a flow column, a
+  versioned blob of eligibility stamps, lapses, Ok values, signal
+  payloads, and remedy progress, brought into an existing table in place,
+  and a row written before it still resumes
+- add the order saga: skeleton/saga.geas and skeleton/flowdesk.geas,
+  driven by make test-saga from C and make test-saga-python from Python,
+  with make test-terms, test-remedy, test-signal, and
+  test-workflow-park under the sanitizers and tsan-workflow under
+  ThreadSanitizer, all on a fake clock
+- emit a typed Signal rpc per signal from emit-proto, with a helper in
+  the Go and TypeScript session wrappers and REMEDYING in the state enum
+  of a file whose contracts carry the workflow surface
+- bind it all from Python: geas.py gains set_clock, tick, signal,
+  signal_payload, lapsed, term_lapsed, remedy_state, and
+  remedy_failures, written against docs/abi.md alone like the rest
+- parse and check the course and amends blocks: course, await, select,
+  sleep, together, and now() hold every rule, bare name pledge calls,
+  course only statements, a contract driven by its course refusing
+  instance calls, and amends items checked against the version that
+  carries them, while build answers workflow constructs are not emitted
+  yet until the engine driven mode lands
+- write it down: the grammar, the spec, the tutorial's saga walk, the
+  ABI's workflow surface, and a README that says what the language is
+  for
+
 ## [v0.7.3] the installed toolchain
 
 The toolchain leaves the checkout. `make install` lays geas out the way
@@ -31,6 +120,9 @@ package: `geas` on the AUR, built from the tagged release tarball.
   bin/geas, lib/libgeasrt.so, include/geas, and share/geas/std
 - pin -fPIC on the runtime shared library rule itself, so a packager's
   own CFLAGS cannot drop it out from under -shared
+- make the binary agree with the release about what version it is:
+  version_string answers geas 0.7.3, and the package's check refuses a
+  binary that disagrees with pkgver so the two can never drift again
 - cut the AUR package: packaging/aur carries the PKGBUILD the AUR copy
   is cut from, gcc is the one runtime dependency because the vendored
   SQLite rides inside libgeasrt, and dusk-lang builds it

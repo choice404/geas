@@ -1,0 +1,128 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Undo",
+            attrs: [],
+            members: [
+                Pledge {
+                    name: "capture",
+                    params: [
+                        Field {
+                            name: "auth",
+                            ty: Named("AuthId"),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Receipt"),
+                        Named("PayError"),
+                    ]),
+                    attrs: [],
+                    body: None,
+                },
+                Pledge {
+                    name: "reserve",
+                    params: [
+                        Field {
+                            name: "items",
+                            ty: Named("List", [
+                                Named("Item"),
+                            ]),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Reservation"),
+                        Named("StockError"),
+                    ]),
+                    attrs: [],
+                    body: None,
+                },
+                Pledge {
+                    name: "note",
+                    params: [],
+                    ret: Named("Unit"),
+                    attrs: [],
+                    body: None,
+                },
+                Remedy {
+                    name: "refund",
+                    target: "capture",
+                    param: Field {
+                        name: "receipt",
+                        ty: Named("Receipt"),
+                    },
+                    ret: Named("Result", [
+                        Named("Unit"),
+                        Named("PayError"),
+                    ]),
+                    terms: [
+                        Retry {
+                            count: 10,
+                            every: Duration(60000),
+                            backoff: Float("2.0"),
+                            cap: Duration(3600000),
+                            on: [],
+                        },
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Remedy {
+                    name: "release",
+                    target: "reserve",
+                    param: Field {
+                        name: "r",
+                        ty: Named("Reservation"),
+                    },
+                    ret: Named("Unit"),
+                    terms: [],
+                    attrs: [],
+                    body: None,
+                },
+                Remedy {
+                    name: "forget",
+                    target: "note",
+                    param: None,
+                    ret: Named("Unit"),
+                    terms: [
+                        Within(Duration(5000)),
+                    ],
+                    attrs: [
+                        Attr {
+                            key: "symbol",
+                            value: Str("forget_note"),
+                        },
+                    ],
+                    body: None,
+                },
+                Remedy {
+                    name: "undo",
+                    target: "capture",
+                    param: Field {
+                        name: "receipt",
+                        ty: Named("Receipt"),
+                    },
+                    ret: Named("Unit"),
+                    terms: [],
+                    attrs: [],
+                    body: Block {
+                        stmts: [
+                            Expr(
+                                Call {
+                                    callee: Ident("log"),
+                                    args: [
+                                        Arg {
+                                            label: None,
+                                            expr: Ident("receipt"),
+                                        },
+                                    ],
+                                },
+                            ),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

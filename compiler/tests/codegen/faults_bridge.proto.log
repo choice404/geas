@@ -1,0 +1,31 @@
+exit 1
+compiler/tests/codegen/src/faults_bridge.geas: 11:25: error: codegen: the version attribute must be an integer literal
+  contract Wire [version: 1.5] {
+                          ^~~
+compiler/tests/codegen/src/faults_bridge.geas: 12:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow level: Byte = 3
+      ^~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 23:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge raw(r: Raw) -> Result<Raw, Char> {
+      ^~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 23:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Char
+      pledge raw(r: Raw) -> Result<Raw, Char> {
+      ^~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 23:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Char
+      pledge raw(r: Raw) -> Result<Raw, Char> {
+      ^~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 27:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Option<Tuple<Int, Byte>>
+      pledge bytes(xs: List<Byte>, m: Map<Char, Int>) -> Option<Tuple<Int, Byte>> {
+      ^~~~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 31:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge plain(x: Int) -> Unit {
+      ^~~~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 15:5: error: codegen: a pledge's rpc spelling collides with the session surface: Session
+      pledge session(x: Int) -> Result<Int, Int> {
+      ^~~~~~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 19:5: error: codegen: a pledge's rpc spelling collides with the session surface: GetPartial
+      pledge get_partial(x: Int) -> Result<Int, Int> {
+      ^~~~~~~~~~~~~~~~~~
+compiler/tests/codegen/src/faults_bridge.geas: 27:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge bytes(xs: List<Byte>, m: Map<Char, Int>) -> Option<Tuple<Int, Byte>> {
+      ^~~~~~~~~~~~

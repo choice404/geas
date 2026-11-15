@@ -1,0 +1,30 @@
+// Amends blocks chained from two older versions, every item naming what this
+// version can verify
+contract Saga [version: 3] {
+    vow dsn: String
+    vow region: String = "eu"
+    vow grace: Duration = 1h
+
+    subcontract Payment {
+        pledge capture() -> Unit
+    }
+    pledge ship() -> Unit
+    signal delivered()
+
+    amends 1 {
+        vow dsn = prior.store_url
+        vow region = "us"
+        vow grace = prior.grace + 30m
+        rename dispatch -> ship
+        rename Billing -> Payment
+        rename charge -> capture
+        rename url -> dsn
+        retire legacy
+        latch delivered as pending
+        latch capture as fulfilled
+    }
+
+    amends 2 {
+        latch ship as broken
+    }
+}

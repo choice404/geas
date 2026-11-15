@@ -1,0 +1,14 @@
+// A retry makes at least one more attempt
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    pledge pay() -> Unit retry 0
+}

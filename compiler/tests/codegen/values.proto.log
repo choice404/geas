@@ -1,0 +1,19 @@
+exit 1
+compiler/tests/codegen/src/values.geas: 25:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow mark: Char = 'x'
+      ^~~~~~~~
+compiler/tests/codegen/src/values.geas: 26:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow small: Byte = 7
+      ^~~~~~~~~
+compiler/tests/codegen/src/values.geas: 169:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge silent(x: Int) -> Unit {
+      ^~~~~~~~~~~~~
+compiler/tests/codegen/src/values.geas: 94:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Char
+      pledge scalars(u: UInt, c: Char, y: Byte, f: Float) -> Result<Float, Int> {
+      ^~~~~~~~~~~~~~
+compiler/tests/codegen/src/values.geas: 94:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge scalars(u: UInt, c: Char, y: Byte, f: Float) -> Result<Float, Int> {
+      ^~~~~~~~~~~~~~
+compiler/tests/codegen/src/values.geas: 134:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Result<Option<Shape>, String>
+      pledge nested(w: Result<Option<Shape>, String>) -> Option<Float> {
+      ^~~~~~~~~~~~~

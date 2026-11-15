@@ -120,7 +120,10 @@ typedef enum GeasContractState {
     GEAS_SIGNED,
     GEAS_FULFILLED,
     GEAS_PARTIAL,
-    GEAS_BROKEN
+    GEAS_BROKEN,
+    GEAS_REMEDYING      /* the break is decided and the remedies are running;
+                        * appended after Broken so every earlier state keeps
+                        * its number, and always followed by Broken */
 } GeasContractState;
 
 struct GeasRuntime;
@@ -262,6 +265,73 @@ enum {
     GEAS_SUB_TRANSACTIONAL = 1
 };
 
+/* The pledge kinds, carried in a byte array parallel to the pledges table, one
+ * entry per pledge in declaration order. A signal is an outside event the host
+ * delivers into a live instance through geas_signal; it rides the pledges
+ * table so its latch, its requirements atom, its place on the partial surface,
+ * and its terms are the pledge machinery unchanged, and its fn is NULL because
+ * nothing runs and nothing binds. A NULL pledge_kinds reads as all zero, every
+ * entry an ordinary pledge, which is every descriptor emitted before signals
+ * and every handwritten one. */
+enum {
+    GEAS_KIND_PLEDGE = 0,
+    GEAS_KIND_SIGNAL = 1
+};
+
+/* One item an "after" term waits on: a pledge or signal by its pledges table
+ * index, or a subcontract by its subs table index. The item counts as landed
+ * when it latched fulfilled, a subcontract when every pledge inside it did. */
+enum {
+    GEAS_REF_PLEDGE = 0,
+    GEAS_REF_SUB    = 1
+};
+
+typedef struct GeasItemRef {
+    uint32_t kind;   /* GEAS_REF_PLEDGE or GEAS_REF_SUB */
+    uint32_t index;  /* pledges or subs table index */
+} GeasItemRef;
+
+/* The terms of one item, the within, after, and retry a declaration trails.
+ * All zero is "no terms", which is what a zero-filled entry and a NULL terms
+ * table both read as. Durations are wall clock milliseconds.
+ *
+ * within_ms is the deadline, counted from the moment the item became
+ * eligible; 0 is no deadline. after lists the items that must latch fulfilled
+ * before this one is eligible; none means eligible at sign. retry_count is how
+ * many times a failed fulfillment is run again inside the one fulfill call;
+ * the n-th retry, counting from 0, waits retry_every_ms * retry_backoff^n
+ * first, held at retry_cap_ms when that is nonzero. A retry_backoff of 0 reads
+ * as 1.0, a constant delay. retry_on lists the variant tags of the pledge's
+ * Err sum that are worth another attempt; without it only a thunk status
+ * other than GEAS_OK retries and a business Err never does. */
+typedef struct GeasTermDesc {
+    uint64_t           within_ms;
+    uint32_t           nafter;
+    uint32_t           retry_count;
+    const GeasItemRef* after;
+    uint64_t           retry_every_ms;
+    double             retry_backoff;
+    uint64_t           retry_cap_ms;
+    uint32_t           nretry_on;
+    const uint32_t*    retry_on;      /* variant tags of the Err sum */
+} GeasTermDesc;
+
+/* One remedy of a contract: the undo of one pledge that landed. target is the
+ * pledges table index of the pledge it undoes. has_param is 1 when the remedy
+ * takes the pledge's Ok value as its single argument and 0 when it takes
+ * none. fn rides the uniform thunk frame, NULL marking an abstract remedy the
+ * host binds through geas_pledge_bind under "Contract.remedy" or the mangled
+ * symbol. terms carries the remedy's own within and retry; a remedy has no
+ * after. A remedy is never a requirements atom and never an item. */
+typedef struct GeasRemedyDesc {
+    const char*  name;
+    const char*  mangled;
+    uint32_t     target;     /* pledges table index */
+    uint32_t     has_param;  /* 1 when the thunk takes the target's Ok value */
+    GeasPledgeFn fn;         /* NULL marks an abstract remedy awaiting a bind */
+    GeasTermDesc terms;      /* within and retry only */
+} GeasRemedyDesc;
+
 /* The requirements surface rides at the tail of the contract descriptor so a
  * zero-filled handwritten descriptor stays valid: no atoms and no lines means
  * the runtime applies the structural default policy over subs and loose
@@ -305,7 +375,31 @@ typedef struct GeasContractDesc {
      * transactional modifier and every handwritten one, so the field is a pure
      * tail addition the runtime reads beside the subs table. */
     const uint8_t*       sub_flags;
+    /* The workflow surface, a pure tail addition again: every field below
+     * reads as absent when zero, so a zero-filled handwritten descriptor is a
+     * contract with no signals, no terms, no remedies, and no term of its own.
+     * A module compiled before these fields existed carries a shorter struct;
+     * the registrar reports the size it was compiled with, see
+     * geas_register_contract in geas.h, and the runtime reads nothing past it.
+     *
+     * pledge_kinds is one GEAS_KIND_* byte per pledge. pledge_terms is one
+     * GeasTermDesc per pledge and sub_terms one per subcontract, each NULL
+     * when no item of that table carries a term. remedies lists the contract's
+     * remedies in declaration order. term_ms is the contract's own term in
+     * milliseconds from sign, 0 for none. */
+    const uint8_t*        pledge_kinds;
+    const GeasTermDesc*   pledge_terms;
+    const GeasTermDesc*   sub_terms;
+    uint32_t              nremedies;
+    const GeasRemedyDesc* remedies;
+    uint64_t              term_ms;
 } GeasContractDesc;
+
+/* The byte size of the descriptor every module built before the workflow
+ * surface carries: everything up to and including sub_flags. The plain
+ * geas_register_contract symbol reads exactly this much. */
+#define GEAS_CONTRACT_DESC_V1_SIZE \
+    (offsetof(GeasContractDesc, sub_flags) + sizeof(const uint8_t*))
 
 /* A vow override a host supplies at sign. The value is copied onto the
  * instance, string bytes included; the runtime keeps nothing the host owns. */

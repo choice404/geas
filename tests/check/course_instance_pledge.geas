@@ -1,0 +1,29 @@
+// A contract with a course is engine driven: a host delivers its signals and never
+// calls its pledges
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Flow {
+    pledge step() -> Unit
+    signal approved()
+    course {
+        step()
+        await approved
+    }
+}
+
+contract Host {
+    pledge run() -> Unit {
+        let flow = Flow.sign()
+        flow.approved()
+        flow.step()
+        let held = flow.step
+    }
+}

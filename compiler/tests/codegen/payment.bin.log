@@ -1,0 +1,4 @@
+exit 1
+skeleton/payment.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The M7 partial fulfillment skeleton: the README PaymentService reshaped to
+  ^

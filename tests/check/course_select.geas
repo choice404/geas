@@ -1,0 +1,27 @@
+// select arms agree on one type and an as pattern is held to the payload
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Flow {
+    signal approved(by: String)
+    signal counted(n: Int)
+    course {
+        let verdict = select {
+            await approved as by -> by
+            await counted as n -> n
+            timeout 1h -> 2.0
+        }
+        let shaped = select {
+            await approved as Some(x) -> 1
+            await counted as 7 -> 2
+            await counted as "seven" -> 3
+        }
+    }
+}

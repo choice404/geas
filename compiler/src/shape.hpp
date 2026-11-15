@@ -1,0 +1,91 @@
+// The shape of a checked contract, the flattened view code generation and
+// the header emitter both read: its version and term, its vows, pledges,
+// subcontracts, signals, remedies, and schemas in declaration order, the
+// requirements atoms in first appearance order, the canonical shape string
+// with its hash, and the mangled name of every pledge and remedy.
+//
+// The shape string spells the contract name, then each vow, pledge, and
+// schema, so a contract that uses none of the workflow surface hashes
+// exactly as it always has. Signals, remedies, terms, the course, and the
+// term attribute each append a segment of their own, and only when the
+// contract has one
+#pragma once
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "ast.hpp"
+#include "checked.hpp"
+#include "loader.hpp"
+#include "sigs.hpp"
+#include "types.hpp"
+
+namespace geas {
+
+// One pledge, loose or inside a subcontract, with the ordinal of the
+// subcontract that owns it, -1 for a loose pledge
+struct PledgeShape {
+    const PledgeDecl* decl;
+    int subOrdinal;
+    std::string signature;
+    std::uint64_t sigHash;
+    std::string mangled;
+};
+
+struct SignalShape {
+    const SignalDecl* decl;
+    int subOrdinal;
+};
+
+// One remedy and the pledge it undoes
+struct RemedyShape {
+    const RemedyDecl* decl;
+    const PledgeDecl* target;
+    std::string signature;
+    std::uint64_t sigHash;
+    std::string mangled;
+};
+
+struct ContractShape {
+    const ContractDecl* decl;
+    std::int64_t version;
+    std::optional<std::int64_t> termMilliseconds;
+    std::vector<const VowDecl*> vows;
+    std::vector<PledgeShape> pledges;
+    std::vector<const SubcontractDecl*> subs;
+    std::vector<SignalShape> signals;
+    std::vector<RemedyShape> remedies;
+    std::vector<const SchemaDecl*> schemas;
+    const RequirementsDecl* requirements;
+    std::vector<std::string> requirementAtoms;
+    const CourseDecl* course;
+    std::string shape;
+    std::uint64_t shapeHash;
+};
+
+/**
+ * The contract's version attribute, 1 when it carries none.
+ * @params ast - the tree, contract - the contract to read
+ * @returns {std::int64_t} - the version
+ */
+std::int64_t contractVersion(const Ast& ast, const ContractDecl& contract);
+
+/**
+ * The contract's term attribute in milliseconds.
+ * @params ast - the tree, contract - the contract to read
+ * @returns {std::optional<std::int64_t>} - the lifetime, nullopt when the contract carries no term
+ */
+std::optional<std::int64_t> contractTerm(const Ast& ast, const ContractDecl& contract);
+
+/**
+ * Flattens every contract of a checked program, in declaration order.
+ * @params program - the loaded program, sigs - its lowered signatures, types - the arena, tables -
+ * the checker's side tables
+ * @returns {std::vector<ContractShape>} - one shape per contract
+ */
+std::vector<ContractShape> buildContractShapes(const Program& program, const Sigs& sigs,
+                                               const TypeArena& types, const CheckTables& tables);
+
+}  // namespace geas

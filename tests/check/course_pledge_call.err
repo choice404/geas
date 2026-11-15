@@ -1,0 +1,6 @@
+pledge 'step' is fulfilled through a signed instance
+pledge 'step' takes 1 arguments, got 0
+argument 1 of 'step' expects 'Int', got 'String'
+pledge 'step' is not a value; call it
+the let binding is annotated 'String' but the value has type 'Int'
+'?' needs an Option or a Result value

@@ -1,0 +1,4 @@
+the parameter of remedy 'refund' has type 'Item' but pledge 'pay' yields 'Receipt'
+remedy 'retract' cannot take a parameter; pledge 'notify' yields no Ok value
+remedy 'forget' cannot take a parameter; pledge 'lookup' yields no Ok value
+remedy 'erase' cannot take a parameter; pledge 'log' yields no Ok value

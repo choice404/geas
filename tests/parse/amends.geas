@@ -1,0 +1,20 @@
+// Amends blocks: a supplied vow reading the prior instance, a rename, a
+// retirement, and a latch for each starting state
+contract Saga [version: 3] {
+    vow dsn: String
+
+    amends 1 {
+        vow dsn = prior.store_url
+        rename dispatch -> ship
+        retire legacy
+        latch delivered as pending
+    }
+
+    amends 2 {
+        latch audited as fulfilled
+        latch flagged as broken
+    }
+
+    amends 0x2 {
+    }
+}

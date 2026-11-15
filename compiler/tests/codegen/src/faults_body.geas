@@ -1,0 +1,46 @@
+// Constructs the checker accepts and the module emitter names as build
+// errors, each one a fault with its own span
+
+record Pair {
+    a: Int
+    b: Int
+}
+
+internal contract Secret {
+    pledge peek(x: Int) -> Result<Int, Int> {
+        return Ok(x)
+    }
+}
+
+contract Other {
+    vow items: List<Int>
+
+    pledge get(x: Int) -> Result<Int, Int> {
+        return Ok(x)
+    }
+}
+
+contract Faulty [version: "two"] {
+    vow pair: Pair
+    vow fine: Int = 1
+
+    pledge tagged(x: Int) -> Result<Int, Int> [symbol: "tagged_sym"] {
+        return Ok(x)
+    }
+
+    pledge first_class(x: Int) -> Result<Int, Int> {
+        let o = Other.sign(items: [1])
+        let f = o.get
+        return f(x)
+    }
+
+    pledge hidden(x: Int) -> Result<Int, Int> {
+        let s = Secret.sign()
+        return s.peek(x)
+    }
+
+    pledge floats(x: Float) -> Result<Float, Int> {
+        let r = x % 2.0
+        return Ok(r)
+    }
+}

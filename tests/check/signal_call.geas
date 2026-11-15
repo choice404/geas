@@ -1,0 +1,27 @@
+// A signal is delivered through an instance with its own arguments
+record Item {
+    sku: String
+}
+
+record Receipt {
+    id: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Shop {
+    signal delivered(sku: String)
+    pledge local() -> Unit {
+        delivered("sku")
+        let s = delivered
+    }
+}
+
+contract Host {
+    pledge run() -> Unit {
+        let shop = Shop.sign()
+        shop.delivered()
+        shop.delivered(7)
+        let held = shop.delivered
+    }
+}

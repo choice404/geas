@@ -1,0 +1,23 @@
+// The newline continuations: a sum whose or chain wraps a variant a line,
+// an "either" that ends its line, and an else on the line after its brace
+PayError is either
+    Declined(reason: String)
+    or Timeout
+    or Gateway(code: Int)
+
+Short is either A or B
+    or C
+
+contract Branch {
+    clause pick(n: Int) -> Int {
+        if n > 0 {
+            return 1
+        }
+        else if n < 0 {
+            return 2
+        }
+        else {
+            return 3
+        }
+    }
+}

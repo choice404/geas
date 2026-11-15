@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The golden test runner for the geas front end. Each suite directory pairs
 # with a geas command: tests/lex with `geas lex`, tests/parse with
-# `geas parse`, and tests/check and tests/typeck with `geas check`. Every NAME.geas with a
+# `geas parse`, tests/check and tests/typeck with `geas check`, and
+# tests/shape with `geas dump-shape`, the debug command that prints every
+# shape string, shape hash, and mangled name. Every NAME.geas with a
 # NAME.expect beside it must be accepted and its dump must match the golden
 # byte for byte; check writes nothing to stdout, so its goldens are a single
 # blank line guarding that silence. Every NAME.geas with a
@@ -9,21 +11,25 @@
 # .err file appearing somewhere in stderr as a substring, so a diagnostic can
 # gain context without breaking the suite. tests/check/mfa holds the
 # multi-file programs: only files with a golden beside them are roots, the
-# rest are modules the roots import. The geas binary is rebuilt when
-# missing; set GEAS to test another build, or DUSK to build with another
-# toolchain.
+# rest are modules the roots import. The geas binary is built with
+# `make compiler` when missing; set GEAS to test another build, the
+# sanitizer one at target/bin-asan/geas for instance.
 
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-DUSK="${DUSK:-dusk}"
-GEAS="${GEAS:-$ROOT/target/dusk-out/geas}"
+GEAS="${GEAS:-$ROOT/target/bin/geas}"
 
 if [ ! -x "$GEAS" ]; then
-    echo "[tests] building geas with $DUSK" >&2
-    "$DUSK" build compiler/geas.dusk || exit 1
+    echo "[tests] no geas binary at $GEAS, running make compiler" >&2
+    make compiler >&2 || exit 1
+fi
+
+if [ ! -x "$GEAS" ]; then
+    echo "[tests] make compiler left no binary at $GEAS" >&2
+    exit 1
 fi
 
 pass=0
@@ -171,6 +177,7 @@ run_suite lex lex
 run_suite parse parse
 run_suite check check
 run_suite typeck check
+run_suite shape dump-shape
 run_multi_suite check/mfa
 run_bin_suite
 

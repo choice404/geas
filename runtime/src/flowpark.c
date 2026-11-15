@@ -1,0 +1,307 @@
+/* flowpark.c: the workflow state in the park row. The row's first ten
+ * columns are what a parked instance has always been, the vows, the latches,
+ * the Err payloads, the transactional fates. The eleventh, flow, is one blob
+ * written and read here, and it carries what the terms, signals, and
+ * remedies keep on an instance: the signing time in milliseconds, when each
+ * item became eligible, which latches are lapses, the Ok value of every
+ * fulfilled pledge and with it every signal payload, the latch order, and
+ * where each remedy stands.
+ *
+ * The blob is versioned. It opens with the four bytes "GFLW" and a version
+ * number, and this file reads version 2 and nothing else: a blob of any
+ * other version is refused, not guessed at. Version 1 of the park format is
+ * the row with no blob at all, the row every runtime before the workflow
+ * state wrote, and an empty blob is how it reads here; such a row resumes
+ * with the workflow state rebuilt from what the row does hold.
+ *
+ * Integers are little endian at fixed widths, values are the wire codec's
+ * canonical encoding, the same bytes the vows and the Err payloads already
+ * use in the row beside it. Everything runs under the instance lock, or on
+ * an instance nothing else can reach yet. */
+
+#include "runtime_internal.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+#define FLOW_MAGIC   "GFLW"
+#define FLOW_VERSION 2u
+
+/* ---- writing ---- */
+
+/* A growable byte buffer. A failed growth latches oom and every later put is
+ * a no-op, so the encoder checks once at the end. */
+typedef struct FlowOut {
+    uint8_t* buf;
+    size_t   len;
+    size_t   cap;
+    int      oom;
+} FlowOut;
+
+static uint8_t* out_room(FlowOut* o, size_t n) {
+    if (o->oom) return NULL;
+    if (o->len + n > o->cap) {
+        size_t cap = o->cap ? o->cap * 2 : 256;
+        while (cap < o->len + n) cap *= 2;
+        uint8_t* grown = realloc(o->buf, cap);
+        if (!grown) {
+            o->oom = 1;
+            return NULL;
+        }
+        o->buf = grown;
+        o->cap = cap;
+    }
+    uint8_t* at = o->buf + o->len;
+    o->len += n;
+    return at;
+}
+
+static void out_bytes(FlowOut* o, const void* p, size_t n) {
+    uint8_t* at = out_room(o, n);
+    if (at) memcpy(at, p, n);
+}
+
+static void out_u8(FlowOut* o, uint8_t v) {
+    out_bytes(o, &v, 1);
+}
+
+static void out_u32(FlowOut* o, uint32_t v) {
+    uint8_t b[4];
+    for (int i = 0; i < 4; i++) b[i] = (uint8_t)(v >> (8 * i));
+    out_bytes(o, b, 4);
+}
+
+static void out_i64(FlowOut* o, int64_t v) {
+    uint8_t b[8];
+    uint64_t u = (uint64_t)v;
+    for (int i = 0; i < 8; i++) b[i] = (uint8_t)(u >> (8 * i));
+    out_bytes(o, b, 8);
+}
+
+/* A presence byte, then the value's wire encoding when present. */
+static GeasStatus out_value(FlowOut* o, const GeasValue* v, int present) {
+    out_u8(o, (uint8_t)(present ? 1 : 0));
+    if (!present) return GEAS_OK;
+    size_t need = 0;
+    /* The sizing call answers GEAS_ERR_OOM with *need set, the codec's own
+     * size protocol, so only another status is a fault. */
+    GeasStatus st = geas_wire_encode_value(v, NULL, 0, &need);
+    if (st != GEAS_OK && st != GEAS_ERR_OOM) return st;
+    uint8_t* at = out_room(o, need);
+    if (!at) return GEAS_ERR_OOM;
+    return geas_wire_encode_value(v, at, need, &need);
+}
+
+static GeasStatus encode_pledges(const GeasContract* c, FlowOut* o) {
+    const GeasFlow* f = &c->flow;
+    uint32_t n = c->desc->npledges;
+    out_u32(o, n);
+    for (uint32_t i = 0; i < n; i++) {
+        out_i64(o, f->pledge_eligible_ms[i]);
+        out_u8(o, f->pledge_lapsed[i]);
+        out_u32(o, f->latch_seq[i]);
+        GeasStatus st = out_value(o, &f->pledge_ok[i], f->pledge_ok_set[i]);
+        if (st != GEAS_OK) return st;
+    }
+    return GEAS_OK;
+}
+
+static GeasStatus encode_remedies(const GeasContract* c, FlowOut* o) {
+    const GeasFlow* f = &c->flow;
+    static const GeasValue zero;
+    uint32_t n = c->desc->nremedies;
+    out_u32(o, n);
+    for (uint32_t r = 0; r < n; r++) {
+        out_u8(o, f->remedy_state[r]);
+        out_u32(o, (uint32_t)f->remedy_status[r]);
+        out_u8(o, f->remedy_lapsed[r]);
+        int present = memcmp(&f->remedy_err[r], &zero, sizeof(zero)) != 0;
+        GeasStatus st = out_value(o, &f->remedy_err[r], present);
+        if (st != GEAS_OK) return st;
+    }
+    return GEAS_OK;
+}
+
+GeasStatus geas_rt_flow_encode(const GeasContract* c, uint8_t** buf_out,
+                             size_t* len_out) {
+    const GeasFlow* f = &c->flow;
+    FlowOut o;
+    memset(&o, 0, sizeof(o));
+    out_bytes(&o, FLOW_MAGIC, 4);
+    out_u32(&o, FLOW_VERSION);
+    out_i64(&o, f->signed_ms);
+    out_u8(&o, f->term_lapsed);
+    out_u32(&o, f->next_seq);
+    GeasStatus st = encode_pledges(c, &o);
+    if (st == GEAS_OK) {
+        out_u32(&o, c->desc->nsubs);
+        for (uint32_t s = 0; s < c->desc->nsubs; s++) {
+            out_i64(&o, f->sub_eligible_ms[s]);
+        }
+        st = encode_remedies(c, &o);
+    }
+    if (st == GEAS_OK && o.oom) st = GEAS_ERR_OOM;
+    if (st != GEAS_OK) {
+        free(o.buf);
+        return st;
+    }
+    *buf_out = o.buf;
+    *len_out = o.len;
+    return GEAS_OK;
+}
+
+/* ---- reading ---- */
+
+/* A cursor over the blob. A read past the end latches bad and answers zero,
+ * so the decoder checks once per section. */
+typedef struct FlowIn {
+    const uint8_t* buf;
+    size_t         len;
+    size_t         off;
+    int            bad;
+} FlowIn;
+
+static const uint8_t* in_take(FlowIn* in, size_t n) {
+    if (in->bad || in->len - in->off < n) {
+        in->bad = 1;
+        return NULL;
+    }
+    const uint8_t* at = in->buf + in->off;
+    in->off += n;
+    return at;
+}
+
+static uint8_t in_u8(FlowIn* in) {
+    const uint8_t* at = in_take(in, 1);
+    return at ? at[0] : 0;
+}
+
+static uint32_t in_u32(FlowIn* in) {
+    const uint8_t* at = in_take(in, 4);
+    uint32_t v = 0;
+    for (int i = 0; at && i < 4; i++) v |= (uint32_t)at[i] << (8 * i);
+    return v;
+}
+
+static int64_t in_i64(FlowIn* in) {
+    const uint8_t* at = in_take(in, 8);
+    uint64_t v = 0;
+    for (int i = 0; at && i < 8; i++) v |= (uint64_t)at[i] << (8 * i);
+    return (int64_t)v;
+}
+
+/* The mirror of out_value: decodes onto the instance heap when present.
+ * *present_out, when non NULL, receives the presence byte. */
+static GeasStatus in_value(FlowIn* in, GeasContract* c, GeasValue* v,
+                          uint8_t* present_out) {
+    uint8_t present = in_u8(in);
+    if (in->bad || present > 1) return GEAS_ERR_TYPE;
+    if (present_out) *present_out = present;
+    if (!present) return GEAS_OK;
+    size_t used = 0;
+    GeasStatus st = geas_wire_decode_value(c, in->buf + in->off,
+                                         in->len - in->off, v, &used);
+    in->off += used;
+    return st;
+}
+
+static GeasStatus decode_pledges(GeasContract* c, FlowIn* in) {
+    GeasFlow* f = &c->flow;
+    uint32_t n = in_u32(in);
+    if (in->bad || n != c->desc->npledges) return GEAS_ERR_TYPE;
+    for (uint32_t i = 0; i < n; i++) {
+        f->pledge_eligible_ms[i] = in_i64(in);
+        f->pledge_lapsed[i] = in_u8(in);
+        f->latch_seq[i] = in_u32(in);
+        GeasStatus st = in_value(in, c, &f->pledge_ok[i], &f->pledge_ok_set[i]);
+        if (st != GEAS_OK) return st;
+        /* A lapse is a broken latch and nothing else. */
+        if (f->pledge_lapsed[i] > 1) return GEAS_ERR_TYPE;
+        if (f->pledge_lapsed[i] && c->pledge_state[i] != PLEDGE_BROKEN) {
+            return GEAS_ERR_TYPE;
+        }
+    }
+    return in->bad ? GEAS_ERR_TYPE : GEAS_OK;
+}
+
+/* A remedy recorded as running was in flight when the park was written. Its
+ * body may or may not have finished, and the rule is that no remedy runs
+ * twice, so it resumes as failed with a state error and the host reads it
+ * off the partial surface. */
+static GeasStatus decode_remedies(GeasContract* c, FlowIn* in) {
+    GeasFlow* f = &c->flow;
+    uint32_t n = in_u32(in);
+    if (in->bad || n != c->desc->nremedies) return GEAS_ERR_TYPE;
+    for (uint32_t r = 0; r < n; r++) {
+        uint8_t state = in_u8(in);
+        f->remedy_status[r] = (int32_t)in_u32(in);
+        f->remedy_lapsed[r] = in_u8(in);
+        GeasStatus st = in_value(in, c, &f->remedy_err[r], NULL);
+        if (st != GEAS_OK) return st;
+        if (state > REMEDY_FAILED || f->remedy_lapsed[r] > 1) return GEAS_ERR_TYPE;
+        if (state == REMEDY_RUNNING) {
+            state = REMEDY_FAILED;
+            f->remedy_status[r] = (int32_t)GEAS_ERR_STATE;
+        }
+        f->remedy_state[r] = state;
+    }
+    return in->bad ? GEAS_ERR_TYPE : GEAS_OK;
+}
+
+/* A row from before the workflow state. What it holds is the latches and
+ * the signing second, and the rest is rebuilt from them: the second stands
+ * for the millisecond stamp; an item that waits on nothing was eligible at
+ * sign and is stamped so, its deadline counting from the one time the row
+ * kept; an item whose after has landed is stamped with the resume, the
+ * first moment this runtime can vouch for; the fulfilled latches are
+ * ordered by declaration, the only order the row can offer. No latch reads
+ * as a lapse and no Ok value exists. */
+static GeasStatus rebuild_from_latches(GeasContract* c, int64_t now) {
+    const GeasContractDesc* d = c->desc;
+    GeasFlow* f = &c->flow;
+    /* A signing second no clock could have produced is a corrupt row. */
+    if (c->signed_at > INT64_MAX / 1000 || c->signed_at < INT64_MIN / 1000) {
+        return GEAS_ERR_TYPE;
+    }
+    f->signed_ms = c->signed_at * 1000;
+    geas_rt_refresh_eligible(c, now);
+    for (uint32_t s = 0; s < d->nsubs; s++) {
+        const GeasTermDesc* t = geas_rt_sub_term(d, s);
+        if (!t || t->nafter == 0) f->sub_eligible_ms[s] = f->signed_ms;
+    }
+    for (uint32_t i = 0; i < d->npledges; i++) {
+        const GeasTermDesc* t = geas_rt_pledge_term(d, i);
+        if (t && t->nafter > 0) continue;
+        if (f->pledge_eligible_ms[i] < 0) continue;
+        f->pledge_eligible_ms[i] = geas_rt_pledge_is_loose(d, i)
+            ? f->signed_ms
+            : f->sub_eligible_ms[d->pledges[i].sub];
+    }
+    for (uint32_t i = 0; i < d->npledges; i++) {
+        if (c->pledge_state[i] == PLEDGE_FULFILLED) f->latch_seq[i] = ++f->next_seq;
+    }
+    return GEAS_OK;
+}
+
+GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf, size_t len,
+                             int64_t now) {
+    if (len == 0) return rebuild_from_latches(c, now);
+    FlowIn in = { buf, len, 0, 0 };
+    const uint8_t* magic = in_take(&in, 4);
+    if (!magic || memcmp(magic, FLOW_MAGIC, 4) != 0) return GEAS_ERR_TYPE;
+    if (in_u32(&in) != FLOW_VERSION || in.bad) return GEAS_ERR_TYPE;
+    GeasFlow* f = &c->flow;
+    f->signed_ms = in_i64(&in);
+    f->term_lapsed = in_u8(&in);
+    f->next_seq = in_u32(&in);
+    if (in.bad || f->term_lapsed > 1) return GEAS_ERR_TYPE;
+    GeasStatus st = decode_pledges(c, &in);
+    if (st != GEAS_OK) return st;
+    uint32_t nsubs = in_u32(&in);
+    if (in.bad || nsubs != c->desc->nsubs) return GEAS_ERR_TYPE;
+    for (uint32_t s = 0; s < nsubs; s++) f->sub_eligible_ms[s] = in_i64(&in);
+    st = decode_remedies(c, &in);
+    if (st != GEAS_OK) return st;
+    /* The blob must hold exactly what the descriptor declares. */
+    return in.off == len ? GEAS_OK : GEAS_ERR_TYPE;
+}
