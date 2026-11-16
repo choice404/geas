@@ -49,14 +49,15 @@ enum {
 /* The per-subcontract transaction state, one slot per descriptor sub for a
  * store-backed contract. A transactional subcontract opens its episode lazily
  * on the first fulfillment of one of its pledges, so TXN_NONE is the fresh
- * state, TXN_OPEN a live transaction on the connection, and TXN_DONE the one
- * commit or rollback that closes it. Because an episode is one outcome and not
- * a latch, a pledge whose sub reads TXN_DONE is refused GEAS_ERR_STATE rather
- * than run again. */
+ * state, TXN_OPEN a live transaction, TXN_DONE a commit, and TXN_ROLLED_BACK
+ * a rollback. Older park rows used TXN_DONE for either closed fate, so their
+ * latches distinguish the outcome. A closed episode refuses another run with
+ * GEAS_ERR_STATE */
 enum {
     TXN_NONE = 0,
     TXN_OPEN = 1,
-    TXN_DONE = 2
+    TXN_DONE = 2,
+    TXN_ROLLED_BACK = 3
 };
 
 /* Where one remedy stands, the internal spelling of GeasRemedyState, one slot
@@ -109,7 +110,7 @@ struct GeasContract {
     GeasBlock*              owned;
     GeasValue*              vow_vals;  /* one per desc vow, instance owned */
     GeasPledgeFn*           fns;       /* dispatch table resolved at sign */
-    struct GeasFuture*      futures;   /* every future this instance issued */
+    struct GeasFuture*      futures;   /* receipts retained until release */
     uint64_t               shape_hash;
     int64_t                signed_at;
 
@@ -124,10 +125,10 @@ struct GeasContract {
 
     /* One TXN_* slot per descriptor subcontract, NULL for a contract with no
      * subs or no store. A transactional subcontract's episode is tracked here:
-     * TXN_OPEN while a transaction buffers its writes, TXN_DONE once the commit
-     * or rollback landed. Plain heap freed at shutdown, like the latches, and
-     * touched only under this instance's lock so the connection stays single
-     * threaded. */
+     * TXN_OPEN while a transaction buffers its writes, TXN_DONE after commit,
+     * and TXN_ROLLED_BACK after rollback. Plain heap freed at shutdown, like
+     * the latches, and touched only under this instance's lock so the
+     * connection stays single threaded */
     uint8_t*               sub_txn;
 
     /* The store connection, NULL for a contract that declares no schema. A
@@ -141,15 +142,27 @@ struct GeasContract {
     /* The workflow state, see GeasFlow. */
     GeasFlow                flow;
     pthread_mutex_t        mu;        /* recursive; the instance lock */
+
+    /* Cancellation is published before taking mu, so a body can poll it
+     * while a breaker waits. cancel_mu and cancel_cv only guard retry waits
+     * and are released before taking any instance or runtime lock */
+    uint32_t               cancel_requested; /* atomic */
+    pthread_mutex_t        cancel_mu;
+    pthread_cond_t         cancel_cv;
+    uint8_t                cancel_ready;
+
+    /* Binding snapshot fixed at sign or resume, terminated by a NULL key */
+    struct GeasBinding*    bindings;
 };
 
 /* A future is the receipt of one fulfillment. Between the fulfill and the
  * worker it is also the task: the dispatch fn, the prepared frame, and the
  * queue link ride inside it, so the pool queue allocates nothing. The struct
- * is heap memory tracked on the instance's futures list and freed at
- * shutdown, or earlier by the synchronous path once its one wait has
- * delivered; a break forfeits every unwaited future to GEAS_ERR_STATE and
- * clears its pointers into the instance heap before that heap goes away. */
+ * is heap memory tracked on the instance's futures list until release or
+ * shutdown. Release drops the receipt's hold, and queued work keeps its own
+ * until the worker returns. A break forfeits every unwaited future to
+ * GEAS_ERR_STATE and clears its pointers into the instance heap before that
+ * heap goes away */
 struct GeasFuture {
     struct GeasFuture* next;    /* instance futures list */
     struct GeasFuture* qnext;   /* pool queue link */
@@ -159,7 +172,7 @@ struct GeasFuture {
     GeasValue*         frame;   /* instance owned, one slot per parameter */
     size_t            frame_nargs;
     GeasStatus         status;
-    uint32_t          done;
+    uint32_t          done;       /* atomic completion flag, published once */
     uint32_t          waited;
     GeasValue          value;
     GeasRef*           refs;      /* instance owned copy of the caller's refs */
@@ -177,10 +190,13 @@ struct GeasFuture {
  * overlay lives on the runtime because the descriptor tables are const data
  * inside the module image. key is the address of the GeasPledgeDesc or the
  * GeasRemedyDesc the binding covers; the two tables never share an address,
- * so the one overlay serves both. */
+ * so the one overlay serves both. Exactly one of fn and user_fn is set;
+ * user is borrowed and is passed only to user_fn */
 typedef struct GeasBinding {
-    const void*  key;
-    GeasPledgeFn fn;
+    const void*      key;
+    GeasPledgeFn     fn;
+    GeasPledgeUserFn user_fn;
+    void*           user;
 } GeasBinding;
 
 struct GeasRuntime {
@@ -223,6 +239,7 @@ struct GeasRuntime {
     int                    qstop;
     pthread_mutex_t        qmu;
     pthread_cond_t         qcv;
+    uint32_t               shutting_down; /* atomic, published before joins */
 };
 
 /* ---- shared by every unit ---- */
@@ -269,10 +286,24 @@ GEAS_INTERNAL const GeasPledgeDesc* geas_rt_find_pledge(const GeasContractDesc* 
 GEAS_INTERNAL GeasPledgeFn geas_rt_find_binding(const GeasRuntime* rt,
                                               const void* key);
 
+/* The signed binding for a descriptor, under the instance lock */
+GEAS_INTERNAL const GeasBinding* geas_rt_instance_binding(const GeasContract* c,
+                                                         const void* key);
+
 /* The reclaim an explicit break ends in: forfeit every unwaited future, zero
  * every stored value struct, roll back and close the store, free the heap,
  * and latch Broken. Under the instance lock. */
 GEAS_INTERNAL void geas_rt_reclaim(GeasContract* c);
+
+/* Rolls back every open episode before a break runs remedies, under mu */
+GEAS_INTERNAL void geas_rt_rollback_open(GeasContract* c);
+
+/* Publishes a break and wakes retry waits without taking the instance lock */
+GEAS_INTERNAL void geas_rt_request_cancel(GeasContract* c);
+
+/* Carries a published break into the lifecycle before policy evaluation,
+ * under the instance lock, without reclaiming a body or its outcome */
+GEAS_INTERNAL void geas_rt_note_cancel(GeasContract* c);
 
 /* ---- terms.c ---- */
 

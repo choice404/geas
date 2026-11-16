@@ -666,6 +666,9 @@ geas_pledge_bind(rt, "OrderSaga.refund", fn_refund);
 geas_runtime_freeze(rt);
 ```
 
+When several bindings share one host body but carry different host state,
+`geas_pledge_bind_user` binds each one with the user pointer that body reads.
+
 A remedy binds with the same call a pledge does. The fake sleep moves the clock
 by whatever it is asked to wait and logs it, so a retry costs no real time and
 the test can read the delays back: two timeouts from `authorize` show up as

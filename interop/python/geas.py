@@ -484,10 +484,16 @@ class Runtime:
         lib.geas_contract_signed_at.restype = C.c_int64
         lib.geas_contract_break.argtypes = [v]
         lib.geas_contract_break.restype = i
+        lib.geas_cancel_requested.argtypes = [v]
+        lib.geas_cancel_requested.restype = i
         lib.geas_pledge_fulfill.argtypes = [v, s, VP, z, C.POINTER(GeasRef), z]
         lib.geas_pledge_fulfill.restype = v
         lib.geas_future_wait.argtypes = [v, VP]
         lib.geas_future_wait.restype = i
+        lib.geas_future_poll.argtypes = [v, C.POINTER(i)]
+        lib.geas_future_poll.restype = i
+        lib.geas_future_release.argtypes = [v]
+        lib.geas_future_release.restype = i
         lib.geas_pledge_fulfill_sync.argtypes = [v, s, VP, z,
                                                 C.POINTER(GeasRef), z, VP]
         lib.geas_pledge_fulfill_sync.restype = i
@@ -862,6 +868,20 @@ class Future:
                "geas_future_wait")
         return decode(out)
 
+    def poll(self):
+        """Whether an outcome exists, without delivering or writing refs."""
+        ready = C.c_int()
+        _check(self._rt._lib.geas_future_poll(self._ptr, C.byref(ready)),
+               "geas_future_poll")
+        return bool(ready.value)
+
+    def release(self):
+        """Releases a waited or forfeited receipt and invalidates its handle."""
+        _check(self._rt._lib.geas_future_release(self._ptr),
+               "geas_future_release")
+        self._ptr = None
+        self._refs = None
+
 
 class Contract:
     """A signed instance. Thin on purpose: every method is one runtime call
@@ -888,6 +908,9 @@ class Contract:
     def break_(self):
         _check(self._rt._lib.geas_contract_break(self._ptr),
                "geas_contract_break")
+
+    def cancel_requested(self):
+        return bool(self._rt._lib.geas_cancel_requested(self._ptr))
 
     def park(self, dsn, key):
         """Writes this instance under key in the park store behind dsn."""
@@ -927,7 +950,8 @@ class Contract:
     def fulfill_sync(self, pledge_name, *args, refs=None):
         """Fulfill and wait fused. Returns the decoded value; raises
         GeasError when the fulfillment itself did not run, a pledge's Err
-        being a value, not an error."""
+        being a value, not an error. The C call releases its own receipt
+        before returning, including when the wait reports an error."""
         arr, n, rarr, rn, keep = self._frame(args, refs)
         out = GeasValue()
         _check(self._rt._lib.geas_pledge_fulfill_sync(

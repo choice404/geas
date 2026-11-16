@@ -47,6 +47,8 @@ SQLITE_OBJ := $(OUT)/sqlite3.o
 SQLITE_FLAGS := -fPIC -w -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION \
     -DSQLITE_DQS=0 -DSQLITE_DEFAULT_MEMSTATUS=0
 
+RT_SONAME  := libgeasrt.so.0
+RT_VERSIONED := $(OUT)/$(RT_SONAME)
 RT_SO      := $(OUT)/libgeasrt.so
 GEAS       ?= target/bin/geas
 MODULE     := $(OUT)/libhello.geas.so
@@ -60,7 +62,8 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
-.PHONY: test-terms test-remedy test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-soname test-future test-cancel
 .PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
 
 # The full suite, one gate per surface the language carries: the walking
@@ -69,7 +72,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: smoke test-runtime test-wire test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-signal test-workflow-park test-saga test-saga-python tsan tsan-workflow
+all: smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan tsan-workflow
 
 runtime: $(RT_SO)
 
@@ -77,9 +80,12 @@ $(SQLITE_OBJ): runtime/third_party/sqlite3.c runtime/third_party/sqlite3.h
 	@mkdir -p $(OUT)
 	$(CC) $(SQLITE_FLAGS) -I runtime/third_party -c runtime/third_party/sqlite3.c -o $(SQLITE_OBJ)
 
-$(RT_SO): $(RT_UNITS) runtime/src/runtime_internal.h runtime/include/geas/geas.h runtime/include/geas/geas_abi.h runtime/include/geas/geas_wire.h runtime/include/geas/geas_store.h runtime/third_party/sqlite3.h $(SQLITE_OBJ)
+$(RT_SO): $(RT_VERSIONED)
+	ln -sfn $(RT_SONAME) $@
+
+$(RT_VERSIONED): $(RT_UNITS) runtime/src/runtime_internal.h runtime/include/geas/geas.h runtime/include/geas/geas_abi.h runtime/include/geas/geas_wire.h runtime/include/geas/geas_store.h runtime/third_party/sqlite3.h $(SQLITE_OBJ)
 	@mkdir -p $(OUT)
-	$(CC) $(CFLAGS) -fPIC -shared -pthread -I runtime/include -I runtime/src -I runtime/third_party $(RT_UNITS) $(SQLITE_OBJ) -ldl -o $(RT_SO)
+	$(CC) $(CFLAGS) -fPIC -shared -Wl,-soname,$(RT_SONAME) -pthread -I runtime/include -I runtime/src -I runtime/third_party $(RT_UNITS) $(SQLITE_OBJ) -ldl -o $@
 
 # The compiler, C++23 with no exceptions and no RTTI, configured and built by
 # CMake. The plain binary lands in target/bin over the objects in
@@ -112,25 +118,25 @@ $(GEAS_ASAN): $(COMPILER_SRC)
 
 module: $(MODULE)
 
-$(MODULE): $(GEAS) skeleton/hello.geas runtime/include/geas/geas_abi.h
+$(MODULE): $(GEAS) $(RT_SO) skeleton/hello.geas runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/hello.geas
 
-$(MODULE_V2): $(GEAS) skeleton/hello_v2.geas runtime/include/geas/geas_abi.h
+$(MODULE_V2): $(GEAS) $(RT_SO) skeleton/hello_v2.geas runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/hello_v2.geas
 
-$(MODULE_PAY): $(GEAS) skeleton/payment.geas runtime/include/geas/geas_abi.h
+$(MODULE_PAY): $(GEAS) $(RT_SO) skeleton/payment.geas runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/payment.geas
 
-$(MODULE_LANG): $(GEAS) skeleton/lang.geas runtime/include/geas/geas_abi.h
+$(MODULE_LANG): $(GEAS) $(RT_SO) skeleton/lang.geas runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/lang.geas
 
-$(MODULE_STD): $(GEAS) skeleton/std_user.geas $(wildcard lib/std/*.geas) runtime/include/geas/geas_abi.h
+$(MODULE_STD): $(GEAS) $(RT_SO) skeleton/std_user.geas $(wildcard lib/std/*.geas) runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/std_user.geas
 
-$(MODULE_LEDGER): $(GEAS) skeleton/ledger.geas lib/std/store.geas runtime/include/geas/geas_abi.h
+$(MODULE_LEDGER): $(GEAS) $(RT_SO) skeleton/ledger.geas lib/std/store.geas runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/ledger.geas
 
-$(MODULE_LIFE): $(GEAS) skeleton/lifecycle.geas runtime/include/geas/geas_abi.h
+$(MODULE_LIFE): $(GEAS) $(RT_SO) skeleton/lifecycle.geas runtime/include/geas/geas_abi.h
 	$(GEAS) build skeleton/lifecycle.geas
 
 $(BIN_DEMO): $(GEAS) skeleton/main_demo.geas $(RT_SO) runtime/include/geas/geas_abi.h
@@ -145,6 +151,14 @@ $(HOST): skeleton/host.c $(RT_SO)
 smoke: $(RT_SO) $(MODULE) $(HOST)
 	./$(HOST)
 
+# The module names its runtime and loads through a host linked against it
+test-soname: $(RT_SO) $(MODULE) tests/runtime/test_soname.c
+	readelf -d $(RT_VERSIONED) | grep -E '\(SONAME\).*\[libgeasrt\.so\.0\]'
+	readelf -d $(MODULE) | grep -E '\(NEEDED\).*\[libgeasrt\.so\.0\]'
+	$(CC) $(CFLAGS) -pthread -I runtime/include tests/runtime/test_soname.c \
+	    -L $(OUT) -lgeasrt -Wl,-rpath,'$$ORIGIN' -o $(OUT)/test_soname
+	./$(OUT)/test_soname
+
 # The leak gate. The runtime compiles straight into the host here so LSan sees
 # every allocation, and -rdynamic exports the geas_* symbols the dlopened
 # module resolves against. valgrind covers the same ground where installed.
@@ -154,7 +168,7 @@ smoke: $(RT_SO) $(MODULE) $(HOST)
 test-runtime:
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread $(RT_INC) \
-	    tests/runtime/test_value.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_value
+	    tests/runtime/test_value.c $(RT_UNITS) $(RT_SQLITE) -ldl -Wl,--wrap=malloc -o $(OUT)/test_value
 	./$(OUT)/test_value
 
 # The wire codec gate under ASan: the canonical value encoding against its
@@ -321,7 +335,7 @@ test-park: $(MODULE_PAY) $(MODULE_LEDGER) $(SQLITE_OBJ)
 # The workflow gates, each under ASan, LSan, and UBSan with the runtime
 # compiled in, each over handwritten descriptors on a fake clock, so a
 # deadline is a number the test moves and a retry delay is an entry in a list
-# the test reads. WF_SAN is the one flag set the four share.
+# the test reads. WF_SAN is the flag set the workflow gates share
 WF_SAN := -fsanitize=address,leak,undefined -fno-sanitize-recover=undefined
 WF_DEPS := tests/runtime/workflow_util.h $(RT_UNITS) runtime/src/runtime_internal.h
 
@@ -346,6 +360,20 @@ test-remedy: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_remedy.c
 	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
 	    tests/runtime/test_remedy.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_remedy
 	./$(OUT)/test_remedy
+
+# Cancellation waits for bodies, undoes their Ok outcomes, and wakes retries
+test-cancel: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_cancel.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_cancel.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_cancel
+	./$(OUT)/test_cancel
+
+# Shared host bodies keep the user pointer fixed at sign and resume
+test-bind-user: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_bind_user.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_bind_user
+	./$(OUT)/test_bind_user
 
 # The signal gate: delivery latches, the payload is the instance's own copy
 # and the first one wins, a signal is an atom and an after target, its own
@@ -378,7 +406,7 @@ test-workflow-park: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_workflow_park.c
 MODULE_SAGA := $(OUT)/libsaga.geas.so
 MODULE_DESK := $(OUT)/libflowdesk.geas.so
 
-test-saga: $(GEAS) $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_saga.c
+test-saga: $(GEAS) $(RT_SO) $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_saga.c
 	@mkdir -p $(OUT)
 	$(GEAS) build skeleton/saga.geas
 	$(GEAS) build skeleton/flowdesk.geas
@@ -397,10 +425,9 @@ test-saga-python: $(GEAS) $(RT_SO)
 	    echo "[test-saga-python] python3 not found, skipping"; \
 	fi
 
-# The same four under ThreadSanitizer: the retry delay waited with the
-# instance lock released, the remedy pass a second thread reads and a host
-# break races, and signals delivered from several threads at once.
-tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS)
+# The workflow gates under ThreadSanitizer: retries with the instance lock
+# released, remedy passes and signals across threads, and user bindings
+tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c tests/runtime/test_cancel.c
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
@@ -408,6 +435,12 @@ tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_remedy.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_remedy_tsan
 	./$(OUT)/test_remedy_tsan
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_cancel.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_cancel_tsan
+	@for round in $$(seq 1 20); do ./$(OUT)/test_cancel_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_bind_user.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_bind_user_tsan
+	./$(OUT)/test_bind_user_tsan
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_signal.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_signal_tsan
 	./$(OUT)/test_signal_tsan
@@ -422,6 +455,14 @@ test-thread:
 	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread $(RT_INC) \
 	    tests/runtime/test_thread.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_thread
 	./$(OUT)/test_thread
+
+# Future receipts are polled, delivered, and released without accumulating;
+# queued work retains its own hold when a break forfeits a released receipt
+test-future: $(SQLITE_OBJ)
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread $(RT_INC) \
+	    tests/runtime/test_future.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_future
+	./$(OUT)/test_future
 
 # The iname gate under ASan: two compiled generations loaded side by side,
 # exact name discovery, the version mismatch miss, the freeze, and the
@@ -470,7 +511,7 @@ test-std: $(MODULE_STD)
 # variant on purpose: the TSan runtime cannot be mixed into an
 # uninstrumented python3 process, so the concurrency surface stays covered
 # by the C tsan gate.
-$(MODULE_SVC): $(GEAS) examples/supervisor/service.geas $(wildcard lib/std/*.geas) runtime/include/geas/geas_abi.h
+$(MODULE_SVC): $(GEAS) $(RT_SO) examples/supervisor/service.geas $(wildcard lib/std/*.geas) runtime/include/geas/geas_abi.h
 	$(GEAS) build examples/supervisor/service.geas
 
 # The flagship example gate: the supervisor whose service state machine is a
@@ -513,7 +554,9 @@ test-supervisor-watch: $(RT_SO) $(MODULE_SVC)
 
 test-python: $(RT_SO) $(MODULE) $(MODULE_PAY)
 	@if command -v python3 >/dev/null 2>&1; then \
-	    python3 interop/python/demo_payment.py; \
+	    python3 interop/python/demo_payment.py && \
+	    python3 interop/python/test_future.py && \
+	    python3 interop/python/test_cancel.py; \
 	else \
 	    echo "[test-python] python3 not found, skipping"; \
 	fi
@@ -623,6 +666,9 @@ tsan: $(MODULE)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_thread.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_thread_tsan
 	./$(OUT)/test_thread_tsan
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_future.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_future_tsan
+	./$(OUT)/test_future_tsan
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread -rdynamic $(RT_INC) \
 	    skeleton/host.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/host_tsan
 	./$(OUT)/host_tsan
@@ -888,7 +934,8 @@ PREFIX ?= /usr/local
 
 install: $(GEAS) $(RT_SO)
 	install -Dm755 $(GEAS) $(DESTDIR)$(PREFIX)/bin/geas
-	install -Dm755 $(RT_SO) $(DESTDIR)$(PREFIX)/lib/libgeasrt.so
+	install -Dm755 $(RT_VERSIONED) $(DESTDIR)$(PREFIX)/lib/$(RT_SONAME)
+	ln -sfn $(RT_SONAME) $(DESTDIR)$(PREFIX)/lib/libgeasrt.so
 	install -Dm644 -t $(DESTDIR)$(PREFIX)/include/geas \
 	    runtime/include/geas/geas.h runtime/include/geas/geas_abi.h \
 	    runtime/include/geas/geas_wire.h runtime/include/geas/geas_store.h
@@ -896,7 +943,7 @@ install: $(GEAS) $(RT_SO)
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/geas
-	rm -f $(DESTDIR)$(PREFIX)/lib/libgeasrt.so
+	rm -f $(DESTDIR)$(PREFIX)/lib/libgeasrt.so $(DESTDIR)$(PREFIX)/lib/$(RT_SONAME)
 	rm -rf $(DESTDIR)$(PREFIX)/include/geas
 	rm -rf $(DESTDIR)$(PREFIX)/share/geas
 

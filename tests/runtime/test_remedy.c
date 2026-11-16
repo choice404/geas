@@ -13,6 +13,8 @@
 #define TEST_NAME "test_remedy"
 #include "workflow_util.h"
 
+#include <unistd.h>
+
 /* ---- the log every thunk writes ---- */
 
 #define LOG_MAX 32
@@ -525,6 +527,243 @@ static void test_break_race(void) {
     geas_runtime_shutdown(rt);
 }
 
+/* ---- automatic breaks release transactional episodes ---- */
+
+static const GeasSchemaCol k_episode_cols[] = { { "id", GEAS_TY_INT } };
+static const GeasSchemaDesc k_episode_schema = { "EpisodeRows", 1, k_episode_cols };
+static const GeasVowDesc k_episode_vows[] = { { .name = "dsn", .ty = GEAS_TY_STRING } };
+static GeasContract* g_episode_observer;
+static int g_committed_remedies;
+static int g_open_remedies;
+
+static GeasStatus episode_insert(GeasContract* instance, int64_t id, GeasValue* out) {
+    GeasValue field = int_val(id);
+    GeasValue row = { .ty = GEAS_TY_RECORD };
+    row.as.list.data = &field;
+    row.as.list.len = 1;
+    return geas_store_insert(instance, &k_episode_schema, &row, out);
+}
+
+static GeasStatus episode_write(void* ctx, const GeasValue* args, size_t nargs,
+                                GeasValue* out) {
+    if (nargs != 1) return GEAS_ERR_TYPE;
+    return episode_insert(ctx, args[0].as.i, out);
+}
+
+static GeasStatus episode_fail(void* ctx, const GeasValue* args, size_t nargs,
+                               GeasValue* out) {
+    (void)args;
+    (void)nargs;
+    GeasValue payload = str_val("declined");
+    return result_of(ctx, 1, &payload, out);
+}
+
+static GeasStatus episode_undo_committed(void* ctx, const GeasValue* args,
+                                        size_t nargs, GeasValue* out) {
+    (void)ctx;
+    (void)args;
+    (void)nargs;
+    g_committed_remedies++;
+    /* A second connection can write before the remedy pass has finished */
+    GeasValue result;
+    CHECK(episode_insert(g_episode_observer, 80, &result) == GEAS_OK,
+          "the open episode released its database lock before remedies");
+    memset(out, 0, sizeof(*out));
+    return GEAS_OK;
+}
+
+static GeasStatus episode_undo_open(void* ctx, const GeasValue* args,
+                                   size_t nargs, GeasValue* out) {
+    (void)ctx;
+    (void)args;
+    (void)nargs;
+    g_open_remedies++;
+    memset(out, 0, sizeof(*out));
+    return GEAS_OK;
+}
+
+static const GeasPledgeDesc k_episode_pledges[] = {
+    { "committed", NULL, 1, episode_write, 0 },
+    { "open", NULL, 1, episode_write, 1 },
+    { "finish", NULL, 1, episode_write, 1 },
+    { "fail", NULL, 0, episode_fail, -1 },
+    { "loose", NULL, 1, episode_write, -1 },
+};
+static const char* const k_episode_subs[] = { "Committed", "Open" };
+static const uint8_t k_episode_flags[] = { GEAS_SUB_TRANSACTIONAL, GEAS_SUB_TRANSACTIONAL };
+static const GeasReqAtom k_episode_atoms[] = { { "fail", GEAS_ATOM_BROKEN, -1, 3 } };
+static const GeasReqOp k_episode_break[] = { { GEAS_REQ_ATOM, 0 } };
+static const GeasRemedyDesc k_episode_remedies[] = {
+    { "undo_committed", NULL, 0, 0, episode_undo_committed, { 0 } },
+    { "undo_open", NULL, 1, 0, episode_undo_open, { 0 } },
+};
+static const GeasTermDesc k_episode_terms[] = {
+    { 0 }, { 0 }, { 0 }, { .within_ms = 100 }, { 0 },
+};
+static const GeasContractDesc k_episode = {
+    .name = "Episode", .version = 1, .shape_hash = 0xe9150de,
+    .nvows = 1, .vows = k_episode_vows,
+    .npledges = 5, .pledges = k_episode_pledges,
+    .nsubs = 2, .subs = k_episode_subs, .sub_flags = k_episode_flags,
+    .nschemas = 1, .schemas = &k_episode_schema,
+    .has_reqs = 1, .natoms = 1, .atoms = k_episode_atoms,
+    .nbreak = 1, .req_break = k_episode_break,
+    .nremedies = 2, .remedies = k_episode_remedies,
+};
+
+static GeasContract* sign_episode(GeasRuntime* rt, const char* path) {
+    GeasContract* instance = NULL;
+    GeasVowBinding binding = { "dsn", str_val(path) };
+    CHECK(geas_contract_sign(rt, "Episode", &binding, 1, 0, &instance) == GEAS_OK,
+          "sign with schema and real store path");
+    return instance;
+}
+
+static void check_episode_row(GeasContract* observer, int64_t id, int is_present) {
+    GeasValue key = int_val(id), result;
+    GeasStatus status = geas_store_find(observer, &k_episode_schema, &key, &result);
+    CHECK(status == GEAS_OK, "read through the second store connection");
+    if (status != GEAS_OK) return;
+    CHECK(result.ty == GEAS_TY_RESULT && result.tag == 0 && result.as.box,
+          "store read returns Ok");
+    if (!result.as.box) return;
+    const GeasValue* option = result.as.box;
+    CHECK(option->ty == GEAS_TY_OPTION && option->tag == (uint32_t)is_present,
+          "the second connection sees only committed rows");
+}
+
+static void check_episode_errors(GeasContract* instance, int cause) {
+    CHECK(geas_contract_state(instance) == GEAS_BROKEN, "automatic break reads Broken");
+    CHECK(item_is(instance, "Open", GEAS_ITEM_PENDING), "the partial surface survives");
+    CHECK(geas_contract_term_lapsed(instance) == (cause == 1), "term lapse survives");
+    CHECK(geas_partial_nerrors(instance) == (cause == 1 ? 0 : 1), "errors survive");
+    if (cause == 1) return;
+    const char* name = NULL;
+    const GeasValue* error = NULL;
+    CHECK(geas_partial_error(instance, 0, &name, &error) == GEAS_OK, "read error");
+    CHECK(name && strcmp(name, "fail") == 0, "the broken loose pledge is named");
+    if (cause == 0) CHECK(str_is(error, "declined"), "Err string stays readable");
+    else {
+        CHECK(error && error->ty == GEAS_TY_UNIT, "deadline has no business error");
+        CHECK(geas_partial_lapsed(instance, "fail"), "deadline lapse survives");
+    }
+}
+
+static void break_episode(GeasContract* instance, int cause) {
+    if (cause == 0) {
+        GeasValue result;
+        CHECK(run(instance, "fail", NULL, 0, &result) == GEAS_OK, "loose Err lands");
+        CHECK(result.ty == GEAS_TY_RESULT && result.tag == 1, "Err is delivered");
+        return;
+    }
+    clock_advance(100);
+    CHECK(geas_instance_tick(instance) == GEAS_OK, "clock breaks the episode");
+}
+
+static void test_episode_break(int cause, int has_committed) {
+    char path[] = "target/episode_remedy_XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0, "create database file");
+    if (fd < 0) return;
+    CHECK(close(fd) == 0, "close temporary descriptor");
+    clock_set(0);
+    GeasRuntime* rt = fake_runtime();
+    CHECK(rt != NULL, "episode runtime");
+    if (!rt) { CHECK(unlink(path) == 0, "remove database"); return; }
+    GeasContractDesc descriptor = k_episode;
+    if (cause == 1) descriptor.term_ms = 100;
+    if (cause == 2) descriptor.pledge_terms = k_episode_terms;
+    CHECK(geas_register_contract(rt, &descriptor) == GEAS_OK, "register episode");
+    GeasContract* instance = sign_episode(rt, path);
+    g_episode_observer = sign_episode(rt, path);
+    g_committed_remedies = 0;
+    g_open_remedies = 0;
+    if (has_committed) CHECK(land(instance, "committed", 1) == GEAS_OK, "commit first episode");
+    CHECK(land(instance, "open", 2) == GEAS_OK, "open second episode and buffer row");
+    check_episode_row(g_episode_observer, 2, 0);
+    CHECK(geas_instance_park(instance, path, "open") == GEAS_ERR_STATE, "park refuses open episode");
+    break_episode(instance, cause);
+    check_episode_errors(instance, cause);
+    CHECK(g_open_remedies == 0, "a rolled back pledge gets no remedy");
+    CHECK(g_committed_remedies == has_committed, "a committed pledge gets its remedy");
+    check_episode_row(g_episode_observer, 1, has_committed);
+    check_episode_row(g_episode_observer, 2, 0);
+    /* The observer's own term can lapse too, so sign a fresh writer */
+    GeasContract* writer = sign_episode(rt, path);
+    CHECK(land(writer, "loose", 90) == GEAS_OK, "another instance writes without SQLITE_BUSY");
+    check_episode_row(g_episode_observer, 90, 1);
+    CHECK(geas_instance_park(instance, path, "broken") == GEAS_OK, "park after automatic break");
+    geas_runtime_shutdown(rt);
+
+    rt = fake_runtime();
+    CHECK(rt != NULL, "fresh resume runtime");
+    if (!rt) { CHECK(unlink(path) == 0, "remove database"); return; }
+    CHECK(geas_register_contract(rt, &descriptor) == GEAS_OK, "register for resume");
+    GeasContract* resumed = NULL;
+    CHECK(geas_instance_resume(rt, path, "broken", 0, &resumed) == GEAS_OK, "resume broken episode");
+    check_episode_errors(resumed, cause);
+    CHECK(g_open_remedies == 0 && g_committed_remedies == has_committed,
+          "resume runs no remedy twice");
+    CHECK(geas_contract_break(resumed) == GEAS_OK, "explicit break reclaims resumed values");
+    geas_runtime_shutdown(rt);
+    CHECK(unlink(path) == 0, "remove episode database");
+}
+
+/* A nested break waits for every write in the outer body. Both pledges
+ * latch Ok, but their episode rolled back and neither earns a remedy */
+static GeasStatus episode_deferred_finish(void* ctx, const GeasValue* args,
+                                         size_t nargs, GeasValue* out) {
+    (void)args;
+    (void)nargs;
+    CHECK(geas_contract_break(ctx) == GEAS_OK, "nested body defers break");
+    CHECK(geas_cancel_requested(ctx), "nested break publishes cancellation");
+    return episode_insert(ctx, 3, out);
+}
+
+static GeasStatus episode_outer(void* ctx, const GeasValue* args, size_t nargs,
+                                GeasValue* out) {
+    (void)args;
+    (void)nargs;
+    GeasValue result;
+    GeasStatus status = run(ctx, "finish", NULL, 0, &result);
+    if (status != GEAS_OK) return status;
+    CHECK(geas_cancel_requested(ctx), "outer body sees nested cancellation");
+    CHECK(geas_vow_ref(ctx, "dsn") != NULL, "outer body still has its heap");
+    return episode_insert(ctx, 2, out);
+}
+
+static void test_nested_episode_cancel(void) {
+    char path[] = "target/episode_cancel_XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0, "nested episode database");
+    if (fd < 0) return;
+    CHECK(close(fd) == 0, "close temporary descriptor");
+    GeasRuntime* rt = fake_runtime();
+    CHECK(rt != NULL, "nested episode runtime");
+    if (!rt) { CHECK(unlink(path) == 0, "remove database"); return; }
+    GeasPledgeDesc pledges[5];
+    memcpy(pledges, k_episode_pledges, sizeof(pledges));
+    pledges[1].fn = episode_outer;
+    pledges[1].nargs = 0;
+    pledges[2].fn = episode_deferred_finish;
+    pledges[2].nargs = 0;
+    GeasContractDesc descriptor = k_episode;
+    descriptor.pledges = pledges;
+    CHECK(geas_register_contract(rt, &descriptor) == GEAS_OK, "register nested episode");
+    GeasContract* instance = sign_episode(rt, path);
+    GeasContract* observer = sign_episode(rt, path);
+    g_open_remedies = 0;
+    CHECK(run(instance, "open", NULL, 0, NULL) == GEAS_ERR_STATE, "outer outcome is forfeited");
+    CHECK(geas_contract_state(instance) == GEAS_BROKEN, "nested break completes");
+    CHECK(item_is(instance, "Open", GEAS_ITEM_FULFILLED), "both nested Ok outcomes latch");
+    CHECK(g_open_remedies == 0, "rollback suppresses remedies even with every latch Ok");
+    check_episode_row(observer, 2, 0);
+    check_episode_row(observer, 3, 0);
+    CHECK(land(observer, "loose", 90) == GEAS_OK, "nested break released the writer lock");
+    geas_runtime_shutdown(rt);
+    CHECK(unlink(path) == 0, "remove nested episode database");
+}
+
 int main(void) {
     GeasRuntime* rt = fake_runtime();
     if (!rt) {
@@ -548,6 +787,11 @@ int main(void) {
     geas_runtime_shutdown(rt);
 
     test_break_race();
+    test_nested_episode_cancel();
+    for (int cause = 0; cause < 3; cause++) {
+        test_episode_break(cause, 0);
+        test_episode_break(cause, 1);
+    }
 
     if (atomic_load(&g_failures)) return 1;
     printf("[test_remedy] ok\n");

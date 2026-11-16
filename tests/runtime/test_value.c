@@ -15,6 +15,20 @@
 
 static int g_failures = 0;
 
+/* The linker wrapper fails one allocation on this thread, so the string
+ * constructor's OOM answer is tested without exhausting the process */
+static _Thread_local int g_fail_malloc;
+
+void* __real_malloc(size_t size);
+
+void* __wrap_malloc(size_t size) {
+    if (g_fail_malloc) {
+        g_fail_malloc = 0;
+        return NULL;
+    }
+    return __real_malloc(size);
+}
+
 #define CHECK(cond, what)                                                  \
     do {                                                                   \
         if (!(cond)) {                                                     \
@@ -109,6 +123,59 @@ static const GeasContractDesc k_capture = {
 };
 
 /* ---- the tests ---- */
+
+static void test_string_into(GeasContract* arena) {
+    const uint8_t bytes[] = { 'a', 0, 'b' };
+    GeasValue out;
+    GeasValue expected = geas_string_copy(arena, bytes, sizeof(bytes));
+    CHECK(geas_string_copy_into(arena, bytes, sizeof(bytes), &out) == GEAS_OK,
+          "string pointer form succeeds");
+    CHECK(value_eq(&expected, &out) && out.as.s.ptr != expected.as.s.ptr,
+          "string pointer form copies the same bytes onto its own allocation");
+    CHECK(geas_string_copy_into(arena, NULL, 0, &out) == GEAS_OK &&
+              out.as.s.ptr && out.as.s.len == 0,
+          "an empty string accepts NULL bytes and owns an allocation");
+    CHECK(geas_string_copy_into(NULL, bytes, sizeof(bytes), &out) == GEAS_ERR_TYPE,
+          "string pointer form refuses a NULL instance");
+    CHECK(geas_string_copy_into(arena, bytes, sizeof(bytes), NULL) == GEAS_ERR_TYPE,
+          "string pointer form refuses NULL out");
+    CHECK(geas_string_copy_into(arena, NULL, 1, &out) == GEAS_ERR_TYPE,
+          "string pointer form requires nonempty bytes");
+    CHECK(geas_string_copy_into(arena, bytes, UINT64_MAX, &out) == GEAS_ERR_OOM,
+          "string pointer form refuses an overflowing allocation");
+    g_fail_malloc = 1;
+    CHECK(geas_string_copy_into(arena, bytes, sizeof(bytes), &out) == GEAS_ERR_OOM,
+          "string pointer form reports allocation failure");
+    CHECK(!g_fail_malloc && out.ty == GEAS_TY_STRING && !out.as.s.ptr,
+          "string allocation failure retains the by value failure shape");
+}
+
+static void test_map_into(GeasContract* arena) {
+    GeasValue out;
+    GeasValue expected = geas_map_new(arena, GEAS_TY_STRING);
+    CHECK(geas_map_new_into(arena, GEAS_TY_STRING, &out) == GEAS_OK,
+          "map pointer form succeeds without allocating");
+    CHECK(value_eq(&expected, &out) && out.as.list.elem_ty == GEAS_TY_STRING &&
+              !out.as.list.data && out.as.list.cap == 0,
+          "empty map's NULL data is a successful value");
+    CHECK(geas_map_new_into(NULL, GEAS_TY_STRING, &out) == GEAS_ERR_TYPE,
+          "map pointer form refuses a NULL instance");
+    CHECK(geas_map_new_into(arena, GEAS_TY_STRING, NULL) == GEAS_ERR_TYPE,
+          "map pointer form refuses NULL out");
+}
+
+static void test_state_into(GeasContract* arena) {
+    GeasValue out;
+    GeasValue expected = geas_state_value(arena);
+    CHECK(geas_state_value_into(arena, &out) == GEAS_OK,
+          "state pointer form succeeds");
+    CHECK(value_eq(&expected, &out) && out.as.s.ptr == expected.as.s.ptr,
+          "state pointer form borrows the same static spelling");
+    CHECK(geas_state_value_into(NULL, &out) == GEAS_ERR_TYPE,
+          "state pointer form refuses a NULL instance");
+    CHECK(geas_state_value_into(arena, NULL) == GEAS_ERR_TYPE,
+          "state pointer form refuses NULL out");
+}
 
 static void test_list_of_tuples(GeasContract* src_arena, GeasContract* dst_arena) {
     GeasValue list;
@@ -484,6 +551,9 @@ int main(void) {
           "sign Capture");
 
     if (src && dst && cap) {
+        test_string_into(src);
+        test_map_into(src);
+        test_state_into(src);
         test_list_of_tuples(src, dst);
         test_option_result_nesting(src, dst);
         test_map(src, dst);

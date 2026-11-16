@@ -396,6 +396,23 @@ and loose signals are fulfilled, which are pending, and which are broken, with
 the latched errors attached by name, which broken latches are lapses, and how
 every remedy went.
 
+### Cancel
+
+`break()` is cancel. When a step body is running on another thread, break waits
+for that body to return, never interrupts it, then runs the remedies if the
+contract was Signed or Partial and reclaims the instance. The body's outcome
+still latches first, so a step that finishes with `Ok` after cancel gets its
+remedy and a step whose first outcome is `Err` does not. The last step gets its
+remedy too, even if its `Ok` would have fulfilled the whole contract.
+
+A body may poll whether cancel was requested through the host boundary, using
+`geas_cancel_requested(ctx)` in C or `inst.cancel_requested()` in a Python bound
+callback. The poll also reads true during runtime shutdown. A body that calls
+`break()` on its own instance leaves the break pending until the outermost
+fulfillment ends, and the poll reads true from that request onward. A retry
+delay ends on cancel, the fulfillment reports a state error, and no further
+attempt starts. Remedies still run through their own terms.
+
 ---
 
 ## The Requirements Policy
@@ -994,6 +1011,9 @@ contract.
 `sign` opens the connection and reconciles the schema; `break` rolls back any
 open transaction, closes the connection, and reclaims the heap, in that order, so
 no uncommitted write survives a break and no connection outlives its instance.
+An automatic break, whether its break line matched, its term ran out, or a
+deadline lapsed, rolls back every open episode before remedies begin, releasing
+the database locks while keeping the heap, errors, and partial surface readable.
 
 A transactional subcontract holds no signal and no pledge with a `retry`, since
 a retried attempt would run inside the same open episode as the attempt it
@@ -1009,7 +1029,16 @@ their error payloads, the transactional fates, and a versioned workflow column
 holding the eligibility stamps, the lapses, the `Ok` values the remedies will
 need, the signal payloads, and the remedy progress, so a deadline keeps counting
 across the park and a break after a resume runs the same remedies in the same
-order it would have before.
+order it would have before. An automatically Broken instance can park after
+its open episodes have rolled back and resumes Broken with its errors. An
+explicit `break()` reclaims the heap, so that instance can no longer park.
+
+Steps are at least once. A host that dies in the middle of a step resumes from
+its last park with that pledge still pending and runs it again, so a step body
+should be safe to run twice or check its own progress before repeating work.
+Parking records what has latched, it does not make the body's outside effects
+and the park row one transaction. Cancel waits for a live body to return, but a
+host that dies cannot wait for it.
 
 ---
 

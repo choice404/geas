@@ -4,6 +4,45 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.8.1] the plain host
+
+The host becomes a plain resident of the runtime, one shared body and its
+user pointer serving every pledge and remedy it owns, future receipts kept
+until the host has polled, waited, and released them, and cancellation a
+request a running body can read while break waits for it to finish. The
+runtime now carries its own SONAME and every compiled contract names it, so
+a host links `libgeasrt` plainly and loading order stops mattering. The
+workflow surface closes around an automatic break too: open transactional
+episodes roll back before remedies run, only committed work earns one, and
+the broken instance can park afterwards, while the spec says plainly that a
+step is at least once across a host crash.
+
+- bind a host body with `geas_pledge_bind_user`, giving each pledge or
+  remedy its own user pointer held from sign through nested calls, retries,
+  and remedies, so one host function can serve many bindings
+- give libgeasrt the SONAME `libgeasrt.so.0`, keep `libgeasrt.so` as its
+  symlink, install both, and link every contract module against the runtime
+  it names, so a host loads the runtime normally and module order does not
+  decide which copy answers
+- add the out pointer twins `geas_string_copy_into`, `geas_map_new_into`,
+  and `geas_state_value_into`, so C hosts can receive a status before they
+  use a value
+- keep future receipts explicit: `geas_future_poll` reads readiness without
+  delivery, `geas_future_release` drops a waited or forfeited receipt, and
+  `geas_pledge_fulfill_sync` releases the receipt it creates
+- make an automatic break roll back every open transactional episode before
+  the remedy pass, leave an uncommitted pledge owing no remedy, and park the
+  resulting Broken instance with its readable partial surface
+- make `geas_contract_break` wait for a running body, let that body read
+  `geas_cancel_requested` and stop early, and wake retry waits on cancel
+  before another attempt begins
+- state the crash boundary: steps are at least once, so a host crash between
+  parks can run a pending step again and its body must make that safe
+- extend Python with future `poll` and `release`, and
+  `Contract.cancel_requested`, over the same C ABI the binding already uses
+- add the `test-bind-user`, `test-soname`, `test-future`, and `test-cancel`
+  gates, covering the plain host surface from binding through cancellation
+
 ## [v0.8.0] the durable obligation
 
 Geas becomes what its name always said it was, a language for durable

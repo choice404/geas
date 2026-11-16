@@ -26,8 +26,8 @@
  * instance's block list, vow values and frames included, so
  * geas_contract_break frees the lot in one walk and valgrind stays clean
  * whatever the pledge did. The one exception threading forced: the future
- * struct itself is heap memory the runtime tracks per instance and frees at
- * shutdown, so a wait that races a break lands on a live struct and reports
+ * struct itself is heap memory the runtime tracks per instance until release
+ * or shutdown, so a wait that races a break lands on a live struct and reports
  * GEAS_ERR_STATE instead of touching freed memory. Everything a future's
  * value points at is still instance owned and still dies at break, which is
  * why the wait-before-break rule keeps mattering to a host that wants the
@@ -68,7 +68,9 @@
  * the evaluator lands a break in Remedying when a remedy is due, and every
  * entry point runs the lazy tick first. The lock order is unchanged; the one
  * new habit is that a retry delay, a pledge's or a remedy's, is waited with
- * the instance lock released. */
+ * the instance lock released. Cancellation is published through an atomic
+ * flag before break takes the instance lock. Its retry wait mutex is a leaf:
+ * no thread acquires an instance, runtime, or future lock while holding it */
 
 #include <geas/geas.h>
 #include <geas/geas_store.h>
@@ -137,9 +139,8 @@ static struct GeasFuture* future_new(GeasContract* c) {
  * Two parties can hold a future at once, the receipt the host waits and the
  * pool queue it rides through; a break can finish the receipt's side before
  * the worker has even dequeued the task, so neither side may free
- * unilaterally. A future still linked on its instance keeps a hold too; only
- * the synchronous path unlinks and drops it early, everything else drops at
- * shutdown. */
+ * unilaterally. The instance list tracks the receipt's hold until release
+ * or shutdown */
 static void future_unref(struct GeasFuture* f) {
     pthread_mutex_lock(&f->mu);
     uint32_t left = --f->refcnt;
@@ -152,10 +153,10 @@ static void future_unref(struct GeasFuture* f) {
 static void future_finish(struct GeasFuture* f, GeasStatus st,
                           const GeasValue* val) {
     pthread_mutex_lock(&f->mu);
-    if (!f->done) {
+    if (!__atomic_load_n(&f->done, __ATOMIC_RELAXED)) {
         f->status = st;
         if (val) f->value = *val;
-        f->done = 1;
+        __atomic_store_n(&f->done, 1, __ATOMIC_RELEASE);
         pthread_cond_broadcast(&f->cv);
     }
     pthread_mutex_unlock(&f->mu);
@@ -176,24 +177,37 @@ static void future_forfeit(struct GeasFuture* f) {
         f->refs = NULL;
         f->ref_slots = NULL;
         f->nrefs = 0;
-        f->done = 1;
+        __atomic_store_n(&f->done, 1, __ATOMIC_RELEASE);
         pthread_cond_broadcast(&f->cv);
     }
     pthread_mutex_unlock(&f->mu);
 }
 
-/* Unlinks one delivered future and drops the receipt's hold on it, the
- * synchronous path's cleanup so a sync-heavy host does not accumulate
- * receipts until shutdown. The pool may still hold the future when a break
- * finished it while it sat queued; the worker's own drop frees it then. */
-static void future_release(struct GeasFuture* f) {
-    GeasContract* c = f->c;
+/* Unlinks a waited or forfeited receipt under the instance lock, then drops
+ * its hold. This list is also the registry shutdown walks. A queued worker
+ * keeps its own hold until it finishes, even after forfeiture */
+GeasStatus geas_future_release(GeasFuture* fut) {
+    if (!fut) return GEAS_ERR_TYPE;
+    GeasContract* c = fut->c;
     pthread_mutex_lock(&c->mu);
-    struct GeasFuture** p = &c->futures;
-    while (*p && *p != f) p = &(*p)->next;
-    if (*p) *p = f->next;
+    pthread_mutex_lock(&fut->mu);
+    int can_release = __atomic_load_n(&fut->done, __ATOMIC_RELAXED) &&
+                      (fut->waited || c->flow.reclaimed);
+    pthread_mutex_unlock(&fut->mu);
+    if (!can_release) {
+        pthread_mutex_unlock(&c->mu);
+        return GEAS_ERR_STATE;
+    }
+    struct GeasFuture** entry = &c->futures;
+    while (*entry && *entry != fut) entry = &(*entry)->next;
+    if (!*entry) {
+        pthread_mutex_unlock(&c->mu);
+        return GEAS_ERR_STATE;
+    }
+    *entry = fut->next;
     pthread_mutex_unlock(&c->mu);
-    future_unref(f);
+    future_unref(fut);
+    return GEAS_OK;
 }
 
 /* ---- the pool ---- */
@@ -415,10 +429,24 @@ static void contract_free_owned(GeasContract* c) {
     c->owned = NULL;
     c->vow_vals = NULL;
     c->fns = NULL;
+    free(c->bindings);
+    c->bindings = NULL;
 }
 
 void geas_runtime_shutdown(GeasRuntime* rt) {
     if (!rt) return;
+    /* Publish shutdown before waiting for a body that polls cancellation */
+    __atomic_store_n(&rt->shutting_down, 1, __ATOMIC_RELEASE);
+    pthread_mutex_lock(&rt->lock);
+    size_t ninstances = rt->ninstances;
+    GeasContract* instances[GEAS_MAX_INSTANCES];
+    memcpy(instances, rt->instances, ninstances * sizeof(*instances));
+    pthread_mutex_unlock(&rt->lock);
+    for (size_t i = 0; i < ninstances; i++) {
+        pthread_mutex_lock(&instances[i]->cancel_mu);
+        pthread_cond_broadcast(&instances[i]->cancel_cv);
+        pthread_mutex_unlock(&instances[i]->cancel_mu);
+    }
     /* Drain and join first. After the joins no worker exists, so the rest of
      * shutdown is single threaded and needs no locks. */
     pthread_mutex_lock(&rt->qmu);
@@ -684,13 +712,56 @@ static GeasStatus bind_vows(GeasContract* c, const GeasVowBinding* vows,
     return GEAS_OK;
 }
 
-/* The host binding over a pledge or remedy descriptor, or NULL when nothing
- * bound. Called under the runtime lock. */
+/* Adapts a user body to the retry runner's plain thunk frame. The two local
+ * slots carry the immutable binding and the original argument frame, so
+ * nested fulfillments and concurrent retries keep separate call state.
+ * The retry runner calls this with the instance lock held */
+static GeasStatus call_user_body(void* ctx, const GeasValue* call, size_t nargs,
+                                GeasValue* out) {
+    const GeasBinding* binding = call[0].as.box;
+    const GeasValue* frame = call[1].as.box;
+    return binding->user_fn(binding->user, ctx, frame, nargs, out);
+}
+
+/* The host body over a descriptor, under the runtime lock */
 GeasPledgeFn geas_rt_find_binding(const GeasRuntime* rt, const void* key) {
     for (size_t i = 0; i < rt->nbindings; i++) {
-        if (rt->bindings[i].key == key) return rt->bindings[i].fn;
+        if (rt->bindings[i].key != key) continue;
+        return rt->bindings[i].user_fn ? call_user_body : rt->bindings[i].fn;
     }
     return NULL;
+}
+
+/* Copies the binding overlay while the runtime lock holds sign's view fixed.
+ * The snapshot owns its records and borrows every callback and user pointer */
+static GeasStatus snapshot_bindings(const GeasRuntime* rt, GeasBinding** out) {
+    *out = NULL;
+    if (rt->nbindings == 0) return GEAS_OK;
+    *out = calloc(rt->nbindings + 1, sizeof(GeasBinding));
+    if (!*out) return GEAS_ERR_OOM;
+    memcpy(*out, rt->bindings, rt->nbindings * sizeof(GeasBinding));
+    return GEAS_OK;
+}
+
+const GeasBinding* geas_rt_instance_binding(const GeasContract* c, const void* key) {
+    for (const GeasBinding* binding = c->bindings; binding && binding->key; binding++) {
+        if (binding->key == key) return binding;
+    }
+    return NULL;
+}
+
+/* Runs every retry against the same signed binding, under the instance lock.
+ * The runner releases the lock across delays and checks the instance before
+ * calling again, so a break may reclaim the snapshot during a delay */
+static GeasStatus run_bound_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
+                                    GeasValue* frame, size_t nargs, GeasValue* out) {
+    const GeasBinding* binding = geas_rt_instance_binding(c, &c->desc->pledges[pidx]);
+    if (!binding || !binding->user_fn)
+        return geas_rt_run_attempts(c, pidx, fn, frame, nargs, out);
+    GeasValue call[2] = { 0 };
+    call[0].as.box = (void*)binding;
+    call[1].as.box = frame;
+    return geas_rt_run_attempts(c, pidx, call_user_body, call, nargs, out);
 }
 
 /* Resolves the dispatch table into plain heap under the runtime lock, one fn
@@ -1926,11 +1997,15 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
      * remedies resolve beside the pledges under the same lock hold. */
     GeasPledgeFn* fns = NULL;
     GeasPledgeFn* remedy_fns = NULL;
+    GeasBinding* bindings = NULL;
     GeasStatus st = geas_rt_validate_desc(desc);
     if (st == GEAS_OK) st = resolve_dispatch(rt, desc, &fns);
     if (st == GEAS_OK) st = geas_rt_resolve_remedies(rt, desc, &remedy_fns);
+    if (st == GEAS_OK) st = snapshot_bindings(rt, &bindings);
     pthread_mutex_unlock(&rt->lock);
     if (st != GEAS_OK) {
+        free(remedy_fns);
+        free(bindings);
         free(fns);
         return st;
     }
@@ -1939,17 +2014,20 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
     if (!c) {
         free(fns);
         free(remedy_fns);
+        free(bindings);
         return GEAS_ERR_OOM;
     }
     if (mutex_init_recursive(&c->mu) != 0) {
         free(c);
         free(fns);
         free(remedy_fns);
+        free(bindings);
         return GEAS_ERR_OOM;
     }
     c->rt = rt;
     c->desc = desc;
     c->flow.remedy_fns = remedy_fns;
+    c->bindings = bindings;
     if (desc->npledges > 0) {
         c->fns = (GeasPledgeFn*)geas_bytes(c, desc->npledges * sizeof(GeasPledgeFn));
         if (!c->fns) st = GEAS_ERR_OOM;
@@ -2033,6 +2111,7 @@ GeasRuntime* geas_instance_runtime(const GeasContract* c) {
  * exactly two outcomes: delivered before the break, or GEAS_ERR_STATE. */
 GeasStatus geas_contract_break(GeasContract* c) {
     if (!c) return GEAS_ERR_TYPE;
+    geas_rt_request_cancel(c);
     pthread_mutex_lock(&c->mu);
     if (c->state == GEAS_UNSIGNED) {
         pthread_mutex_unlock(&c->mu);
@@ -2043,6 +2122,31 @@ GeasStatus geas_contract_break(GeasContract* c) {
     GeasStatus st = geas_rt_break_explicit(c);
     pthread_mutex_unlock(&c->mu);
     return st;
+}
+
+/* Polls only atomic flags, including while the caller holds the instance
+ * lock and the breaker is waiting for that same lock */
+int geas_cancel_requested(void* ctx) {
+    GeasContract* c = ctx;
+    if (!c) return 0;
+    return __atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE) ||
+           __atomic_load_n(&c->rt->shutting_down, __ATOMIC_ACQUIRE);
+}
+
+void geas_rt_request_cancel(GeasContract* c) {
+    pthread_mutex_lock(&c->cancel_mu);
+    __atomic_store_n(&c->cancel_requested, 1, __ATOMIC_RELEASE);
+    pthread_cond_broadcast(&c->cancel_cv);
+    pthread_mutex_unlock(&c->cancel_mu);
+}
+
+void geas_rt_note_cancel(GeasContract* c) {
+    if (!__atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE)) return;
+    if (c->flow.reclaimed) return;
+    c->flow.break_pending = 1;
+    if (c->state == GEAS_SIGNED || c->state == GEAS_PARTIAL) {
+        c->state = GEAS_REMEDYING;
+    }
 }
 
 /* The reclaim itself, what an explicit break has always done once nothing is
@@ -2067,13 +2171,10 @@ void geas_rt_reclaim(GeasContract* c) {
     if (c->flow.remedy_err && d->nremedies > 0) {
         memset(c->flow.remedy_err, 0, d->nremedies * sizeof(GeasValue));
     }
-    /* The store side of break, in the order docs/database.md fixes: roll back
-     * any open transaction, then close the connection, then reclaim the heap.
-     * S1 is autocommit so a rollback usually finds nothing open, but it runs
-     * anyway so no uncommitted write can ever survive a break, and the close
-     * lands before the heap the rows live on goes away. */
+    /* Roll back open episodes, close the connection, then reclaim the heap
+     * the rows live on, all under the instance lock */
+    geas_rt_rollback_open(c);
     if (c->store) {
-        geas_store_rollback(c->store);
         geas_store_close(c->store);
         c->store = NULL;
     }
@@ -2282,9 +2383,10 @@ static int resolve_bind_name(const GeasRuntime* rt, const char* name,
     return 0;
 }
 
-GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
-                          GeasPledgeFn fn) {
-    if (!rt || !pledge_name || !fn) return GEAS_ERR_TYPE;
+/* Replaces the entire binding under the runtime lock */
+static GeasStatus bind_body(GeasRuntime* rt, const char* pledge_name,
+                           GeasPledgeFn fn, GeasPledgeUserFn user_fn, void* user) {
+    if (!rt || !pledge_name || (!fn && !user_fn)) return GEAS_ERR_TYPE;
     pthread_mutex_lock(&rt->lock);
     if (rt->frozen) {
         pthread_mutex_unlock(&rt->lock);
@@ -2302,7 +2404,7 @@ GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
     }
     for (size_t i = 0; i < rt->nbindings; i++) {
         if (rt->bindings[i].key == target.key) {
-            rt->bindings[i].fn = fn;
+            rt->bindings[i] = (GeasBinding){ target.key, fn, user_fn, user };
             pthread_mutex_unlock(&rt->lock);
             return GEAS_OK;
         }
@@ -2311,11 +2413,20 @@ GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
         pthread_mutex_unlock(&rt->lock);
         return GEAS_ERR_OOM;
     }
-    rt->bindings[rt->nbindings].key = target.key;
-    rt->bindings[rt->nbindings].fn = fn;
+    rt->bindings[rt->nbindings] = (GeasBinding){ target.key, fn, user_fn, user };
     rt->nbindings++;
     pthread_mutex_unlock(&rt->lock);
     return GEAS_OK;
+}
+
+GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
+                          GeasPledgeFn fn) {
+    return bind_body(rt, pledge_name, fn, NULL, NULL);
+}
+
+GeasStatus geas_pledge_bind_user(GeasRuntime* rt, const char* pledge_name,
+                                GeasPledgeUserFn fn, void* user) {
+    return bind_body(rt, pledge_name, NULL, fn, user);
 }
 
 /* Copies the host value a ref points at into an instance owned frame slot.
@@ -2589,6 +2700,23 @@ static void latch_pledge(GeasContract* c, uint32_t pidx, const GeasValue* out) {
 
 /* ---- transactional subcontracts ---- */
 
+/* Closes every open episode while keeping the heap and partial surface.
+ * A rollback failure closes the connection as well, releasing its locks.
+ * The recorded fate distinguishes rollback even when every latch is Ok.
+ * Called under the instance lock before remedies choose what is due */
+void geas_rt_rollback_open(GeasContract* c) {
+    if (!c->sub_txn) return;
+    for (uint32_t s = 0; s < c->desc->nsubs; s++) {
+        if (c->sub_txn[s] != TXN_OPEN) continue;
+        if (c->store && geas_store_rollback(c->store) != GEAS_OK) {
+            fprintf(stderr, "[libgeasrt] rollback failed for %s\n", c->desc->name);
+            geas_store_close(c->store);
+            c->store = NULL;
+        }
+        c->sub_txn[s] = TXN_ROLLED_BACK;
+    }
+}
+
 /* The subcontract a pledge belongs to when that subcontract is transactional,
  * or -1. A loose pledge, a sub index outside the table, and a subcontract
  * without the flag all read -1, so the store transaction machinery is a no-op
@@ -2613,7 +2741,7 @@ static int32_t pledge_txn_sub(const GeasContractDesc* d, uint32_t pidx) {
 static GeasStatus txn_before(GeasContract* c, uint32_t pidx) {
     int32_t s = pledge_txn_sub(c->desc, pidx);
     if (s < 0 || !c->sub_txn || !c->store) return GEAS_OK;
-    if (c->sub_txn[s] == TXN_DONE) return GEAS_ERR_STATE;
+    if (c->sub_txn[s] >= TXN_DONE) return GEAS_ERR_STATE;
     if (c->sub_txn[s] == TXN_NONE) {
         GeasStatus st = geas_store_begin(c->store);
         if (st != GEAS_OK) return st;
@@ -2639,23 +2767,20 @@ static GeasStatus txn_after(GeasContract* c, uint32_t pidx, GeasStatus st,
     if (s < 0 || !c->sub_txn || !c->store || c->sub_txn[s] != TXN_OPEN) {
         return st;
     }
-    if (st != GEAS_OK) {
-        geas_store_rollback(c->store);
-        c->sub_txn[s] = TXN_DONE;
-        return st;
-    }
-    if (out && out->ty == GEAS_TY_RESULT && out->tag == 1) {
-        geas_store_rollback(c->store);
-        c->sub_txn[s] = TXN_DONE;
+    /* A nested break leaves the outer body's writes in the same episode
+     * until that body returns and the outermost fulfillment rolls it back */
+    if (!geas_rt_live(c) && c->flow.in_thunk > 0) return st;
+    if (st != GEAS_OK || (out && geas_rt_is_err(out)) || !geas_rt_live(c)) {
+        geas_rt_rollback_open(c);
         return st;
     }
     if (geas_rt_sub_all(c, (uint32_t)s, PLEDGE_FULFILLED)) {
         GeasStatus cs = geas_store_commit(c->store);
-        c->sub_txn[s] = TXN_DONE;
         if (cs != GEAS_OK) {
-            geas_store_rollback(c->store);
+            geas_rt_rollback_open(c);
             return GEAS_ERR_STORE;
         }
+        c->sub_txn[s] = TXN_DONE;
     }
     return st;
 }
@@ -2687,8 +2812,9 @@ static void run_task(struct GeasFuture* f) {
     }
     GeasValue out;
     memset(&out, 0, sizeof(out));
-    GeasStatus st = geas_rt_run_attempts(c, f->pidx, f->fn, f->frame,
+    GeasStatus st = run_bound_attempts(c, f->pidx, f->fn, f->frame,
                                         f->frame_nargs, &out);
+    geas_rt_note_cancel(c);
     if (st == GEAS_OK) {
         latch_pledge(c, f->pidx, &out);
         geas_rt_eval_policy(c);
@@ -2768,6 +2894,15 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
     return f;
 }
 
+/* Reads the published flag without locks, so a waiter's write back callback
+ * cannot block a poll. No tick runs because it can execute remedies and
+ * wait for retry delays. Atomic builtins preserve the existing field layout */
+GeasStatus geas_future_poll(GeasFuture* fut, int* ready) {
+    if (!fut || !ready) return GEAS_ERR_TYPE;
+    *ready = __atomic_load_n(&fut->done, __ATOMIC_ACQUIRE) ? 1 : 0;
+    return GEAS_OK;
+}
+
 /* Blocks until the outcome exists, delivers it exactly once, and performs
  * the ref write back on this thread while the host is inside the call. The
  * write back runs under the future's mutex, which is also what a break must
@@ -2784,7 +2919,7 @@ GeasStatus geas_future_wait(GeasFuture* f, GeasValue* out) {
         pthread_mutex_unlock(&f->c->mu);
     }
     pthread_mutex_lock(&f->mu);
-    while (!f->done) {
+    while (!__atomic_load_n(&f->done, __ATOMIC_RELAXED)) {
         pthread_cond_wait(&f->cv, &f->mu);
     }
     if (f->waited) {
@@ -2857,7 +2992,8 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
         }
         GeasValue res;
         memset(&res, 0, sizeof(res));
-        st = geas_rt_run_attempts(c, pidx, c->fns[pidx], frame, p->nargs, &res);
+        st = run_bound_attempts(c, pidx, c->fns[pidx], frame, p->nargs, &res);
+        geas_rt_note_cancel(c);
         if (st == GEAS_OK) {
             latch_pledge(c, pidx, &res);
             geas_rt_eval_policy(c);
@@ -2902,7 +3038,8 @@ GeasStatus geas_pledge_fulfill_sync(GeasContract* c, const char* pledge_name,
     GeasFuture* f = geas_pledge_fulfill(c, pledge_name, args, nargs, refs, nrefs);
     if (!f) return GEAS_ERR_OOM;
     GeasStatus st = geas_future_wait(f, out);
-    future_release(f);
+    GeasStatus released = geas_future_release(f);
+    if (released != GEAS_OK) return released;
     return st;
 }
 
@@ -3147,7 +3284,10 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
      * can carry. Both refuse rather than guess. */
     if (st == GEAS_OK) {
         for (struct GeasFuture* f = c->futures; f; f = f->next) {
-            if (!f->waited) {
+            pthread_mutex_lock(&f->mu);
+            int has_waited = f->waited;
+            pthread_mutex_unlock(&f->mu);
+            if (!has_waited) {
                 st = GEAS_ERR_STATE;
                 break;
             }
@@ -3283,11 +3423,15 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
     }
     GeasPledgeFn* fns = NULL;
     GeasPledgeFn* remedy_fns = NULL;
+    GeasBinding* bindings = NULL;
     st = geas_rt_validate_desc(desc);
     if (st == GEAS_OK) st = resolve_dispatch(rt, desc, &fns);
     if (st == GEAS_OK) st = geas_rt_resolve_remedies(rt, desc, &remedy_fns);
+    if (st == GEAS_OK) st = snapshot_bindings(rt, &bindings);
     pthread_mutex_unlock(&rt->lock);
     if (st != GEAS_OK) {
+        free(remedy_fns);
+        free(bindings);
         free(fns);
         park_arena_free(arena);
         return st;
@@ -3297,6 +3441,7 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
     if (!c) {
         free(fns);
         free(remedy_fns);
+        free(bindings);
         park_arena_free(arena);
         return GEAS_ERR_OOM;
     }
@@ -3304,12 +3449,14 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
         free(c);
         free(fns);
         free(remedy_fns);
+        free(bindings);
         park_arena_free(arena);
         return GEAS_ERR_OOM;
     }
     c->rt = rt;
     c->desc = desc;
     c->flow.remedy_fns = remedy_fns;
+    c->bindings = bindings;
     if (desc->npledges > 0) {
         c->fns = (GeasPledgeFn*)geas_bytes(c, desc->npledges * sizeof(GeasPledgeFn));
         if (!c->fns) st = GEAS_ERR_OOM;
@@ -3369,15 +3516,14 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
         if (st == GEAS_OK && off != berrs.len) st = GEAS_ERR_TYPE;
     }
 
-    /* The transactional fates replay too: TXN_DONE stays done, so a resumed
-     * episode can never run twice, and a recorded TXN_OPEN is a row park
-     * refused to write, so reading one is corruption, not state. */
+    /* Closed episodes stay closed after resume, with rollback preserved
+     * separately from commit. Park refuses TXN_OPEN, so the reader does too */
     if (st == GEAS_OK && desc->nsubs > 0) {
         c->sub_txn = calloc(desc->nsubs, sizeof(uint8_t));
         if (!c->sub_txn) st = GEAS_ERR_OOM;
         if (st == GEAS_OK && bsubtxn.len != desc->nsubs) st = GEAS_ERR_TYPE;
         for (uint32_t i = 0; st == GEAS_OK && i < desc->nsubs; i++) {
-            if (bsubtxn.ptr[i] == TXN_OPEN || bsubtxn.ptr[i] > TXN_DONE) {
+            if (bsubtxn.ptr[i] == TXN_OPEN || bsubtxn.ptr[i] > TXN_ROLLED_BACK) {
                 st = GEAS_ERR_TYPE;
             } else {
                 c->sub_txn[i] = bsubtxn.ptr[i];
@@ -3437,6 +3583,12 @@ GeasValue geas_state_value(const GeasContract* c) {
     v.as.s.ptr = (uint8_t*)n;
     v.as.s.len = strlen(n);
     return v;
+}
+
+GeasStatus geas_state_value_into(const GeasContract* c, GeasValue* out) {
+    if (!c || !out) return GEAS_ERR_TYPE;
+    *out = geas_state_value(c);
+    return GEAS_OK;
 }
 
 /* The NUL terminated copy of a String value the park calls take their dsn
@@ -3515,6 +3667,14 @@ GeasValue geas_string_copy(GeasContract* c, const uint8_t* utf8, uint64_t len) {
     v.as.s.ptr = dst;
     v.as.s.len = dst ? len : 0;
     return v;
+}
+
+GeasStatus geas_string_copy_into(GeasContract* c, const uint8_t* utf8,
+                                 uint64_t len, GeasValue* out) {
+    if (!c || !out || (!utf8 && len)) return GEAS_ERR_TYPE;
+    if (len > SIZE_MAX - sizeof(GeasBlock)) return GEAS_ERR_OOM;
+    *out = geas_string_copy(c, utf8, len);
+    return out->as.s.ptr ? GEAS_OK : GEAS_ERR_OOM;
 }
 
 GeasStatus geas_string_concat(GeasContract* c, const GeasValue* a,
@@ -3614,6 +3774,12 @@ GeasValue geas_map_new(GeasContract* c, uint32_t key_ty) {
     v.ty = GEAS_TY_MAP;
     v.as.list.elem_ty = key_ty;
     return v;
+}
+
+GeasStatus geas_map_new_into(GeasContract* c, uint32_t key_ty, GeasValue* out) {
+    if (!c || !out) return GEAS_ERR_TYPE;
+    *out = geas_map_new(c, key_ty);
+    return GEAS_OK;
 }
 
 /* The slot index of k's value inside m, or -1 for a miss. Assumes m is a map

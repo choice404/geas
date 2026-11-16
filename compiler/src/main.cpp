@@ -19,7 +19,7 @@
 
 namespace {
 
-constexpr std::string_view versionString = "geas 0.8.0";
+constexpr std::string_view versionString = "geas 0.8.1";
 constexpr int exitSuccess = 0;
 constexpr int exitFailure = 1;
 

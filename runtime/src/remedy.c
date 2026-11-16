@@ -55,9 +55,9 @@ GeasStatus geas_rt_resolve_remedies(const GeasRuntime* rt,
 /* Whether a pledge's writes sit in a transactional episode that did not
  * commit. Such a pledge needs no remedy: nothing it wrote is durable, the
  * rollback is its undo. An open episode has not committed yet and the break
- * rolls it back; a closed one committed only if every pledge of the
- * subcontract latched fulfilled, that being the one condition the commit
- * fires on, so a closed episode with anything else in it was rolled back. An
+ * rolls it back. Rollback has its own fate, including when all latches are
+ * fulfilled. Older park rows used TXN_DONE for either closed fate, so those
+ * rows count as committed only when every pledge latched fulfilled. An
  * episode that never opened, a contract with no store behind it, ran no
  * transaction at all and its pledges are undone the ordinary way. */
 static int in_uncommitted_episode(const GeasContract* c, uint32_t pidx) {
@@ -65,7 +65,7 @@ static int in_uncommitted_episode(const GeasContract* c, uint32_t pidx) {
     int32_t s = d->pledges[pidx].sub;
     if (s < 0 || (uint32_t)s >= d->nsubs || !d->sub_flags || !c->sub_txn) return 0;
     if ((d->sub_flags[s] & GEAS_SUB_TRANSACTIONAL) == 0) return 0;
-    if (c->sub_txn[s] == TXN_OPEN) return 1;
+    if (c->sub_txn[s] == TXN_OPEN || c->sub_txn[s] == TXN_ROLLED_BACK) return 1;
     if (c->sub_txn[s] != TXN_DONE) return 0;
     return !geas_rt_sub_all(c, (uint32_t)s, PLEDGE_FULFILLED);
 }
@@ -140,6 +140,15 @@ static int remedy_wait(GeasContract* c, const GeasTermDesc* t, int64_t started,
     return geas_rt_now(c->rt) < at;
 }
 
+/* Calls the signed remedy binding with the instance lock held */
+static GeasStatus call_remedy(GeasContract* c, uint32_t remedy,
+                             const GeasValue* args, size_t nargs, GeasValue* out) {
+    const GeasBinding* binding = geas_rt_instance_binding(c, &c->desc->remedies[remedy]);
+    if (binding && binding->user_fn)
+        return binding->user_fn(binding->user, c, args, nargs, out);
+    return c->flow.remedy_fns[remedy](c, args, nargs, out);
+}
+
 /* Runs remedy r to its end: the body, and again while its retry term says
  * so. The argument is the pledge's Ok value, a struct copy the body may not
  * keep past its return. A remedy that takes that value and finds none, a
@@ -165,7 +174,7 @@ static void run_remedy(GeasContract* c, uint32_t r) {
         GeasValue out;
         memset(&out, 0, sizeof(out));
         f->in_thunk++;
-        GeasStatus st = f->remedy_fns[r]((void*)c, nargs ? &arg : NULL, nargs, &out);
+        GeasStatus st = call_remedy(c, r, nargs ? &arg : NULL, nargs, &out);
         f->in_thunk--;
         if (st == GEAS_OK && !geas_rt_is_err(&out)) {
             f->remedy_state[r] = REMEDY_DONE;
@@ -200,6 +209,9 @@ static void run_remedy(GeasContract* c, uint32_t r) {
 void geas_rt_remedy_drive(GeasContract* c) {
     GeasFlow* f = &c->flow;
     if (f->remedy_active || f->in_thunk > 0) return;
+    if (c->state == GEAS_REMEDYING || c->state == GEAS_BROKEN) {
+        geas_rt_rollback_open(c);
+    }
     if (c->state != GEAS_REMEDYING) {
         /* A host break made inside a body on a contract with no pass to
          * run, Fulfilled or already Broken, left only its reclaim behind. */

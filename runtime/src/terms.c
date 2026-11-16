@@ -29,6 +29,7 @@
 #include "runtime_internal.h"
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -65,6 +66,38 @@ void geas_rt_sleep(GeasRuntime* rt, uint64_t ms) {
     pthread_mutex_unlock(&rt->lock);
     if (fn) fn(user, ms);
     else default_sleep(ms);
+}
+
+/* Waits a pledge retry with no instance lock held. A custom sleep belongs
+ * to the host scheduler and returns on its terms; a break forfeits the
+ * waiting fulfillment immediately even while that callback is returning.
+ * The default wait wakes on cancellation without waiting out the delay */
+static void retry_sleep(GeasContract* c, uint64_t ms) {
+    pthread_mutex_lock(&c->rt->lock);
+    GeasSleepFn fn = c->rt->sleep_fn;
+    void* user = c->rt->clock_user;
+    pthread_mutex_unlock(&c->rt->lock);
+    if (geas_cancel_requested(c)) return;
+    if (fn) {
+        fn(user, ms);
+        return;
+    }
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    until.tv_sec += (time_t)(ms / 1000);
+    until.tv_nsec += (long)(ms % 1000) * 1000000L;
+    until.tv_sec += until.tv_nsec / 1000000000L;
+    until.tv_nsec %= 1000000000L;
+    pthread_mutex_lock(&c->cancel_mu);
+    while (!geas_cancel_requested(c)) {
+        int status = pthread_cond_timedwait(&c->cancel_cv, &c->cancel_mu, &until);
+        if (status == ETIMEDOUT) break;
+        if (status != 0) {
+            fprintf(stderr, "[libgeasrt] retry wait failed: %s\n", strerror(status));
+            break;
+        }
+    }
+    pthread_mutex_unlock(&c->cancel_mu);
 }
 
 GeasStatus geas_runtime_set_clock(GeasRuntime* rt, GeasClockFn now_fn,
@@ -162,6 +195,12 @@ GeasStatus geas_rt_validate_desc(const GeasContractDesc* d) {
 GeasStatus geas_rt_flow_init(GeasContract* c) {
     const GeasContractDesc* d = c->desc;
     GeasFlow* f = &c->flow;
+    if (pthread_mutex_init(&c->cancel_mu, NULL) != 0) return GEAS_ERR_OOM;
+    if (pthread_cond_init(&c->cancel_cv, NULL) != 0) {
+        pthread_mutex_destroy(&c->cancel_mu);
+        return GEAS_ERR_OOM;
+    }
+    c->cancel_ready = 1;
     if (pthread_cond_init(&f->remedy_cv, NULL) != 0) return GEAS_ERR_OOM;
     f->cv_ready = 1;
     if (d->npledges > 0) {
@@ -213,6 +252,11 @@ void geas_rt_flow_free(GeasContract* c) {
     free(f->remedy_err);
     free(f->remedy_fns);
     if (f->cv_ready) pthread_cond_destroy(&f->remedy_cv);
+    if (c->cancel_ready) {
+        pthread_cond_destroy(&c->cancel_cv);
+        pthread_mutex_destroy(&c->cancel_mu);
+        c->cancel_ready = 0;
+    }
     memset(f, 0, sizeof(*f));
 }
 
@@ -438,6 +482,7 @@ int geas_contract_term_lapsed(GeasContract* c) {
 /* ---- the fulfillment gate ---- */
 
 GeasStatus geas_rt_fulfill_gate(GeasContract* c, uint32_t pidx) {
+    if (geas_cancel_requested(c)) return GEAS_ERR_STATE;
     geas_rt_tick(c);
     if (!geas_rt_live(c)) return GEAS_ERR_STATE;
     if (pidx >= c->desc->npledges) return GEAS_ERR_NAME;
@@ -497,6 +542,7 @@ static uint64_t delay_to_deadline(const GeasContract* c, uint32_t pidx,
  * not lapsed. Runs the tick, so a deadline that passed during the delay
  * lapses here. Under the instance lock. */
 static int attempt_may_continue(GeasContract* c, uint32_t pidx) {
+    if (geas_cancel_requested(c)) return 0;
     if (c->flow.reclaimed) return 0;
     geas_rt_tick(c);
     if (c->flow.reclaimed || !geas_rt_live(c)) return 0;
@@ -540,6 +586,9 @@ GeasStatus geas_rt_run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
         GeasStatus st = run_body(c, fn, frame, nargs, out);
         /* A body that broke its own instance left nothing to latch. */
         if (c->flow.reclaimed) return GEAS_ERR_STATE;
+        /* A returned outcome still latches, including a retriable Err,
+         * when cancellation was requested while the body ran */
+        if (geas_cancel_requested(c)) return st;
         if (!t || !geas_rt_retryable(t, attempt, st, out)) return st;
         if (!attempt_may_continue(c, pidx)) return GEAS_ERR_STATE;
         uint64_t delay = delay_to_deadline(c, pidx, t,
@@ -547,7 +596,7 @@ GeasStatus geas_rt_run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
         if (delay > 0) {
             c->flow.retrying++;
             pthread_mutex_unlock(&c->mu);
-            geas_rt_sleep(c->rt, delay);
+            retry_sleep(c, delay);
             pthread_mutex_lock(&c->mu);
             c->flow.retrying--;
         }

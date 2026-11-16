@@ -130,7 +130,7 @@ typedef struct GeasInameEntry {
 } GeasInameEntry;
 
 /* Freezes the runtime's registration surface. Every later geas_module_load,
- * geas_register_contract, and geas_pledge_bind reports GEAS_ERR_STATE; signing
+ * geas_register_contract, and either pledge bind reports GEAS_ERR_STATE; signing
  * and fulfillment continue unchanged. Idempotent, and safe to call from any
  * thread. */
 GeasStatus geas_runtime_freeze(GeasRuntime* rt);
@@ -214,8 +214,14 @@ GeasRuntime* geas_instance_runtime(const GeasContract* c);
  * A break races in-flight
  * fulfillments safely: a thunk mid-run finishes first, a task not yet run
  * never runs, and every future not yet waited is forfeited so its wait
- * reports GEAS_ERR_STATE instead of touching freed memory. */
+ * reports GEAS_ERR_STATE instead of touching freed memory. The request is
+ * visible through geas_cancel_requested while break waits for the body */
 GeasStatus geas_contract_break(GeasContract* c);
+
+/* A body polls with its ctx, without taking the instance lock. Answers 1
+ * once a break is requested on this instance or shutdown starts, 0 otherwise.
+ * Break waits for a running body to return and latch before undoing it */
+int geas_cancel_requested(void* ctx);
 
 /* ---- the partial result ---- */
 
@@ -385,15 +391,17 @@ GeasStatus geas_instance_resume_v(GeasRuntime* rt, const GeasValue* dsn,
 const char* geas_state_name(GeasContractState s);
 GeasValue    geas_state_value(const GeasContract* c);
 
+/* The pointer form, GEAS_ERR_TYPE for a NULL instance or out */
+GeasStatus geas_state_value_into(const GeasContract* c, GeasValue* out);
+
 /* ---- pledges ---- */
 
 /* Binds a host implementation to a pledge, the way an abstract pledge gets a
  * body and a concrete one gets overridden. pledge_name is either
  * "Contract.pledge" or the pledge's mangled symbol; GEAS_ERR_NAME when no
  * registered contract carries it. The bound fn runs in the uniform thunk
- * frame with ctx = the signed instance, exactly like a compiled body; a
- * per-binding userdata is deferred, a host that needs state reaches it
- * through its own globals for now. Rebinding replaces. Bindings resolve at
+ * frame with ctx = the signed instance, exactly like a compiled body.
+ * Rebinding replaces either form of binding. Bindings resolve at
  * sign: an instance signed before the bind keeps dispatching what it was
  * signed with, and a binding beats the compiled body for instances signed
  * after it. GEAS_ERR_STATE once the runtime is frozen.
@@ -405,11 +413,23 @@ GeasValue    geas_state_value(const GeasContract* c);
 GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
                           GeasPledgeFn fn);
 
+/* Binds a body with a borrowed user pointer, passed before the same ctx and
+ * frame a plain body receives. The runtime never owns or frees user, which
+ * may be NULL. The host keeps it and fn alive while any signed instance can
+ * call them. Sign and resume copy both pointers from the current binding;
+ * neither pointer is stored in a park row. Names, replacement, and errors
+ * follow geas_pledge_bind, for pledges and remedies alike */
+typedef GeasStatus (*GeasPledgeUserFn)(void* user, void* ctx,
+                                     const GeasValue* args, size_t nargs,
+                                     GeasValue* out);
+GeasStatus geas_pledge_bind_user(GeasRuntime* rt, const char* pledge_name,
+                               GeasPledgeUserFn fn, void* user);
+
 /* Starts a fulfillment and hands back its future. The pledge body runs on a
  * pool worker; every error a fulfillment can hit, wrong state, unknown
  * pledge, argument mismatch, is reported by the wait, not here. Returns NULL
  * only when c or pledge_name is NULL or the future itself cannot be
- * allocated. The future struct is tracked by the instance and freed at
+ * allocated. The future struct is tracked by the instance until release or
  * runtime shutdown; everything its value points at is instance owned and
  * dies at break, so wait before you break.
  *
@@ -441,6 +461,18 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
  * on this thread, before the value is delivered; a slot whose type no longer
  * matches its ref is GEAS_ERR_TYPE and nothing is written. */
 GeasStatus geas_future_wait(GeasFuture* f, GeasValue* out);
+
+/* Reads completion without delivering or writing refs back. ready receives
+ * 0 while pending and 1 after completion, even after wait or forfeiture.
+ * Does not run the instance tick. NULL arguments are GEAS_ERR_TYPE */
+GeasStatus geas_future_poll(GeasFuture* fut, int* ready);
+
+/* Releases a waited receipt or one an explicit break forfeited. A pending
+ * or completed but unwaited receipt is GEAS_ERR_STATE and stays valid.
+ * NULL is GEAS_ERR_TYPE. On success the handle is dead: no further call,
+ * including another release, is valid. The host must finish all other calls
+ * on this handle before releasing it. Queued work keeps its own hold */
+GeasStatus geas_future_release(GeasFuture* fut);
 
 /* The synchronous form: fulfill and wait in one call. Ref write back happens
  * before this returns, on the calling thread.
@@ -507,6 +539,11 @@ GeasValue* geas_box(GeasContract* c);
 /* Copies utf8[0..len) into instance owned memory and returns a string value. */
 GeasValue  geas_string_copy(GeasContract* c, const uint8_t* utf8, uint64_t len);
 
+/* The pointer form, GEAS_ERR_TYPE for NULL c or out, or NULL utf8 when len
+ * is nonzero. A failed allocation is GEAS_ERR_OOM */
+GeasStatus geas_string_copy_into(GeasContract* c, const uint8_t* utf8,
+                                 uint64_t len, GeasValue* out);
+
 /* Joins two string values into instance owned memory. GEAS_ERR_TYPE when
  * either operand is not a string, GEAS_ERR_OOM when the bytes cannot be had. */
 GeasStatus geas_string_concat(GeasContract* c, const GeasValue* a,
@@ -559,6 +596,10 @@ int geas_value_eq(const GeasValue* a, const GeasValue* b);
  * The repr rides the list arm: interleaved key, value pairs behind data in
  * insertion order, len twice the pair count, elem_ty the key tag. */
 GeasValue geas_map_new(GeasContract* c, uint32_t key_ty);
+
+/* The pointer form, GEAS_ERR_TYPE for NULL c or out. An empty map's NULL
+ * data pointer is valid, since no allocation is needed */
+GeasStatus geas_map_new_into(GeasContract* c, uint32_t key_ty, GeasValue* out);
 
 /* Inserts or updates one pair. The key and the value are both deep copied
  * onto the instance before anything is committed, so the caller keeps what it

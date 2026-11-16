@@ -124,6 +124,20 @@ bool runCommand(const std::string& command) {
     return std::system(command.c_str()) == 0;
 }
 
+// Both artifact kinds name the runtime and find it beside the artifact
+std::string runtimeLinkFlags() {
+    const std::string library = runtimeDirectory(outputDirectory);
+    std::string flags;
+    if (!library.empty()) {
+        flags.append(joined(" -L", shellArg(library)));
+    }
+    flags.append(joined(" -lgeasrt", shellArg("-Wl,-rpath,$ORIGIN")));
+    if (!library.empty()) {
+        flags.append(shellArg(joined("-Wl,-rpath,", library)));
+    }
+    return flags;
+}
+
 // Compiles the emitted C into a shared library with cc
 bool linkModule(const std::string& modulePath, const std::string& libraryPath) {
     const std::string include = runtimeDirectory("runtime/include");
@@ -131,6 +145,7 @@ bool linkModule(const std::string& modulePath, const std::string& libraryPath) {
     if (!include.empty()) {
         command.append(joined(" -I", shellArg(include)));
     }
+    command.append(runtimeLinkFlags());
     command.append(joined(" -o", shellArg(libraryPath)));
     report("[geas] linking with cc");
     if (!runCommand(command)) {
@@ -146,18 +161,11 @@ bool linkModule(const std::string& modulePath, const std::string& libraryPath) {
 bool linkExecutable(const std::string& wrapperPath, const std::string& modulePath,
                     const std::string& binaryPath) {
     const std::string include = runtimeDirectory("runtime/include");
-    const std::string library = runtimeDirectory(outputDirectory);
     std::string command = joined("cc", shellArg(wrapperPath), shellArg(modulePath));
     if (!include.empty()) {
         command.append(joined(" -I", shellArg(include)));
     }
-    if (!library.empty()) {
-        command.append(joined(" -L", shellArg(library)));
-    }
-    command.append(joined(" -lgeasrt", shellArg("-Wl,-rpath,$ORIGIN")));
-    if (!library.empty()) {
-        command.append(shellArg(joined("-Wl,-rpath,", library)));
-    }
+    command.append(runtimeLinkFlags());
     command.append(joined(" -o", shellArg(binaryPath)));
     report("[geas] linking the executable with cc");
     if (!runCommand(command)) {
