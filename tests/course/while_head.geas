@@ -1,0 +1,10 @@
+contract Flow {
+    pledge again() -> Option<Bool>
+    pledge visit() -> Unit
+    course {
+        while again()? {
+            visit()
+            continue
+        }
+    }
+}

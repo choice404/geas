@@ -1,0 +1,4 @@
+exit 1
+tests/check/course_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The course: own pledges by bare name, a pledge inside a subcontract included,
+  ^

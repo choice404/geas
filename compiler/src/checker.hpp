@@ -32,6 +32,7 @@ namespace geas {
 struct Binding {
     TyId type;
     bool isMutable;
+    bool isPendingTogether = false;
 };
 
 // What the arms of one match cover so far
@@ -258,6 +259,8 @@ private:
     TyId checkSelect(const Expr& expr, const SelectExpr& select, TyId want);
     void checkSleep(const SleepStmt& sleep);
     void checkTogether(const TogetherStmt& together);
+    void checkTogetherStatement(StmtId statement);
+    bool hasContractType(TyId type) const;
     TyId checkNow(const Expr& expr, const CallExpr& call);
 
     // Terms and ordering, checkterms.cpp
@@ -315,6 +318,7 @@ private:
     int loopDepth_ = 0;
     bool isInCourse_ = false;
     bool isInAmends_ = false;
+    std::size_t suspensionCount_ = 0;
 };
 
 }  // namespace geas

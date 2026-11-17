@@ -1,0 +1,9 @@
+contract Flow {
+    pledge value(input: Int) -> Option<Int>
+    course {
+        together {
+            let first = value(1)?
+            let second = value(first)?
+        }
+    }
+}

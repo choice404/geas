@@ -64,6 +64,19 @@ int geas_rt_event_read(const GeasContract* c) {
     return event_thread.is_callback || geas_rt_events_blocked(c);
 }
 
+int geas_rt_thread_busy(void) {
+    return event_thread.locks > 0 || event_thread.is_delivering || event_thread.is_callback;
+}
+
+/* Whether this thread may wait out another thread's delivery on the one
+ * instance it holds: exactly one instance hold, the hold a condition wait
+ * gives up whole, and no delivery or hook of its own under way. A deeper
+ * hold would keep the instance from the delivering thread, which takes the
+ * lock back to end its delivery */
+int geas_rt_may_await_delivery(void) {
+    return event_thread.locks == 1 && !event_thread.is_delivering && !event_thread.is_callback;
+}
+
 /* A foreign park during a remedy wait leaves delivery to the pass owner
  * The instance lock protects the queue and the delivery flags */
 int geas_rt_event_park_blocked(const GeasContract* c) {
@@ -72,9 +85,13 @@ int geas_rt_event_park_blocked(const GeasContract* c) {
     return !c->flow.remedy_active || c->event_delivering || c->event_enqueued;
 }
 
-/* Links a queue only on its delivery owner's thread, under the instance lock */
-static void enqueue_instance(GeasContract* c) {
+/* Links a queue only on its delivery owner's thread, under the instance lock.
+ * A course run reserves nothing while it keeps the instance: is_release is
+ * the outermost release on this thread, where its events are claimed and
+ * delivered, at a retry delay inside the run or when the run ends */
+static void enqueue_instance(GeasContract* c, int is_release) {
     if (c->event_enqueued || !c->event_head) return;
+    if (!is_release && geas_rt_course_running_here(c)) return;
     /* A hook installed during an unobserved pass still belongs to its owner */
     if (c->flow.remedy_active &&
         !pthread_equal(c->flow.remedy_owner, pthread_self())) return;
@@ -121,7 +138,7 @@ void geas_rt_event_queue(GeasContract* c, uint32_t kind,
         c->event_head = node;
         c->event_tail = node;
     }
-    enqueue_instance(c);
+    enqueue_instance(c, 0);
 }
 
 /* ---- delivery without runtime locks ---- */
@@ -179,6 +196,9 @@ static void deliver_events(void) {
         /* The remedy owner keeps its reservation across retry delays */
         if (!c->event_head && !c->flow.remedy_active)
             __atomic_store_n(&c->event_owner, NULL, __ATOMIC_RELEASE);
+        /* A course entry that found this delivery holding the instance runs now */
+        if (c->course && !__atomic_load_n(&c->event_owner, __ATOMIC_ACQUIRE))
+            geas_rt_course_redrive(c);
         geas_rt_unlock(c);
     }
     event_thread.is_delivering = 0;
@@ -198,11 +218,16 @@ int geas_rt_trylock(GeasContract* c) {
 }
 
 void geas_rt_unlock(GeasContract* c) {
-    enqueue_instance(c);
+    /* The outermost release on this thread is a durable point: an armed
+     * autopark writes what changed while the lock was held */
+    if (event_thread.locks == 1 && c->autopark_dirty) geas_rt_autopark_unlocking(c);
+    enqueue_instance(c, event_thread.locks == 1);
     /* Clearing the hook during a pass can leave its final queue empty */
     if (!c->event_head && !c->event_delivering && !c->flow.remedy_active &&
-        __atomic_load_n(&c->event_owner, __ATOMIC_RELAXED) == &event_thread)
+        __atomic_load_n(&c->event_owner, __ATOMIC_RELAXED) == &event_thread) {
         __atomic_store_n(&c->event_owner, NULL, __ATOMIC_RELEASE);
+        if (c->course) geas_rt_course_redrive(c);
+    }
     event_thread.locks--;
     pthread_mutex_unlock(&c->mu);
     if (event_thread.locks == 0) deliver_events();

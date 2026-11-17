@@ -1,0 +1,14 @@
+contract Flow {
+    pledge value(n: Int) -> Option<Int>
+    clause number() -> Int { return 1 }
+    course {
+        let input = value(0)?
+        together {
+            value(number())
+            value(input)?
+            let first = value(2)
+            let second = value(3)?
+        }
+        let total = first? + second
+    }
+}

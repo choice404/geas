@@ -1,0 +1,10 @@
+contract Child {
+    pledge run() -> Unit
+}
+contract Flow {
+    signal ready(value: Int)
+    clause consume(instance: Child, value: Int) -> Int { return value }
+    course {
+        consume(Child.sign(), await ready)
+    }
+}

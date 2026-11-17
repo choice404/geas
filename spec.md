@@ -19,13 +19,13 @@ one `geas` enforces and the runtime holds.
 
 Geas runs in layers that share one lifecycle. The core language and the in
 process runtime carry the contract itself. The workflow surface, terms,
-remedies, signals, and the contract term, runs host driven today, the host
-calling the steps and the runtime enforcing the rules. The store layer backs a
-contract with a database and parks an instance into a row another process can
-resume, and the bridge serves the same contracts over gRPC. The engine driven
-mode, a contract that carries its own `course`, and typed amendment between
-versions are parsed and checked today and are the next steps on the roadmap;
-their sections say where they stand. The compiler is `geas`, written by hand
+remedies, signals, and the contract term, runs in two modes: host driven, the
+host calling the steps and the runtime enforcing the rules, and engine driven,
+a contract that carries its own `course`, which the runtime runs step by step.
+The store layer backs a contract with a database and parks an instance into a
+row another process can resume, and the bridge serves the same contracts over
+gRPC. Typed amendment between versions is parsed and checked today and is the
+next step on the roadmap; its section says where it stands. The compiler is `geas`, written by hand
 in C++23 and emitting C, source files end in `.geas`, a compiled module ends in
 `.geas.so`, and the runtime is a shared C library, `libgeasrt`.
 
@@ -512,45 +512,127 @@ outside: the requirements, the terms, the remedies, and the lifecycle. So a
 contract can start in one and grow into the other without a host noticing its
 shape change.
 
-**Host driven** is the mode that runs today, and it is the mode of any
-contract with no `course`. A host signs the contract and calls its pledges in
-whatever order it likes, and the runtime enforces the terms: an early call
-answers a state error, a missed deadline latches the step broken, retries
-happen inside the runtime, and remedies run on break. This is the right shape
-for in process glue and for hosts that want to stay in charge of the order.
+**Host driven** is the mode of any contract with no `course`. A host signs
+the contract and calls its pledges in whatever order it likes, and the runtime
+enforces the terms: an early call answers a state error, a missed deadline
+latches the step broken, retries happen inside the runtime, and remedies run
+on break. This is the right shape for in process glue and for hosts that want
+to stay in charge of the order.
 
-**Engine driven** is the next step on the roadmap. A contract carries one
-`course` block, its orchestration written out, and the engine runs it from the
-moment the contract signs:
+**Engine driven** is the mode of a contract that carries a `course` block, its
+orchestration written out, and the runtime runs it from the moment the
+contract signs. `skeleton/order_course.geas` is the order saga written this
+way:
 
 ```text
 course {
-    let auth = authorize(order.card)?
+    if amount <= 0 {
+        return
+    }
+    let window = plan(hold)?
+    let auth = authorize(Card { number: card })?
     together {
         let receipt = capture(auth)?
-        let res = reserve(order.sku, 1h)?
+        let held = reserve(sku, window)?
     }
-    ship(res)?
-    await delivered
+    let tracking = ship(held)?
+    let shipped = now()
+    let parcel = select {
+        await delivered as parcel -> parcel
+        timeout 2d -> {
+            chase(tracking, now() - shipped)?
+            await delivered
+        }
+    }
 }
 ```
 
-Inside a course the contract's own pledges are called by bare name and each
-call is a durable step dispatched to its binding, a Geas body, a foreign
-symbol, or a worker, with every result journaled so a parked instance resumes
-at the step it stopped on. `await sig` waits for a signal and yields its
-payload, `await sig within 24h` yields an `Option`, `select` takes whichever of
-several awaits or a timeout is ready first, `sleep` pauses durably, and
-`together` runs its statements concurrently and finishes when all of them
-have. A `?` that fires ends the course, but the step it unwrapped has already
-latched, so the requirements decide the state, not the course. `now()` and
-anything else non deterministic is journaled on first run and replayed on
-resume. Hosts bind workers and deliver signals; they do not call the pledges
-of a course driven contract, and the checker refuses a body that tries.
+So the host's job shrinks to two things, it binds the bodies the contract
+leaves abstract and it hands signals in. It never calls a pledge of such a
+contract: a host fulfillment answers a state error and its body never runs,
+and the checker refuses a Geas body that tries.
 
-The compiler parses and checks all of this today, every rule above included,
-and `geas build` refuses a course with `workflow constructs are not emitted
-yet` until the engine runs it.
+*How the course is driven.* The compiler lowers the course to a C function
+that is a state machine over a frame, a step number and a set of slots that
+hold every binding, every loop's position, and every value that has to
+outlive a step. Signing schedules the first entry on the runtime's pool, and a
+pool worker runs the function with the instance lock held. Each call of one
+of the contract's own pledges is a step and runs inline on that worker
+through the same machinery a host fulfillment uses, the eligibility gate, the
+terms, the retries, the latch, the policy, the events, and the remedy pass a
+break makes due. Between two steps the course is ordinary code.
+
+*Steps are at least once.* After every step the course stores its next step
+number, and an armed autopark writes the instance's row right there. A
+resumed course enters at the step its row names with the slots its row
+carried, so a step that finished before the row was written never runs again,
+and a step that was running when the process died runs again from its start.
+A body that must not act twice keys its side effect the way any at least once
+worker does. The same boundary publishes the step number, so a host reading
+the course while it runs sees the step it stands at.
+
+*Suspend and wake.* At an `await`, a `sleep`, a `select`, or a `together`
+that cannot finish yet, the function returns to the runtime, the course reads
+WAITING, and its worker goes back to the pool. A signal's first delivery, a
+tick that finds the wait's deadline due, or the last call of a `together`
+finishing schedules the next entry, which jumps straight to the saved step.
+A wait's deadline is fixed the first time its step runs and travels with the
+row, so neither a re-entry nor a park ever moves it. A deadline falls due only
+when something ticks, the host's own timer through `geas_runtime_tick` or the
+runtime's ticker thread, and like every deadline it is applied when no body is
+in flight on the instance.
+
+*A delivery never stops a course.* The event hook a host installs is called
+from the thread that recorded the events, a signal's caller, the ticker, a
+worker, and while that thread delivers, the instance is reserved to it. A
+course that meets such a delivery at one of its operations, at the end of a
+retry delay, at a step boundary, or where an armed autopark writes its row,
+waits for it to end and goes on, so a course never halts or is cancelled
+over a delivery it had no part in. A host driven fulfillment that meets one
+is refused with `GEAS_ERR_STATE` instead, since the host thread may hold a
+lock the hook is waiting on, and the host calls again once the delivery
+ended, which its own hook is the one to tell it.
+
+*Together.* The calls of a `together` start at once on the pool, each with
+the instance lock released, so two bodies really run at the same time, bounded
+by the pool's size. A pledge of a transactional subcontract is the exception:
+its body keeps the instance lock, since its episode rides the instance's open
+store transaction. Once every call has an outcome the course is entered again,
+the results land in their bindings, and the `?`s apply in statement order.
+
+*Cancel.* A break the host asks for, an automatic one from a break line or a
+lapse, or the contract term running out cancels the course. A waiting course
+is dropped at once. A running one is cut off at its next operation, after the
+step it is inside returns and latches, which is what a host break waits for by
+waiting on the instance lock. A host break during a `together` returns with
+the contract Remedying while the calls still run; they finish and latch, and
+the last one back runs the remedy pass, so whatever landed is undone with the
+rest.
+
+*The course's end is not the contract's state.* A course finishes when it
+falls off its end, runs `return`, or meets an `Err` or a `None` at a `?`; it
+halts when an operation answers a runtime status, a failed autopark write
+among them; and it is cancelled by a break. None of those sets the contract's
+state, the requirements decide it from the latches, so a course whose last
+step answered `Err` reads finished while the break line it tripped has already
+moved the contract to Remedying and then Broken. A course that runs to its end
+before a signal it does not wait on arrives leaves the contract Partial, and
+the signal can still fulfill it.
+
+*Autopark and resume.* A host arms an instance with a store and a key, and
+from then on the runtime writes its row at every step boundary, whenever the
+course waits or ends, and at every latch, lapse, state change, and remedy, the
+same row `geas_instance_park` writes. A resume in a fresh runtime enters a
+waiting or running course at its saved step; a finished, halted, or cancelled
+one stays as it was. The row carries a hash of the course, its step count,
+its slot count, and the tokens of its source, and a module whose course hash
+differs refuses the row with `GEAS_ERR_VERSION`, since a frame laid out for
+one course cannot drive another. A course that changes ships under a new
+contract version, the job amendment takes on.
+
+The full runtime contract, the descriptor fields, the frame, the operations
+the emitted function calls, and the host calls that read and wait on a course,
+is in `docs/abi.md` under The course.
 
 ---
 
@@ -578,7 +660,7 @@ and refuses the build when a difference is left uncovered, which turns a
 resume nobody planned for into a compile error instead of a surprise in
 production.
 
-Amendment is on the roadmap with the engine. The checker holds amends blocks
+Amendment is the next step on the roadmap. The checker holds amends blocks
 today to what the new version alone can verify, a real older version number,
 vows and targets that exist and agree in type, a retired name that is really
 gone, and `geas build` refuses one until the older shape is loaded and the

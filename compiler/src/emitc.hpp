@@ -1,9 +1,10 @@
 // The module C emitter. Given a checked program it emits one C translation
 // unit: a static function per clause, a static thunk per compiled pledge
-// body in the uniform frame, the vow, pledge, schema, and requirements
-// tables, one contract descriptor per public contract with its shape hash
-// and version baked in, and the single exported geas_module_register. The
-// emitted C includes geas/geas.h and nothing else defines a layout.
+// body in the uniform frame, a static resumable function per course, the
+// vow, pledge, schema, and requirements tables, one contract descriptor
+// per public contract with its shape hash and version baked in, and the
+// single exported geas_module_register. The emitted C includes geas/geas.h
+// and nothing else defines a layout.
 //
 // One CEmitter rides through the module: the finished file, the body of the
 // thunk being lowered, a scope stack binding a local's name to the C
@@ -128,6 +129,9 @@ public:
 private:
     // Shared state and helpers, emitc.cpp
     const Ast& ast() const { return lookup_.ast(); }
+    // The arena expressions and patterns are read from: the program's tree,
+    // or the lowered course's own arena while a course function is emitted
+    const Ast& arena() const { return course_ != nullptr ? course_->ast : ast(); }
     TypeArena& types() const { return lookup_.types(); }
     TyKind kindOf(TyId type) const { return lookup_.kindOf(type); }
     TyNode nodeOf(TyId type) const;
@@ -143,6 +147,7 @@ private:
     std::string newValue();
     void setTag(std::string_view value, std::string_view tag);
     void returnUnlessOk(std::string_view status);
+    std::string failExit(std::string_view status) const;
     void unsupportedAt(const Expr& expr, std::string_view what);
     bool isComposite(TyId type) const;
     CValue copyOut(const CValue& value);
@@ -333,6 +338,42 @@ private:
     CValue genGenericNew(const Expr& expr, const GenericNewExpr& ctor);
     CValue genSignalCall(const CallExpr& call, const SignalDecl& signal, const CValue& base);
 
+    // The course, emitcourse.cpp, emitcoursestep.cpp, and emitcoursematch.cpp
+    std::string emitCourse(const ContractShape& shape);
+    void emitCourseDispatch(const LoweredCourse& course);
+    void genCourseInstruction(const CourseInstruction& instruction);
+    void genCourseStore(const CourseStore& store);
+    void genCourseCheckTarget(const CourseCheckTarget& check);
+    void genCourseEvaluate(const CourseEvaluate& evaluate);
+    void genCourseBranch(const CourseBranch& branch);
+    void genCourseForNext(const CourseForNext& loop);
+    void courseLabel(std::string_view name);
+    void openCourseBlock();
+    void closeCourseBlock();
+    void storeSlot(CourseSlotId slot, const CValue& value);
+    std::string slotText(CourseSlotId slot) const;
+    TyId slotType(CourseSlotId slot) const;
+    CourseSlotId courseSlotOf(ExprId id) const;
+    std::optional<CValue> courseValue(ExprId id);
+    void genCourseResume(const CourseResume& resume);
+    void genCourseCall(const CourseStep& step);
+    void genCourseAwait(const CourseStep& step);
+    void genCourseSleep(const CourseStep& step);
+    std::string genCourseArmTable(const CourseStep& step);
+    void genCourseSelect(const CourseStep& step);
+    std::string genCourseCallTable(const CourseStep& step);
+    void genCourseTogether(const CourseStep& step);
+    std::string genCourseArgs(std::uint32_t pledge, const std::vector<ExprId>& arguments);
+    std::string genReadyFlag();
+    void suspendUnlessReady(std::string_view ready);
+    bool checkMember(std::uint32_t member, bool isSignal, std::string_view what);
+    void genCourseMatch(const CourseMatch& match);
+    void genCourseSelectDispatch(const CourseSelect& select);
+    bool genCourseArm(PatternId pattern, const CValue& value,
+                      const std::vector<CoursePatternSlot>& bindings, CourseLabelId target);
+    void genCourseNoArm();
+    std::string emitCourseTail(const ContractShape& shape, std::string_view function);
+
     EmitLookup lookup_;
     std::vector<Diagnostic> scratch_;
     TypeLowering lowering_;
@@ -342,6 +383,8 @@ private:
     std::int64_t nextTemporary_ = 0;
     int indent_ = 0;
     const ContractShape* shape_ = nullptr;
+    const LoweredCourse* course_ = nullptr;
+    std::vector<std::size_t> courseBlockMarks_;
     TyId returnType_;
     std::int64_t spanLo_ = 0;
     std::int64_t spanHi_ = 0;

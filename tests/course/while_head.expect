@@ -1,0 +1,38 @@
+Courses [
+    Course "Flow" {
+        hash: 0xe473fde7b1aecfba,
+        entry: 0,
+        slots: [
+            Slot(0) "$hidden0": Option<Bool> (temporary),
+            Slot(1) "$hidden1": Bool (temporary),
+            Slot(2) "$hidden2": Unit (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(0),
+                question: true,
+            },
+            Step 2 call {
+                pledge: 1,
+                arguments: [],
+                result: Slot(2),
+                question: false,
+            },
+        ],
+        statements: [
+            Label(0):
+            Resume 1,
+            Store Slot(1) = Question(Slot(0)),
+            Branch Slot(1) ? Label(1) : Label(2),
+            Label(1):
+            Resume 2,
+            Evaluate Slot(2),
+            Jump Label(0),
+            Jump Label(0),
+            Label(2):
+            Return,
+        ],
+    },
+]

@@ -180,7 +180,16 @@ void CEmitter::setTag(std::string_view value, std::string_view tag) {
 // The exit every runtime helper shares: a status that is not GEAS_OK leaves
 // the enclosing body with it
 void CEmitter::returnUnlessOk(std::string_view status) {
-    line(joined("if (", status, " != GEAS_OK) return ", status, ";"));
+    line(joined("if (", status, " != GEAS_OK) ", failExit(status)));
+}
+
+// The statement that leaves the enclosing function on a failed status: a
+// thunk or clause returns it, a course records it in its frame and stops
+std::string CEmitter::failExit(std::string_view status) const {
+    if (course_ != nullptr) {
+        return joined("{ f->status = ", status, "; return GEAS_COURSE_STOPPED; }");
+    }
+    return joined("return ", status, ";");
 }
 
 void CEmitter::unsupportedAt(const Expr& expr, std::string_view what) {

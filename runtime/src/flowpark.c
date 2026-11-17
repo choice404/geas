@@ -8,8 +8,11 @@
  * where each remedy stands.
  *
  * The blob is versioned. It opens with the four bytes "GFLW" and a version
- * number, and this file reads versions 2 and 3. Version 3 adds the attempts
- * completed and the absolute retry due time for each pledge. Version 1 is
+ * number, and this file reads versions 2, 3, and 4. Version 3 adds the
+ * attempts completed and the absolute retry due time for each pledge.
+ * Version 4 adds the course frame at the tail: the course state, the step,
+ * the status, the wait fields, the course hash, every slot, and the outcomes
+ * a together in flight already has. Version 1 is
  * the row with no blob at all, the row every runtime before the workflow
  * state wrote, and an empty blob is how it reads here; such a row resumes
  * with the workflow state rebuilt from what the row does hold.
@@ -25,7 +28,7 @@
 #include <string.h>
 
 #define FLOW_MAGIC   "GFLW"
-#define FLOW_VERSION 3u
+#define FLOW_VERSION 4u
 
 /* ---- writing ---- */
 
@@ -71,11 +74,14 @@ static void out_u32(FlowOut* o, uint32_t v) {
     out_bytes(o, b, 4);
 }
 
-static void out_i64(FlowOut* o, int64_t v) {
+static void out_u64(FlowOut* o, uint64_t v) {
     uint8_t b[8];
-    uint64_t u = (uint64_t)v;
-    for (int i = 0; i < 8; i++) b[i] = (uint8_t)(u >> (8 * i));
+    for (int i = 0; i < 8; i++) b[i] = (uint8_t)(v >> (8 * i));
     out_bytes(o, b, 8);
+}
+
+static void out_i64(FlowOut* o, int64_t v) {
+    out_u64(o, (uint64_t)v);
 }
 
 /* A presence byte, then the value's wire encoding when present. */
@@ -124,6 +130,47 @@ static GeasStatus encode_remedies(const GeasContract* c, FlowOut* o) {
     return GEAS_OK;
 }
 
+/* The calls of the together in flight: each one's pledge, and the outcome
+ * of the ones that have it. A call still queued or running is written as
+ * having none and runs again after a resume */
+static GeasStatus encode_join(const GeasCourse* k, FlowOut* o) {
+    uint32_t n = k->join ? k->join_n : 0;
+    out_u32(o, n ? k->join_step : 0);
+    out_u32(o, n);
+    for (uint32_t i = 0; i < n; i++) {
+        const GeasJoinCall* call = &k->join[i];
+        out_u32(o, call->pledge);
+        int has_outcome = call->state == JOIN_DONE;
+        out_u8(o, (uint8_t)has_outcome);
+        if (!has_outcome) continue;
+        out_u32(o, (uint32_t)call->status);
+        GeasStatus st = out_value(o, &call->value, call->status == GEAS_OK);
+        if (st != GEAS_OK) return st;
+    }
+    return GEAS_OK;
+}
+
+/* The course frame, one presence byte first. A slot holding a value the
+ * wire codec refuses, an instance handle, makes the park GEAS_ERR_TYPE */
+static GeasStatus encode_course(const GeasContract* c, FlowOut* o) {
+    const GeasCourse* k = c->course;
+    out_u8(o, k ? 1 : 0);
+    if (!k) return GEAS_OK;
+    const GeasCourseFrame* f = &k->frame;
+    out_u64(o, c->desc->course_hash);
+    out_u8(o, (uint8_t)k->state);
+    out_u32(o, f->step);
+    out_u32(o, f->status);
+    out_i64(o, f->wait_due_ms);
+    out_u32(o, f->wait_step);
+    out_u32(o, f->nslots);
+    for (uint32_t i = 0; i < f->nslots; i++) {
+        GeasStatus st = out_value(o, &f->slots[i], 1);
+        if (st != GEAS_OK) return st;
+    }
+    return encode_join(k, o);
+}
+
 GeasStatus geas_rt_flow_encode(const GeasContract* c, uint8_t** buf_out,
                              size_t* len_out) {
     const GeasFlow* f = &c->flow;
@@ -142,6 +189,7 @@ GeasStatus geas_rt_flow_encode(const GeasContract* c, uint8_t** buf_out,
         }
         st = encode_remedies(c, &o);
     }
+    if (st == GEAS_OK) st = encode_course(c, &o);
     if (st == GEAS_OK && o.oom) st = GEAS_ERR_OOM;
     if (st != GEAS_OK) {
         free(o.buf);
@@ -185,11 +233,15 @@ static uint32_t in_u32(FlowIn* in) {
     return v;
 }
 
-static int64_t in_i64(FlowIn* in) {
+static uint64_t in_u64(FlowIn* in) {
     const uint8_t* at = in_take(in, 8);
     uint64_t v = 0;
     for (int i = 0; at && i < 8; i++) v |= (uint64_t)at[i] << (8 * i);
-    return (int64_t)v;
+    return v;
+}
+
+static int64_t in_i64(FlowIn* in) {
+    return (int64_t)in_u64(in);
 }
 
 /* The mirror of out_value: decodes onto the instance heap when present.
@@ -294,6 +346,75 @@ static GeasStatus rebuild_from_latches(GeasContract* c, int64_t now) {
     return GEAS_OK;
 }
 
+/* The calls of a together the row caught in flight. A call with its outcome
+ * comes back done; one without comes back idle and starts again when the
+ * course polls the together at its step. The outcome's value decodes onto
+ * the instance heap like any pledge value */
+static GeasStatus decode_join(GeasContract* c, FlowIn* in) {
+    GeasCourse* k = c->course;
+    uint32_t step = in_u32(in);
+    uint32_t n = in_u32(in);
+    if (in->bad) return GEAS_ERR_TYPE;
+    if (n == 0) return step == 0 ? GEAS_OK : GEAS_ERR_TYPE;
+    /* Every call carries at least its pledge and its outcome byte */
+    if (n > (in->len - in->off) / 5) return GEAS_ERR_TYPE;
+    GeasJoinCall* calls = calloc(n, sizeof(GeasJoinCall));
+    if (!calls) return GEAS_ERR_OOM;
+    k->join = calls;
+    k->join_step = step;
+    k->join_n = n;
+    for (uint32_t i = 0; i < n; i++) {
+        GeasJoinCall* call = &calls[i];
+        call->pledge = in_u32(in);
+        uint8_t has_outcome = in_u8(in);
+        if (in->bad || has_outcome > 1) return GEAS_ERR_TYPE;
+        if (call->pledge >= c->desc->npledges ||
+            geas_rt_is_signal(c->desc, call->pledge)) return GEAS_ERR_TYPE;
+        if (!has_outcome) continue;
+        call->status = (GeasStatus)in_u32(in);
+        uint8_t present = 0;
+        GeasStatus st = in_value(in, c, &call->value, &present);
+        if (st != GEAS_OK) return st;
+        if ((call->status == GEAS_OK) != (present == 1)) return GEAS_ERR_TYPE;
+        call->state = JOIN_DONE;
+        k->join_done++;
+    }
+    return in->bad ? GEAS_ERR_TYPE : GEAS_OK;
+}
+
+/* The course frame. A frame written by a course other than the registered
+ * one, or for a contract that has no course now, is GEAS_ERR_VERSION; a
+ * frame that disagrees with the descriptor in any other way is
+ * GEAS_ERR_TYPE. A row with no frame leaves the course at step 0 */
+static GeasStatus decode_course(GeasContract* c, FlowIn* in) {
+    uint8_t present = in_u8(in);
+    if (in->bad || present > 1) return GEAS_ERR_TYPE;
+    if (!present) return GEAS_OK;
+    uint64_t hash = in_u64(in);
+    if (in->bad) return GEAS_ERR_TYPE;
+    GeasCourse* k = c->course;
+    if (!k || hash != c->desc->course_hash) return GEAS_ERR_VERSION;
+    GeasCourseFrame* f = &k->frame;
+    uint8_t state = in_u8(in);
+    f->step = in_u32(in);
+    f->status = in_u32(in);
+    f->wait_due_ms = in_i64(in);
+    f->wait_step = in_u32(in);
+    uint32_t nslots = in_u32(in);
+    if (in->bad || nslots != f->nslots) return GEAS_ERR_TYPE;
+    if (state < GEAS_COURSE_RUNNING || state > GEAS_COURSE_CANCELLED) return GEAS_ERR_TYPE;
+    if (f->wait_due_ms < 0) return GEAS_ERR_TYPE;
+    for (uint32_t i = 0; i < nslots; i++) {
+        uint8_t is_present = 0;
+        GeasStatus st = in_value(in, c, &f->slots[i], &is_present);
+        if (st != GEAS_OK) return st;
+        if (!is_present) return GEAS_ERR_TYPE;
+    }
+    k->state = state;
+    k->restored = 1;
+    return decode_join(c, in);
+}
+
 GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf, size_t len,
                              int64_t now) {
     if (len == 0) return rebuild_from_latches(c, now);
@@ -301,7 +422,7 @@ GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf, size_t len,
     const uint8_t* magic = in_take(&in, 4);
     if (!magic || memcmp(magic, FLOW_MAGIC, 4) != 0) return GEAS_ERR_TYPE;
     uint32_t version = in_u32(&in);
-    if ((version != 2 && version != FLOW_VERSION) || in.bad) return GEAS_ERR_TYPE;
+    if (version < 2 || version > FLOW_VERSION || in.bad) return GEAS_ERR_TYPE;
     GeasFlow* f = &c->flow;
     f->signed_ms = in_i64(&in);
     f->term_lapsed = in_u8(&in);
@@ -313,6 +434,8 @@ GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf, size_t len,
     if (in.bad || nsubs != c->desc->nsubs) return GEAS_ERR_TYPE;
     for (uint32_t s = 0; s < nsubs; s++) f->sub_eligible_ms[s] = in_i64(&in);
     st = decode_remedies(c, &in);
+    if (st != GEAS_OK) return st;
+    if (version >= 4) st = decode_course(c, &in);
     if (st != GEAS_OK) return st;
     /* The blob must hold exactly what the descriptor declares. */
     return in.off == len ? GEAS_OK : GEAS_ERR_TYPE;

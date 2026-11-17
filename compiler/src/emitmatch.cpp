@@ -29,7 +29,7 @@ bool CEmitter::isVariantBind(std::string_view name, TyId scrutinee) const {
 // Whether the pattern matches every value of its type, which lets the arm
 // skip the test machinery entirely
 bool CEmitter::isIrrefutable(PatternId id, TyId scrutinee) const {
-    const Pattern& pattern = ast().pattern(id);
+    const Pattern& pattern = arena().pattern(id);
     if (std::holds_alternative<WildcardPattern>(pattern)) {
         return true;
     }
@@ -53,7 +53,7 @@ TyId CEmitter::wrapInner(WrapKind kind, TyId type) const {
 // Collects the bindings a pattern introduces, in the same top down left to
 // right order the test consumes them, each given a fresh C local
 void CEmitter::collectBinds(PatternId id, TyId scrutinee, std::vector<PatternBind>& binds) {
-    const Pattern& pattern = ast().pattern(id);
+    const Pattern& pattern = arena().pattern(id);
     if (const auto* bind = std::get_if<BindPattern>(&pattern)) {
         if (!isVariantBind(bind->name, scrutinee)) {
             binds.push_back(PatternBind{bind->name, freshName(), scrutinee});
@@ -154,7 +154,7 @@ std::size_t CEmitter::genPatternTest(PatternId id, std::string_view value, TyId 
                 return genVariantTest(variant, value, binds, cursor);
             },
         },
-        ast().pattern(id));
+        arena().pattern(id));
 }
 
 // Lowers one arm body with its bindings in scope, assigning the arm's value
@@ -189,7 +189,7 @@ TyId CEmitter::genArms(const MatchExpr& match, const CValue& scrutinee, std::str
     const MatchArm& arm = match.arms[index];
     std::vector<PatternBind> binds;
     if (isIrrefutable(arm.pattern, scrutinee.type)) {
-        if (const auto* bind = std::get_if<BindPattern>(&ast().pattern(arm.pattern))) {
+        if (const auto* bind = std::get_if<BindPattern>(&arena().pattern(arm.pattern))) {
             binds.push_back(PatternBind{bind->name, scrutinee.name, scrutinee.type});
         }
         return genArmBody(arm, binds, result, want);

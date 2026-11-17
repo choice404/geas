@@ -26,7 +26,8 @@ OUT     := target/geas-out
 # of the park row, all over the structs runtime_internal.h shares out.
 RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
     runtime/src/events.c runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
-    runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c
+    runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c \
+    runtime/src/course.c runtime/src/coursejoin.c runtime/src/coursepark.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -62,7 +63,7 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
-.PHONY: test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
 .PHONY: test-requirements
 .PHONY: test-soname test-future test-cancel test-process test-dusk tsan-process
 .PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
@@ -73,7 +74,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python tsan tsan-workflow tsan-process
+all: test-course test-course-park test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-course-saga test-course-python tsan tsan-workflow tsan-process
 
 runtime: $(RT_SO)
 
@@ -376,6 +377,28 @@ test-bind-user: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c
 	    tests/runtime/test_bind_user.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_bind_user
 	./$(OUT)/test_bind_user
 
+# The course gate: handwritten state machines in the emitted shape driven
+# by the runtime on a fake clock, straight steps, a failing step and its
+# remedies, await, sleep, select and loops across re-entries, cancel while
+# running and while waiting, wake races, events, the ticker, and a descriptor
+# from before the course still loading.
+test-course: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_course.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course
+	./$(OUT)/test_course
+
+# A course across a park: autopark rows at every step boundary, children
+# killed at each boundary and inside bodies then resumed here, a park while
+# waiting, a sleep's deadline, a changed course, rows from before the frame,
+# a checkpoint the store refuses, a park inside a call's retry wait and from
+# a remedy body, a together's outcomes across a park, and host driven rows.
+test-course-park: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_park.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_course_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_park
+	./$(OUT)/test_course_park
+
 # Events preserve instance order and run with runtime locks released
 test-events: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_events.c
 	@mkdir -p $(OUT)
@@ -444,9 +467,50 @@ test-saga-python: $(GEAS) $(RT_SO)
 	    echo "[test-saga-python] python3 not found, skipping"; \
 	fi
 
+# The engine driven saga end to end: the compiler builds
+# skeleton/order_course.geas and a twin whose course text differs and
+# nothing else, and the C host drives the compiled course on a fake clock,
+# the happy path, a failing step and its remedies, a retried step, the
+# select's timeout, a lapsed signal, the together's two calls at once, a
+# kill and resume at every step boundary and inside every host body, the
+# changed course refused, a host fulfillment refused, host breaks while the
+# course waits and runs, the term running out, and the events. The runtime is
+# built with its checkpoint renamed so the test can stand in front of it, see
+# the top of the test.
+MODULE_COURSE_SAGA := $(OUT)/liborder_course.geas.so
+COURSE_SAGA_CHANGED := $(OUT)/order_course_changed.geas
+COURSE_SAGA_WRAP := -Dgeas_course_checkpoint=geas_course_checkpoint_real
+
+.PHONY: test-course-saga course-saga-modules
+course-saga-modules: $(GEAS) $(RT_SO) skeleton/order_course.geas
+	@mkdir -p $(OUT)
+	$(GEAS) build skeleton/order_course.geas
+	sed 's/timeout 2d ->/timeout 1d ->/' skeleton/order_course.geas > $(COURSE_SAGA_CHANGED)
+	$(GEAS) build $(COURSE_SAGA_CHANGED)
+
+test-course-saga: course-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c
+	$(CC) $(CFLAGS) $(WF_SAN) $(COURSE_SAGA_WRAP) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_course_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_saga
+	./$(OUT)/test_course_saga
+
+# The engine driven saga from Python: geas.py loads the same order_course
+# module, binds Python callables over the abstract steps, points the
+# runtime at a Python clock with the runtime's own ticker running, and walks
+# the happy path, a break path with its remedies, and a park into a fresh
+# runtime that resumes the course where it waited.
+.PHONY: test-course-python
+test-course-python: $(GEAS) $(RT_SO)
+	$(GEAS) build skeleton/order_course.geas
+	@if command -v python3 >/dev/null 2>&1; then \
+	    python3 interop/python/demo_course.py; \
+	else \
+	    echo "[test-course-python] python3 not found, skipping"; \
+	fi
+
 # The workflow gates under ThreadSanitizer: retries with the instance lock
-# released, remedy passes and signals across threads, and user bindings
-tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c
+# released, remedy passes and signals across threads, user bindings, and
+# the courses, handwritten and compiled
+tsan-workflow: course-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
@@ -472,6 +536,15 @@ tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_events.c tests/runtim
 	$(CC) $(CFLAGS) -fsanitize=thread -DGEAS_RUNTIME_TESTING -g -pthread $(RT_INC) \
 	    tests/runtime/test_events.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_events_tsan
 	@for round in $$(seq 1 20); do ./$(OUT)/test_events_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_course.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_tsan
+	@for round in $$(seq 1 30); do ./$(OUT)/test_course_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_course_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_park_tsan
+	@for round in $$(seq 1 30); do ./$(OUT)/test_course_park_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread $(COURSE_SAGA_WRAP) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_course_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_saga_tsan
+	@for round in $$(seq 1 30); do ./$(OUT)/test_course_saga_tsan || exit $$?; done
 
 # The threading gate under ASan: the pool, the per-instance serialization,
 # out-of-order waits, and the break race, with every allocation watched.

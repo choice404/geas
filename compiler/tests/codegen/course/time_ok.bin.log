@@ -1,0 +1,4 @@
+exit 1
+tests/check/time_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Duration and Time are builtin scalars: literals, vows, params, arithmetic,
+  ^

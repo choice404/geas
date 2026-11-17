@@ -1,0 +1,29 @@
+Courses [
+    Course "Flow" {
+        hash: 0x8f133aea1e67fc80,
+        entry: 0,
+        slots: [
+            Slot(0) "$hidden0": Option<Duration> (temporary),
+            Slot(1) "$hidden1": Duration (temporary),
+        ],
+        steps: [
+            Step 1 sleep {
+                arguments: [Slot(1)],
+                result: None,
+                question: false,
+            },
+            Step 2 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(0),
+                question: true,
+            },
+        ],
+        statements: [
+            Resume 2,
+            Store Slot(1) = Question(Slot(0)),
+            Resume 1,
+            Return,
+        ],
+    },
+]

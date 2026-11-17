@@ -1,0 +1,1 @@
+the 'as' pattern of a select arm must be irrefutable, a name or '_'; bind the payload and match it inside the arm

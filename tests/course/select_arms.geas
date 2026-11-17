@@ -1,0 +1,19 @@
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    signal ready(value: Int)
+    signal alternative(value: Option<Int>)
+    course {
+        let selected = select {
+            await ready as value -> visit(value)?
+            await alternative as maybe -> {
+                sleep 1s
+                match maybe {
+                    Some(value) -> visit(value)?
+                    None -> visit(1)?
+                }
+            }
+            timeout 2s -> visit(0)?
+        }
+        visit(selected)?
+    }
+}

@@ -2,7 +2,7 @@
 
 This is the normative grammar for Geas. It covers the lexical structure, the type grammar, every declaration form including the workflow surface, terms, remedies, signals, the course, and amendment, and the statement and expression core that clause, pledge, remedy, and course bodies are written in. Where the grammar alone cannot pin a rule down, a semantic note next to the production carries the rest. The parser and the checker are held to this document, and a change to the surface lands here first.
 
-Most of the workflow surface runs today in the host driven mode: durations, terms, remedies, signals, and the contract term are parsed, checked, emitted, and enforced by the runtime. The course and amends blocks, along with `await`, `select`, `sleep`, `together`, and `now()`, are parsed and checked in full, and their emission is the next step on the roadmap; until it lands, `geas build` refuses a program that uses them with `geas: workflow constructs are not emitted yet: <what>`. Their sections say so at the top.
+The workflow surface runs in both of its modes today. Durations, terms, remedies, signals, and the contract term are parsed, checked, emitted, and enforced by the runtime for a host driven contract, and the course, with `await`, `select`, `sleep`, `together`, and `now()`, is lowered to a resumable state machine the runtime drives for an engine driven one. The amends block is parsed and checked in full, and its emission is the next step on the roadmap; until it lands, `geas build` refuses a program that carries one with `geas: workflow constructs are not emitted yet: amends`. Its section says so at the top.
 
 ## Notation
 
@@ -393,25 +393,28 @@ When the block is absent the defaults apply: `fulfill` when every subcontract, l
 
 ## Course
 
-The course parses and checks in full today; its emission, the engine driven mode, is the next step on the roadmap, and `geas build` refuses a contract with a course until then.
+The course is emitted and run: `geas build` lowers it to a resumable C function, and the runtime drives that function on its pool from the moment the contract signs.
 
 ```text
 CourseDecl ::= "course" Block
 ```
 
-The course is the contract's orchestration, the order in which the engine drives its own pledges. A contract has at most one. With a course the contract is engine driven: the engine runs the course from sign, each pledge call inside it is a durable step dispatched to its binding, every result is journaled, and a parked instance resumes at the step it stopped on. Without one the contract is host driven, the host calling the pledges in any order the terms allow.
+The course is the contract's orchestration, the order in which the engine drives its own pledges. A contract has at most one. With a course the contract is engine driven: the engine runs the course from sign, each pledge call inside it is a durable step dispatched to its binding, every step's result is kept in the course's frame, and a parked instance resumes at the step it stopped on with that frame. Without one the contract is host driven, the host calling the pledges in any order the terms allow.
 
 ```text
 course {
-    let auth = authorize(order.card)?
+    let window = plan(hold)?
+    let auth = authorize(Card { number: card })?
     together {
         let receipt = capture(auth)?
-        let res = reserve(order.sku, 1h)?
+        let held = reserve(sku, window)?
     }
-    ship(res)?
+    ship(held)?
     await delivered
 }
 ```
+
+That is a trimmed version of the course in `skeleton/order_course.geas`, which plans the hold, authorizes the card, captures and reserves at once, ships, and waits on the delivery scan.
 
 Semantic notes.
 
@@ -420,7 +423,18 @@ Semantic notes.
 - A course returns no value; `return` in a course is bare.
 - A `?` that fires ends the course. The pledge it unwrapped has already latched, so the requirements decide where the contract stands, not the course.
 - A contract with a course is driven by it, so another body cannot fulfill its pledges through an instance; delivering its signals through an instance stays legal, since that is how the outside reaches an engine driven contract.
-- `now()` takes no arguments and answers the current `Time`. Like every non deterministic value in a course, it is journaled on first run and replayed on resume.
+- `now()` takes no arguments and answers the current `Time`, read once from the runtime clock where it runs. Its value lives in the course frame like any binding, so a resumed course sees the time it read before the park, never a new one.
+- A `Main` contract cannot carry a course. The module builds, and `geas build --bin` refuses it, since the entry wrapper fulfills `run` itself while a course would be running the contract's pledges.
+
+#### Suspending operations
+
+A suspending operation is one the course can stop at and come back to: a call of the contract's own pledge by bare name, `await`, `select`, `sleep`, and `together`. Each one is a step. The engine saves the course at every step boundary, so a parked or crashed instance resumes at the step it stopped on with every binding it had made, and nothing before that step runs again. A step is at least once: a course that was inside a pledge call when its row was last written runs that call again after a resume.
+
+- A suspending operation stands in statement position: an expression statement, a `let` initializer, the right side of an assignment, a `?` on any of those, or the head of an `if`, a `match`, or a `while`. One found deeper in an expression, a pledge call as an argument of another call for instance, is hoisted by the compiler into a hidden binding just before the statement, and the operands to its left are evaluated and kept first, so evaluation order is the order the source reads.
+- The right operand of `&&` and `||` cannot hold one. Hoisting it would run it before the left operand decided whether it runs at all, so the checker refuses it and says to bind it with `let` first.
+- A clause called from a course is ordinary code and holds no suspending operation; only the course itself suspends.
+- A course binding never has a contract instance type, directly or inside a record, a list, an option, or any other composite, and neither does a hidden temporary the compiler makes. A frame must be able to park, and an instance handle does not survive a park, so signing another contract and holding its instance in a course is refused.
+- The values a course makes, the copies its bindings take, and every step's result live on the instance's heap until the instance is broken. A loop in a course that runs many times grows that heap with each pass, so a long running loop belongs in a pledge, or in a contract of its own, rather than in the course.
 
 ## Amendment
 
@@ -479,7 +493,9 @@ Bindings are immutable unless declared `let mut`. Assignment targets a `let mut`
 
 `for` walks a `List` or a `Map`. Over a `List<T>` the loop variable binds each element in order, type `T`. Over a `Map<K, V>` it binds each key in insertion order, type `K`, and the body reads a value back with `m[key]` where it needs one. The entry count is fixed when the loop begins, so a key the body inserts is not visited on the current pass, while updating the value of a key already present is seen through a later read, since an update moves the value and not the key's place.
 
-`sleep` and `together` are course statements. `sleep d` takes a `Duration` and pauses the course durably, so a parked instance wakes on time. `together { ... }` starts every statement inside it concurrently and ends when all of them have; bindings made inside are visible after the block, and a `?` that fires inside cancels the siblings that have not latched.
+`sleep` and `together` are course statements. `sleep d` takes a `Duration` and pauses the course durably: the deadline is fixed the first time the step runs, and a parked instance keeps it, so it wakes on time.
+
+`together { ... }` runs the contract's own pledges at the same time, as one step. Its block holds only single call statements of those pledges, in one of four forms, `name(args)`, `name(args)?`, `let x = name(args)`, and `let x = name(args)?`; anything else inside it, another statement, a nested block, a sleep, a return, is refused. The arguments are evaluated in order before any call starts, so an argument cannot read a binding made in the same block, and an argument cannot hold a suspending operation of its own; bind either with `let` before the block. Once every call has an outcome the `?`s apply in statement order, the first `Err` or `None` ending the course, and the bindings are visible after the block. A call that already latched before a `?` fires keeps its latch, and its remedy is due if the contract breaks.
 
 A block used as a value takes the type of its final expression statement, and `Unit` when it ends with anything else. Match arms must agree on one type wherever the match sits, so a statement position match with mixed arms ends each arm in a statement or returns.
 
@@ -614,7 +630,7 @@ Pattern   ::= Literal
 
 ### Await and select
 
-These are course expressions, parsed and checked today and emitted with the course.
+These are course expressions, emitted with the course.
 
 ```text
 AwaitExpr  ::= "await" IDENT [ "within" DURATION ]
@@ -623,7 +639,19 @@ SelectArm  ::= "await" IDENT [ "as" Pattern ] "->" ( Expr | Block )
              | "timeout" DURATION "->" ( Expr | Block )
 ```
 
-`await sig` waits for a signal of the same contract and yields its payload: `Unit` for no parameters, the value for one, a `Tuple` for several. `await sig within 24h` yields an `Option` of the payload, `None` when the time runs out, and the signal does not latch broken for it. `select` waits on several things and takes the first arm that is ready: an `await` arm binds its payload with `as`, a `timeout` arm fires after its duration, and the arms agree on one type the way match arms do.
+`await sig` waits for a signal of the same contract and yields its payload: `Unit` for no parameters, the value for one, a `Tuple` for several. A signal delivered before the course reaches the `await` is not lost, the await answers at once with the payload the first delivery latched. `await sig within 24h` yields an `Option` of the payload, `None` when the time runs out, and the signal does not latch broken for it. An `await` on a signal whose own `within` already lapsed can never be answered: with `within` it yields `None` at once, and without one the course ends, cancelled when the lapse broke the contract and halted otherwise.
+
+`select` waits on several things and takes the first arm that is ready, in source order when more than one is: an `await` arm binds its payload with `as`, a `timeout` arm fires after its duration, counted from the moment the course reached the select, and the arms agree on one type the way match arms do. The `as` pattern is irrefutable, a name or `_`, since a select binds the payload of the arm it chose and has no next arm to fall to; a pattern that could fail to match, `Some(x)`, a variant, a literal, is a compile error, and the payload is matched inside the arm instead.
+
+```text
+let parcel = select {
+    await delivered as parcel -> parcel
+    timeout 2d -> {
+        chase(tracking, now() - shipped)?
+        await delivered
+    }
+}
+```
 
 ## The entry point
 

@@ -1,0 +1,17 @@
+Payload is either Number(value: Int) or Missing
+contract Flow {
+    pledge value(number: Int) -> Option<Int>
+    signal ready(payload: Payload)
+    course {
+        let number = 1
+        if true {
+            let number = value(number)?
+            value(number)?
+        }
+        let selected = match await ready {
+            Number(number) -> value(number)?
+            Missing -> number
+        }
+        value(number + selected)?
+    }
+}

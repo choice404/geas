@@ -14,7 +14,7 @@
 namespace geas {
 
 void CEmitter::genAssign(const AssignStmt& assign) {
-    const Expr& target = ast().expr(assign.target);
+    const Expr& target = arena().expr(assign.target);
     if (const auto* index = std::get_if<IndexExpr>(&target.kind)) {
         genIndexAssign(assign, target, *index);
         return;
@@ -63,13 +63,18 @@ std::string CEmitter::genListSlot(std::string_view base, ExprId index) {
     std::string slot = freshName();
     line(joined("GeasValue* ", slot, " = (GeasValue*)geas_list_get(", base, ", (uint64_t)",
                 position.name, ".as.i);"));
-    line(joined("if (!", slot, ") return GEAS_ERR_TYPE;"));
+    line(joined("if (!", slot, ") ", failExit("GEAS_ERR_TYPE")));
     return slot;
 }
 
 // The lvalue walk, nullopt after a fault
 std::optional<LSlot> CEmitter::genLvalue(ExprId id) {
-    const Expr& expr = ast().expr(id);
+    if (const std::optional<CValue> slot = courseValue(id)) {
+        std::string pointer = freshName();
+        line(joined("GeasValue* ", pointer, " = &", slot->name, ";"));
+        return LSlot{std::move(pointer), slot->type};
+    }
+    const Expr& expr = arena().expr(id);
     if (const auto* identifier = std::get_if<Identifier>(&expr.kind)) {
         const CValue* local = lookupLocal(identifier->name);
         if (local == nullptr) {
@@ -127,7 +132,7 @@ std::optional<LSlot> CEmitter::genIndexSlot(const Expr& expr, const IndexExpr& i
     line(joined("const GeasValue* ", borrowed, " = NULL;"));
     std::string pointer = freshName();
     line(joined("if (!geas_map_get(", base->pointer, ", &", key.name, ", &", borrowed,
-                ")) return GEAS_ERR_TYPE;"));
+                ")) ", failExit("GEAS_ERR_TYPE")));
     line(joined("GeasValue* ", pointer, " = (GeasValue*)", borrowed, ";"));
     return LSlot{std::move(pointer), node.args[1]};
 }

@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/course/src/main_course.geas: 6:1: error: the Main contract cannot carry a course: the entry wrapper fulfills run itself
+  contract Main {
+  ^~~~~~~~~~~~~

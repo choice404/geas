@@ -1,0 +1,14 @@
+// A Main contract with a course: the module builds, and build --bin refuses
+// it, since the entry wrapper fulfills run itself while the course runs the
+// contract's pledges
+
+Failure is either Bad
+contract Main {
+    pledge run(args: List<String>) -> Result<Int, Failure> {
+        return Ok(0)
+    }
+    pledge step() -> Option<Int>
+    course {
+        step()?
+    }
+}

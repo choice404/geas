@@ -1,0 +1,16 @@
+record Pair {
+    left: Int
+    right: Int
+}
+contract Flow {
+    pledge next(value: Int) -> Option<Int>
+    clause earlier() -> Int { return 10 }
+    clause combine(left: Int, right: Int) -> Int { return left + right }
+    course {
+        let value = combine(earlier(), next(1)?)
+        let arithmetic = earlier() + next(2)?
+        let pair = Pair { left: earlier(), right: next(3)? }
+        let list = [earlier(), next(4)?]
+        next(next(5)?)?
+    }
+}

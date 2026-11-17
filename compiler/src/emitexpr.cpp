@@ -45,7 +45,10 @@ bool isOrdering(BinaryOp op) {
 }  // namespace
 
 CValue CEmitter::genExpr(ExprId id, TyId want) {
-    const Expr& expr = ast().expr(id);
+    if (std::optional<CValue> value = courseValue(id)) {
+        return *value;
+    }
+    const Expr& expr = arena().expr(id);
     spanLo_ = expr.lo;
     spanHi_ = expr.hi;
     return std::visit(
@@ -129,7 +132,7 @@ CValue CEmitter::genIdentifier(const Expr& expr, const Identifier& identifier) {
 CValue CEmitter::genVowRead(const VowDecl& vow) {
     const std::string borrowed = freshName();
     line(joined("const GeasValue* ", borrowed, " = geas_vow_ref(cc, \"", vow.name, "\");"));
-    line(joined("if (!", borrowed, ") return GEAS_ERR_NAME;"));
+    line(joined("if (!", borrowed, ") ", failExit("GEAS_ERR_NAME")));
     std::string value = freshName();
     line(joined("GeasValue ", value, " = *", borrowed, ";"));
     return CValue{std::move(value), lookup_.vowType(vow)};
@@ -162,7 +165,7 @@ CValue CEmitter::genConcat(const CValue& lhs, const CValue& rhs) {
     const std::string_view helper = kindOf(lhs.type) == TyKind::Bytes
         ? "geas_bytes_concat" : "geas_string_concat";
     line(joined("if (", helper, "(cc, &", lhs.name, ", &", rhs.name, ", &", value,
-                ") != GEAS_OK) return GEAS_ERR_OOM;"));
+                ") != GEAS_OK) ", failExit("GEAS_ERR_OOM")));
     return CValue{std::move(value), lhs.type};
 }
 

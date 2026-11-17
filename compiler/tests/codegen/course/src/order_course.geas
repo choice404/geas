@@ -1,0 +1,98 @@
+// The order saga, engine driven. The course runs the steps itself: it
+// authorizes the payment, captures it and reserves the stock together,
+// ships, and then waits for the delivery signal or for the delivery window
+// to run out. The terms, the remedies, and the requirements are the ones
+// the host driven saga keeps; the host binds authorize, capture, ship, and
+// refund, and delivers the signal.
+
+record Card {
+    number: String
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+    amount: Int
+}
+
+record Reservation {
+    id: String
+    sku: String
+    hold: Duration
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderSaga [version: 2, term: 7d] {
+    vow card: String = "4242"
+    vow amount: Float = 99.5
+    vow sku: String = "SKU-1"
+    vow hold: Duration = 2h
+    vow grace: Duration = 30m
+
+    subcontract Payment {
+        pledge authorize(card: Card, amount: Float) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    // The stock is held for what the vow asks plus the grace, and a hold
+    // longer than a day is more than the warehouse gives
+    pledge reserve(sku: String, hold: Duration) -> Result<Reservation, StockError> {
+        if sku == "" {
+            return Err(OutOfStock(sku))
+        }
+        let total = hold + grace
+        if total > 1d {
+            return Err(Unavailable)
+        }
+        return Ok(Reservation { id: "R-" + sku, sku: sku, hold: total })
+    }
+
+    pledge ship(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+        within 48h
+
+    signal delivered(tracking: Tracking) after ship within 14d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 10 every 1m backoff 2.0 cap 1h
+    remedy release for reserve(r: Reservation) -> Unit
+
+    requirements {
+        fulfill: Payment && reserve && ship && delivered
+        partial: Payment || reserve
+        break: !Payment || !reserve || !ship || !delivered
+    }
+
+    course {
+        let auth = authorize(Card { number: card }, amount)?
+        together {
+            let receipt = capture(auth)?
+            let res = reserve(sku, hold)?
+        }
+        let tracking = ship(res)?
+        let arrived = select {
+            await delivered as landed -> landed.code == tracking.code
+            timeout 14d -> false
+        }
+        if !arrived {
+            return
+        }
+    }
+}

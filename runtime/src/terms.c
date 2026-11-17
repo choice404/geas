@@ -24,7 +24,10 @@
  * rest of the runtime already keeps. The sleep is the one call made with no
  * lock at all: geas_rt_run_attempts drops the instance lock around it, records
  * the attempts and due time so a park can snapshot the wait, and trusts
- * nothing about the instance when it takes the lock back. */
+ * nothing about the instance when it takes the lock back. On the worker of a
+ * together call the body itself runs with the instance lock released too,
+ * see coursejoin.c, and a retry saved in a park row is waited out by
+ * geas_rt_retry_hold before a resumed course runs its call again. */
 
 #include "runtime_internal.h"
 
@@ -383,7 +386,10 @@ static Due next_due(const GeasContract* c) {
 static void lapse_pledge(GeasContract* c, uint32_t i) {
     c->pledge_state[i] = PLEDGE_BROKEN;
     c->flow.pledge_lapsed[i] = 1;
+    geas_rt_autopark_mark(c);
     geas_rt_event(c, GEAS_EVENT_LATCH_LAPSED, c->desc->pledges[i].name, c->state);
+    /* A course awaiting a signal that can no longer arrive polls again */
+    if (c->course && geas_rt_is_signal(c->desc, i)) geas_rt_course_wake(c);
 }
 
 static void lapse_sub(GeasContract* c, uint32_t s) {
@@ -427,6 +433,7 @@ void geas_rt_tick(GeasContract* c) {
         lapse_due(c, geas_rt_now(c->rt));
     }
     geas_rt_remedy_drive(c);
+    if (c->course) geas_rt_course_tick(c);
 }
 
 GeasStatus geas_instance_tick(GeasContract* c) {
@@ -490,7 +497,11 @@ int geas_contract_term_lapsed(GeasContract* c) {
 
 /* ---- the fulfillment gate ---- */
 
+/* Another thread's delivery refuses a host driven fulfillment here and is
+ * waited out on the course's own paths, whose settle gives the lock up for
+ * the wait, so everything after it reads the instance as it stands then */
 GeasStatus geas_rt_fulfill_gate(GeasContract* c, uint32_t pidx) {
+    geas_rt_course_settle(c);
     if (geas_cancel_requested(c) || geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
     geas_rt_tick(c);
     if (!geas_rt_live(c)) return GEAS_ERR_STATE;
@@ -552,8 +563,12 @@ static uint64_t delay_to_deadline(const GeasContract* c, uint32_t pidx,
 /* Whether the fulfillment may go on after the lock was out of its hands or
  * the clock moved: the heap still there, the contract still live, the pledge
  * not lapsed. Runs the tick, so a deadline that passed during the delay
- * lapses here. Under the instance lock. */
+ * lapses here. Another thread's event delivery ends a host driven
+ * fulfillment here and is waited out on the course's own paths, a call of
+ * the course or of a together, which go on once it ended. Under the
+ * instance lock. */
 static int attempt_may_continue(GeasContract* c, uint32_t pidx) {
+    geas_rt_course_settle(c);
     if (geas_cancel_requested(c)) return 0;
     if (geas_rt_events_blocked(c)) return 0;
     if (c->flow.reclaimed) return 0;
@@ -574,12 +589,16 @@ static int attempt_may_continue(GeasContract* c, uint32_t pidx) {
 
 /* One body run. in_thunk marks the instance as inside a body for exactly
  * the span of the call, which is what keeps a tick from breaking the
- * contract under it. */
+ * contract under it and a break from reclaiming the frame. The body of a
+ * together call runs with the instance lock released, still counted in
+ * in_thunk, so the calls of one together run at once. */
 static GeasStatus run_body(GeasContract* c, GeasPledgeFn fn, GeasValue* frame,
                           size_t nargs, GeasValue* out) {
     memset(out, 0, sizeof(*out));
     c->flow.in_thunk++;
+    int is_released = geas_rt_join_release(c);
     GeasStatus st = fn((void*)c, frame, nargs, out);
+    if (is_released) geas_rt_join_retake(c);
     c->flow.in_thunk--;
     return st;
 }
@@ -591,7 +610,10 @@ static GeasStatus run_body(GeasContract* c, GeasPledgeFn fn, GeasValue* frame,
  * pledges, or a break. Anything may have happened by the time the lock is
  * back, so the frame is not touched again until attempt_may_continue says
  * the heap it lives on is still there. A fulfillment cut off that way
- * reports GEAS_ERR_STATE, the same answer a late or broken call gets. */
+ * reports GEAS_ERR_STATE, the same answer a late or broken call gets. A
+ * course's call waits out a delivery another thread began during the delay
+ * before it looks, still marked as waiting its retry, so a park taken
+ * meanwhile records the retry wait it is in. */
 static GeasStatus run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
                               GeasValue* frame, size_t nargs, GeasValue* out) {
     const GeasTermDesc* t = geas_rt_pledge_term(c->desc, pidx);
@@ -609,16 +631,36 @@ static GeasStatus run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
         if (delay > 0) {
             c->flow.retry_attempts[pidx] = attempt + 1;
             c->flow.retry_due_ms[pidx] = deadline_at(geas_rt_now(c->rt), delay);
+            geas_rt_autopark_mark(c);
             c->flow.retry_waiting[pidx] = 1;
             c->flow.retrying++;
             geas_rt_unlock(c);
             retry_sleep(c, delay);
             geas_rt_lock(c);
+            geas_rt_course_settle(c);
             c->flow.retrying--;
             c->flow.retry_waiting[pidx] = 0;
         }
         if (!attempt_may_continue(c, pidx)) return GEAS_ERR_STATE;
     }
+}
+
+GeasStatus geas_rt_retry_hold(GeasContract* c, uint32_t pidx) {
+    GeasFlow* f = &c->flow;
+    if (pidx >= c->desc->npledges || !f->retry_attempts[pidx]) return GEAS_OK;
+    if (f->retry_waiting[pidx]) return GEAS_ERR_STATE;
+    int64_t now = geas_rt_now(c->rt);
+    if (now >= f->retry_due_ms[pidx]) return GEAS_OK;
+    uint64_t delay = (uint64_t)(f->retry_due_ms[pidx] - now);
+    f->retry_waiting[pidx] = 1;
+    f->retrying++;
+    geas_rt_unlock(c);
+    retry_sleep(c, delay);
+    geas_rt_lock(c);
+    geas_rt_course_settle(c);
+    f->retrying--;
+    f->retry_waiting[pidx] = 0;
+    return attempt_may_continue(c, pidx) ? GEAS_OK : GEAS_ERR_STATE;
 }
 
 /* Retry progress belongs to this fulfillment until it ends

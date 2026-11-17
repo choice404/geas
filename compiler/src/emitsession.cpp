@@ -242,6 +242,49 @@ func (s *@CONTRACT@Session) @RPC@(ctx context.Context, c @CONTRACT@Client, req *
 }
 )GO";
 
+// The course read on an engine driven contract's Go session handle
+constexpr std::string_view goCourse =
+    R"GO(
+// GetCourse reads where this session's instance's course stands, the
+// request's instance id set from the signature. It never waits on the
+// course; poll it, or watch the signals and the partial surface.
+func (s *@CONTRACT@Session) GetCourse(ctx context.Context, c @CONTRACT@Client) (*CourseReply, error) {
+	return c.GetCourse(ctx, &CourseRequest{InstanceId: s.Signed.InstanceId})
+}
+)GO";
+
+// The course read as a TypeScript function, with the reply's shape: the
+// enum crosses as its number, the deadline as a decimal string
+constexpr std::string_view tsCourse =
+    R"TS(
+// get@CONTRACT@Course reads where the session's instance's course stands.
+// state is the CourseState number, status the GeasStatus that halted it,
+// and wait_due_ms the decimal runtime clock time its wait falls due, "0"
+// when nothing is due. It never waits on the course.
+export function get@CONTRACT@Course(
+  client: { GetCourse(req: object, done: (err: Error | null, reply?: CourseReply) => void): unknown },
+  session: @CONTRACT@Session,
+): Promise<CourseReply> {
+  return new Promise((resolve, reject) => {
+    client.GetCourse({ instance_id: session.signed.instance_id }, (err, reply) => {
+      if (err || !reply) { reject(err ?? new Error("GetCourse answered nothing")); } else { resolve(reply); }
+    });
+  });
+}
+)TS";
+
+// The reply interface every course read shares, once per file
+constexpr std::string_view tsCourseReply =
+    R"TS(
+// What GetCourse answers, the CourseReply message as the loader hands it.
+export interface CourseReply {
+  state: number;
+  step: number;
+  status: number;
+  wait_due_ms: string;
+}
+)TS";
+
 // One signal's TypeScript function over the loader's callback client
 constexpr std::string_view tsSignalHead =
     R"TS(
@@ -342,6 +385,9 @@ std::string emitGoSession(const EmitLookup& lookup, std::string_view stem) {
                                              {"@PREFIX@", prefix},
                                              {"@HASH@", hashHex16(shape.shapeHash)}}));
         out.append(goSignalMethods(shape, prefix));
+        if (shape.course != nullptr) {
+            out.append(fillTemplate(goCourse, {{"@CONTRACT@", shape.decl->name}}));
+        }
     }
     return out;
 }
@@ -362,6 +408,16 @@ std::string tsVowFields(const EmitLookup& lookup, const ContractShape& shape, bo
     return out;
 }
 
+// Whether any public contract of the file carries a course
+bool hasCourse(const EmitLookup& lookup) {
+    for (const ContractShape* shape : lookup.publicContracts()) {
+        if (shape->course != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string emitTsSession(const EmitLookup& lookup, std::string_view stem) {
     std::string out = fillTemplate(tsHead, {{"@STEM@", stem}});
     bool isFirst = true;
@@ -375,6 +431,12 @@ std::string emitTsSession(const EmitLookup& lookup, std::string_view stem) {
         out.append(tsVowFields(lookup, *shape, false));
         out.append(fillTemplate(tsSession, {name}));
         out.append(tsSignalFunctions(lookup, *shape));
+        if (shape->course != nullptr) {
+            out.append(fillTemplate(tsCourse, {name}));
+        }
+    }
+    if (hasCourse(lookup)) {
+        out.append(tsCourseReply);
     }
     return out;
 }

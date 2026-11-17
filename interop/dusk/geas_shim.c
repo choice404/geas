@@ -32,6 +32,7 @@
 _Static_assert(sizeof(GeasValue) == 40, "GeasValue is 40 bytes");
 _Static_assert(sizeof(GeasVowBinding) == 48, "GeasVowBinding is 48 bytes");
 _Static_assert(sizeof(GeasAttrInfo) == 32, "GeasAttrInfo is 32 bytes");
+_Static_assert(sizeof(GeasCourseInfo) == 24, "GeasCourseInfo is 24 bytes");
 
 /* ---- handles ---- */
 
@@ -425,4 +426,9 @@ int64_t gd_fulfill_sync(int64_t c, const char* pledge, int64_t args, int64_t nar
 int64_t gd_fulfill(int64_t c, const char* pledge, int64_t args, int64_t nargs) {
     return handle_of(geas_pledge_fulfill((GeasContract*)(intptr_t)c, pledge, value_of(args),
                                          (size_t)nargs, NULL, 0));
+}
+
+/* Stops an instance parking itself, the NULL dsn the runtime reads as clear */
+int64_t gd_clear_autopark(int64_t c) {
+    return geas_contract_set_autopark((GeasContract*)(intptr_t)c, NULL, NULL);
 }

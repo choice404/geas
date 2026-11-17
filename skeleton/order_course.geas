@@ -1,0 +1,139 @@
+// The order saga, engine driven. The host never calls a step here: the
+// contract carries a course, and the runtime runs it from the moment the
+// saga signs. It plans the hold, authorizes the card, captures the payment
+// and reserves the stock at the same time, ships, and then waits on the
+// delivered signal. A parcel quiet for two days gets chased with the time it
+// has been out, and the course keeps waiting after that. The host only binds
+// the bodies a gateway, a warehouse, and a carrier own, and hands the
+// delivered signal in when the carrier reports it.
+//
+// The terms are the ones the host driven saga keeps, and they hold for the
+// course the same way: authorize has thirty seconds and three retries on a
+// Timeout or a Gateway hiccup, capture waits on authorize, ship waits on the
+// whole Payment subcontract and on reserve, the delivered signal has three
+// days from the moment ship landed, and the saga as a whole has a week. When
+// a step answers Err the course ends on its `?`, the break line fires, and
+// every step that already landed is undone through its remedy, newest
+// first, each remedy handed the Ok value its step produced.
+//
+// plan and release are written in Geas, the hold is the requested one plus
+// the grace vow, and release checks the reservation it was handed before it
+// lets the stock go. authorize, capture, reserve, ship, chase, and refund
+// are the host's.
+
+record Card {
+    number: String
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+    amount: Int
+}
+
+record Reservation {
+    id: String
+    sku: String
+    hold: Duration
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderCourse [version: 1, term: 7d] {
+    vow card: String = "4111"
+    vow amount: Int = 100
+    vow sku: String = "sku-1"
+    vow hold: Duration = 1h
+    vow grace: Duration = 30m
+
+    subcontract Payment {
+        pledge authorize(card: Card) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    // The stock is held for what the vow asks plus the grace, and a hold
+    // longer than a day is more than the warehouse gives
+    pledge plan(asked: Duration) -> Result<Duration, StockError> {
+        let total = asked + grace
+        if total > 1d {
+            return Err(Unavailable)
+        }
+        return Ok(total)
+    }
+
+    pledge reserve(sku: String, hold: Duration) -> Result<Reservation, StockError>
+
+    pledge ship(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+
+    // Asks the carrier where a quiet parcel is, told how long it has been out
+    pledge chase(tracking: Tracking, waited: Duration) -> Result<Unit, ShipError>
+        after ship
+
+    signal delivered(tracking: Tracking) after ship within 3d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 2 every 1m
+
+    // A reservation that is not the one this saga asked for is not this
+    // saga's to release
+    remedy release for reserve(res: Reservation) -> Result<Unit, StockError> {
+        if res.sku != sku || res.hold < grace {
+            return Err(Unavailable)
+        }
+        return Ok(released())
+    }
+
+    clause released() -> Unit {
+        return
+    }
+
+    requirements {
+        fulfill: Payment && reserve && ship && delivered
+        partial: Payment || reserve
+        break: !Payment || !reserve || !ship || !delivered
+    }
+
+    // Every step below is a durable step: a parked saga resumes at the one
+    // it stopped on, with every binding it had made
+    course {
+        // An order of nothing has nothing to run
+        if amount <= 0 {
+            return
+        }
+        let window = plan(hold)?
+        let auth = authorize(Card { number: card })?
+        // Both calls run at once, and the bindings are visible after
+        together {
+            let receipt = capture(auth)?
+            let held = reserve(sku, window)?
+        }
+        let tracking = ship(held)?
+        let shipped = now()
+        // The parcel, on time or after a chase; the delivered signal's own
+        // three days still decide whether it ever lands
+        let parcel = select {
+            await delivered as parcel -> parcel
+            timeout 2d -> {
+                chase(tracking, now() - shipped)?
+                await delivered
+            }
+        }
+    }
+}

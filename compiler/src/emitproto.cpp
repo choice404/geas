@@ -91,6 +91,37 @@ message SignalReply {}
 
 )TEXT";
 
+// Where an engine driven contract's course stands, emitted once for a file
+// that has a course: the runtime's geas_course_info read over the wire
+constexpr std::string_view courseMessages =
+    R"TEXT(// Where a course stands, GEAS_COURSE_NONE through GEAS_COURSE_CANCELLED in
+// the runtime's own numbering. RUNNING is scheduled or inside a step,
+// WAITING is suspended at an await, a sleep, a select, or a together,
+// FINISHED ran to its end, HALTED stopped on the status in CourseReply,
+// and CANCELLED was cut off by a break or the contract breaking.
+enum CourseState {
+  COURSE_NONE = 0;
+  COURSE_RUNNING = 1;
+  COURSE_WAITING = 2;
+  COURSE_FINISHED = 3;
+  COURSE_HALTED = 4;
+  COURSE_CANCELLED = 5;
+}
+
+message CourseRequest { uint64 instance_id = 1; }
+
+// The course as geas_course_info reads it: the step it is at or ended on,
+// the GeasStatus that halted it, 0 otherwise, and the runtime clock time
+// its pending wait falls due, 0 when nothing is due.
+message CourseReply {
+  CourseState state = 1;
+  uint32 step = 2;
+  uint32 status = 3;
+  int64 wait_due_ms = 4;
+}
+
+)TEXT";
+
 // The fallback that keeps a service block well formed under a refusal the
 // message pass already recorded
 constexpr std::string_view fallbackReturn = "BoolIntResult";
@@ -160,15 +191,20 @@ std::string ProtoEmitter::emit() && {
     out_ = fillTemplate(headTemplate, {{"@STEM@", stem_}, {"@PACKAGE@", packageOf(stem_)}});
     bool hasWorkflow = false;
     bool hasSignals = false;
+    bool hasCourse = false;
     for (const ContractShape* shape : contracts) {
         emitContractMessages(*shape);
         hasWorkflow = hasWorkflow || hasWorkflowTail(*shape);
         hasSignals = hasSignals || !shape->signals.empty();
+        hasCourse = hasCourse || shape->course != nullptr;
     }
     out_.append(hasWorkflow ? workflowStates : classicStates);
     out_.append(sharedMessages);
     if (hasSignals) {
         out_.append(signalReply);
+    }
+    if (hasCourse) {
+        out_.append(courseMessages);
     }
     for (std::size_t i = 0; i < contracts.size(); ++i) {
         if (i > 0) {
@@ -179,8 +215,9 @@ std::string ProtoEmitter::emit() && {
     return std::move(out_);
 }
 
-// One contract's service: the session stream, one typed rpc per pledge, and
-// the shared lifecycle pair
+// One contract's service: the session stream, one typed rpc per pledge of a
+// host driven contract, the signal rpcs, the shared lifecycle pair, and the
+// course read of an engine driven one
 void ProtoEmitter::emitService(const ContractShape& shape) {
     const std::string prefix = prefixOf(shape);
     top(joined("service ", shape.decl->name, " {"));
@@ -193,14 +230,23 @@ void ProtoEmitter::emitService(const ContractShape& shape) {
     top("  // instance's life, and its first event carries the signature.");
     top(joined("  rpc Resume(", prefix, "ResumeRequest) returns (stream ", prefix,
                "SessionEvent);"));
-    for (const PledgeShape& pledge : shape.pledges) {
-        const std::string camel = camelCase(pledge.decl->name);
-        const std::string declared = returnName(lookup_.pledgeSig(*pledge.decl).ret);
-        top(joined("  rpc ", camel, "(", requestName(prefix, camel), ") returns (",
-                   declared.empty() ? fallbackReturn : std::string_view{declared}, ");"));
+    if (shape.course != nullptr) {
+        top("  // Engine driven: the contract's course runs its pledges, so a client");
+        top("  // starts the instance with Session and moves it on with its signals.");
+    } else {
+        for (const PledgeShape& pledge : shape.pledges) {
+            const std::string camel = camelCase(pledge.decl->name);
+            const std::string declared = returnName(lookup_.pledgeSig(*pledge.decl).ret);
+            top(joined("  rpc ", camel, "(", requestName(prefix, camel), ") returns (",
+                       declared.empty() ? fallbackReturn : std::string_view{declared}, ");"));
+        }
     }
     emitSignalRpcs(shape, prefix);
     top("  rpc GetPartial(PartialRequest) returns (PartialReply);");
+    if (shape.course != nullptr) {
+        top("  // Where the course stands, read without waiting on it.");
+        top("  rpc GetCourse(CourseRequest) returns (CourseReply);");
+    }
     top("  rpc Break(BreakRequest) returns (BreakReply);");
     top("}");
 }

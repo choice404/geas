@@ -1,0 +1,396 @@
+/** demo_course: the engine driven order saga from dusk. The same module
+ *  tests/runtime/test_course_saga.c drives in C, built from
+ *  skeleton/order_course.geas, whose contract carries a course, so the runtime
+ *  runs every step by itself from the moment the saga signs. This host binds
+ *  the bodies a gateway, a warehouse, and a carrier own, signs, waits for the
+ *  course to rest, and hands the delivered signal in. It never fulfills a
+ *  pledge, a host fulfillment on such a contract is GEAS_ERR_STATE.
+ *
+ *  Two walks. The happy path signs with the runtime's ticker running, waits
+ *  until the course rests at its select having planned, authorized through
+ *  one Timeout the retry term absorbs, captured and reserved together, and
+ *  shipped, then delivers the signal and waits for the course to finish with
+ *  the saga Fulfilled. The break path has the carrier refuse, the course ends
+ *  on ship's ?, and the remedies undo what landed, refund handed the receipt
+ *  capture produced while the saga reads Remedying.
+ *
+ *  The clock is a dusk one the runtime reads instead of the wall, so the
+ *  retry delay and the select's two days are numbers this file reads back.
+ *  GEAS_OUT names the directory holding liborder_course.geas.so,
+ *  target/geas-out by default. Exit status 0 means every check held. */
+
+@paradigm procedural
+
+@import std.string
+@import std.vector
+@import std.os
+@import std.concurrent.atomic
+@import std.concurrent.thread
+@import geas
+@import geas_value
+
+/** The fake clock: now is an atomic number, since the ticker's thread reads
+ *  it while a retry delay on a pool worker moves it, and a sleep is logged */
+struct FakeClock {
+    ms: AtomicInt,
+    sleeps: *Vector<int64>,
+}
+
+/** The dusk side of the saga: what the bodies answer, how often they ran,
+ *  the hold reserve was handed, and a log of what refund saw */
+struct CourseHost {
+    timeouts: int64,
+    is_ship_failing: bool,
+    authorizes: int64,
+    chases: int64,
+    hold_ms: int64,
+    refunds: *Vector<string>,
+}
+
+/** How many checks failed */
+struct Checks {
+    failures: int64,
+}
+
+// The variant tags of the saga's sums, their declaration order
+func pay_timeout() -> int64 { return 1 }
+func ship_no_carrier() -> int64 { return 0 }
+
+// The steps of the compiled course the walks read back
+func step_ship() -> int64 { return 4 }
+func step_select() -> int64 { return 5 }
+
+func day_ms() -> int64 { return 86400000 }
+
+// Real milliseconds a walk gives the course before calling it lost
+func patience_ms() -> int64 { return 5000 }
+
+func check(checks: *Checks, is_holding: bool, what: string) -> void {
+    if is_holding {
+        return
+    }
+    printerr("[demo_course_dusk] FAIL: " + what)
+    (*checks).failures = (*checks).failures + 1
+}
+
+func say(line: string) -> void {
+    println("[demo_course_dusk] " + line)
+}
+
+/* ---- the clock ---- */
+
+func clock_now(clock: *FakeClock) -> int64 {
+    return atomic_load((*clock).ms)
+}
+
+func clock_sleep(clock: *FakeClock, ms: int64) -> void {
+    vec_push((*clock).sleeps, ms)
+    atomic_add((*clock).ms, ms)
+}
+
+/* ---- the bodies ---- */
+
+// The text of a record's i-th field, borrowed from the frame
+func field_text(record: *Value, i: int64) -> (string, error) {
+    field, e := value_at(record, i)
+    if e.exists() {
+        return ("", e)
+    }
+    return value_as_text(field)
+}
+
+func authorize(inst: Contract, args: *Vector<*Value>, host: *CourseHost) -> (*Value, error) {
+    (*host).authorizes = (*host).authorizes + 1
+    if (*host).timeouts > 0 {
+        (*host).timeouts = (*host).timeouts - 1
+        return (value_err(value_variant(pay_timeout(), values())), error {})
+    }
+    number, e := field_text(vec_get(args, 0), 0)
+    if e.exists() {
+        return (value_unit(), e)
+    }
+    token: string = "AUTH-" + number
+    answer: *Value = value_ok(value_record(values1(value_text(token))))
+    free(token)
+    return (answer, error {})
+}
+
+func capture(inst: Contract, args: *Vector<*Value>, host: *CourseHost) -> (*Value, error) {
+    amount, e := contract_vow(inst, "amount")
+    if e.exists() {
+        return (amount, e)
+    }
+    return (value_ok(value_record(values2(value_text("RC-7"), amount))), error {})
+}
+
+// Answers the reservation over the hold plan's Geas body worked out
+func reserve(inst: Contract, args: *Vector<*Value>, host: *CourseHost) -> (*Value, error) {
+    sku, e := value_as_text(vec_get(args, 0))
+    if e.exists() {
+        return (value_unit(), e)
+    }
+    hold, he := value_as_int(vec_get(args, 1))
+    if he.exists() {
+        return (value_unit(), he)
+    }
+    (*host).hold_ms = hold
+    id: string = "R-" + sku
+    answer: *Value = value_ok(value_record(values3(value_text(id), value_text(sku), value_int(hold))))
+    free(id)
+    return (answer, error {})
+}
+
+func ship(inst: Contract, args: *Vector<*Value>, host: *CourseHost) -> (*Value, error) {
+    if (*host).is_ship_failing {
+        return (value_err(value_variant(ship_no_carrier(), values())), error {})
+    }
+    return (value_ok(value_record(values2(value_text("ACME"), value_text("T-1")))), error {})
+}
+
+func chase(inst: Contract, args: *Vector<*Value>, host: *CourseHost) -> (*Value, error) {
+    (*host).chases = (*host).chases + 1
+    return (value_ok(value_unit()), error {})
+}
+
+// Logs the receipt it was handed and the state the saga read mid pass
+func refund(inst: Contract, args: *Vector<*Value>, host: *CourseHost) -> (*Value, error) {
+    id, e := field_text(vec_get(args, 0), 0)
+    if e.exists() {
+        return (value_unit(), e)
+    }
+    seen: string = id + " " + state_name(contract_state(inst))
+    vec_push((*host).refunds, seen)
+    return (value_ok(value_unit()), error {})
+}
+
+/* ---- the runtime and the course ---- */
+
+func course_host(timeouts: int64, is_ship_failing: bool) -> *CourseHost {
+    refunds: *Vector<string> = alloc(vec_new())
+    return alloc(CourseHost { timeouts: timeouts, is_ship_failing: is_ship_failing, authorizes: 0, chases: 0, hold_ms: 0, refunds: refunds })
+}
+
+func fake_clock() -> *FakeClock {
+    sleeps: *Vector<int64> = alloc(vec_new())
+    return alloc(FakeClock { ms: atomic_new(1000), sleeps: sleeps })
+}
+
+func course_runtime(host: *CourseHost, clock: *FakeClock) -> (Runtime, error) {
+    rt, e := runtime_start(0)
+    if e.exists() {
+        return (rt, e)
+    }
+    ce := runtime_set_clock(rt, clock, clock_now, clock_sleep)
+    if ce.exists() {
+        return (rt, ce)
+    }
+    out: string = env("GEAS_OUT")
+    dir: string = str_len(out) > 0 ? out : "target/geas-out"
+    le := runtime_load(rt, dir + "/liborder_course.geas.so")
+    if le.exists() {
+        return (rt, le)
+    }
+    return (rt, bind_bodies(rt, host))
+}
+
+// plan and release are Geas bodies inside the module, the rest are the host's
+func bind_bodies(rt: Runtime, host: *CourseHost) -> error {
+    e1 := runtime_bind(rt, "OrderCourse.authorize", host, authorize)
+    if e1.exists() { return e1 }
+    e2 := runtime_bind(rt, "OrderCourse.capture", host, capture)
+    if e2.exists() { return e2 }
+    e3 := runtime_bind(rt, "OrderCourse.reserve", host, reserve)
+    if e3.exists() { return e3 }
+    e4 := runtime_bind(rt, "OrderCourse.ship", host, ship)
+    if e4.exists() { return e4 }
+    e5 := runtime_bind(rt, "OrderCourse.chase", host, chase)
+    if e5.exists() { return e5 }
+    e6 := runtime_bind(rt, "OrderCourse.refund", host, refund)
+    if e6.exists() { return e6 }
+    return runtime_freeze(rt)
+}
+
+// Whether the course ended, the three states it never leaves
+func is_ended(state: int64) -> bool {
+    return state == course_finished() || state == course_halted() || state == course_cancelled()
+}
+
+// Waits in real time until the course rests in want, at step when step is
+// not 0, whatever it passes through on the way. A course that ended somewhere
+// else is an error naming where
+func settle_at(saga: Contract, want: int64, step: int64) -> (CourseInfo, error) {
+    mut tries: int64 = 0
+    while tries < patience_ms() {
+        info, e := contract_course_wait(saga, patience_ms())
+        if e.exists() {
+            return (info, e)
+        }
+        if info.state == want && (step == 0 || info.step == step) {
+            return (info, error {})
+        }
+        if is_ended(info.state) {
+            return (info, error { message: "the course ended " + course_state_name(info.state) + " at step " + int_to_string(info.step) + ", status " + status_name(info.status) })
+        }
+        sleep_ms(1)
+        tries = tries + 1
+    }
+    last, le := contract_course_info(saga)
+    if le.exists() {
+        return (last, le)
+    }
+    return (last, error { message: "the course never rested " + course_state_name(want) })
+}
+
+/* ---- the walks ---- */
+
+func happy_path(checks: *Checks) -> error {
+    clock: *FakeClock = fake_clock()
+    host: *CourseHost = course_host(1, false)
+    rt, e := course_runtime(host, clock)
+    if e.exists() {
+        return e
+    }
+    te := runtime_start_ticker(rt, 10)
+    if te.exists() {
+        return te
+    }
+    again := runtime_start_ticker(rt, 10)
+    check(checks, is_status(again, status_err_state()), "a second ticker is a state error, got " + again.toString())
+    vows: *Vector<Vow> = alloc(vec_new())
+    saga, se := contract_sign(rt, "OrderCourse", vows)
+    if se.exists() {
+        return se
+    }
+    polled, pe := contract_course_wait(saga, 0)
+    check(checks, !pe.exists() && polled.state != course_none(), "a wait of 0 answers the course as it stands, running or at rest, got " + course_state_name(polled.state))
+    info, we := settle_at(saga, course_waiting(), step_select())
+    if we.exists() {
+        return we
+    }
+    say("the course ran itself to step " + int_to_string(info.step) + " and rests " + course_state_name(info.state) + ", the saga " + state_name(contract_state(saga)))
+    read_select(checks, saga, host, clock, info)
+    return finish_happy(checks, rt, saga, host)
+}
+
+// What the host reads while the course rests at its select
+func read_select(checks: *Checks, saga: Contract, host: *CourseHost, clock: *FakeClock, info: CourseInfo) -> void {
+    sleeps: *Vector<int64> = (*clock).sleeps
+    slept: int64 = vec_len(sleeps) > 0 ? vec_get(sleeps, 0) : 0
+    say("authorize retried after a Timeout, ran " + int_to_string((*host).authorizes) + " times, slept " + int_to_string(vec_len(sleeps)) + " time(s), " + int_to_string(slept) + "ms")
+    check(checks, (*host).authorizes == 2, "one Timeout, then the success")
+    check(checks, vec_len(sleeps) == 1 && slept == 2000, "one 2s delay before the second attempt")
+    say("reserve was handed a hold of " + int_to_string((*host).hold_ms) + "ms")
+    check(checks, (*host).hold_ms == 5400000, "the hold is the hour plus the thirty minute grace")
+    check(checks, contract_state(saga) == state_partial(), "Payment and reserve make it partial")
+    check(checks, info.wait_due_ms == clock_now(clock) + 2 * day_ms(), "the select times out two days on")
+    res: *Value = value_record(values3(value_text("R-sku-1"), value_text("sku-1"), value_int((*host).hold_ms)))
+    refused, e := contract_fulfill_sync(saga, "ship", values1(res))
+    value_free(refused)
+    say("a host fulfillment answers " + e.toString())
+    check(checks, is_status(e, status_err_state()), "the host never fulfills a course's pledge")
+}
+
+func finish_happy(checks: *Checks, rt: Runtime, saga: Contract, host: *CourseHost) -> error {
+    tracking: *Value = value_record(values2(value_text("ACME"), value_text("T-1")))
+    de := contract_signal(saga, "delivered", values1(tracking))
+    if de.exists() {
+        return de
+    }
+    info, we := settle_at(saga, course_finished(), 0)
+    if we.exists() {
+        return we
+    }
+    payload, pe := contract_signal_payload(saga, "delivered")
+    if pe.exists() {
+        return pe
+    }
+    say("happy path ends " + state_name(contract_state(saga)) + ", the course " + course_state_name(info.state) + ", delivered with " + value_render(payload))
+    value_free(payload)
+    check(checks, contract_state(saga) == state_fulfilled(), "the saga is fulfilled")
+    check(checks, info.status == status_ok() && info.wait_due_ms == 0, "no status, no wait left")
+    check(checks, (*host).chases == 0, "a parcel on time is never chased")
+    se := runtime_stop_ticker(rt)
+    if se.exists() {
+        return se
+    }
+    stopped := runtime_stop_ticker(rt)
+    check(checks, is_status(stopped, status_err_state()), "a stopped ticker stops once, got " + stopped.toString())
+    be := contract_break(saga)
+    if be.exists() {
+        return be
+    }
+    check(checks, vec_len((*host).refunds) == 0, "a fulfilled saga undoes nothing")
+    runtime_shutdown(rt)
+    return error {}
+}
+
+func break_path(checks: *Checks) -> error {
+    clock: *FakeClock = fake_clock()
+    host: *CourseHost = course_host(0, true)
+    rt, e := course_runtime(host, clock)
+    if e.exists() {
+        return e
+    }
+    vows: *Vector<Vow> = alloc(vec_new())
+    saga, se := contract_sign(rt, "OrderCourse", vows)
+    if se.exists() {
+        return se
+    }
+    info, we := settle_at(saga, course_finished(), 0)
+    if we.exists() {
+        return we
+    }
+    say("ship answered Err, the course ends " + course_state_name(info.state) + " at step " + int_to_string(info.step))
+    check(checks, info.step == step_ship(), "the course ended on ship's ?")
+    tracking: *Value = value_record(values2(value_text("ACME"), value_text("T-1")))
+    late := contract_signal(saga, "delivered", values1(tracking))
+    check(checks, is_status(late, status_err_state()), "a broken saga takes no signal, got " + late.toString())
+    return read_break(checks, rt, saga, host)
+}
+
+func read_break(checks: *Checks, rt: Runtime, saga: Contract, host: *CourseHost) -> error {
+    refunds: *Vector<string> = (*host).refunds
+    seen: string = vec_len(refunds) > 0 ? vec_get(refunds, 0) : "nothing"
+    say("break path ends " + state_name(contract_state(saga)) + ", refund saw " + seen)
+    check(checks, contract_state(saga) == state_broken(), "the saga is broken")
+    check(checks, vec_len(refunds) == 1 && seen == "RC-7 remedying", "refund ran once with the receipt, mid pass")
+    check(checks, contract_remedy_state(saga, "release") == remedy_done(), "release's Geas body accepted the reservation")
+    check(checks, contract_remedy_state(saga, "refund") == remedy_done(), "refund is done")
+    check(checks, !contract_lapsed(saga, "ship"), "ship broke by its Err, not by a deadline")
+    check(checks, (*host).chases == 0, "nothing past ship ran")
+    failures, fe := contract_remedy_failures(saga)
+    if fe.exists() {
+        return fe
+    }
+    check(checks, vec_len(failures) == 0, "no remedy failed")
+    remedy_failures_free(failures)
+    part, pe := contract_partial(saga)
+    if pe.exists() {
+        return pe
+    }
+    say("partial: fulfilled " + str_join((*part).fulfilled, ", ") + ", broken " + str_join((*part).broken, ", ") + ", errors " + str_join((*part).error_names, ", "))
+    check(checks, vec_len((*part).error_names) == 1 && vec_get((*part).error_names, 0) == "ship", "ship is the one broken pledge")
+    check(checks, vec_len((*part).errors) == 1 && value_sum_tag(vec_get((*part).errors, 0)) == ship_no_carrier(), "ship's error is NoCarrier")
+    partial_free(part)
+    runtime_shutdown(rt)
+    return error {}
+}
+
+func main() -> int32 {
+    checks: *Checks = alloc(Checks { failures: 0 })
+    he := happy_path(checks)
+    if he.exists() {
+        printerr("[demo_course_dusk] happy path: " + he.toString())
+        return 1
+    }
+    be := break_path(checks)
+    if be.exists() {
+        printerr("[demo_course_dusk] break path: " + be.toString())
+        return 1
+    }
+    if (*checks).failures > 0 {
+        return 1
+    }
+    say("ok")
+    return 0
+}

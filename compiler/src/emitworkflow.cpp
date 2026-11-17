@@ -2,9 +2,9 @@
 // an Int of milliseconds on the wire, a generic constructor builds the value
 // its annotation names, and a signal delivered through an instance rides
 // geas_signal. The course forms, await, select, now(), sleep, and together,
-// belong to the engine driven half of the roadmap; the gate in
-// workflowgate.hpp refuses them before the emitter runs, and the two seams
-// below still record a named build error should one ever slip past it
+// lower only inside a course, through the course emitter in emitcourse.cpp;
+// the checker holds them there, and the two seams below record a named
+// build error should one ever reach a pledge or clause body
 #include "emitc.hpp"
 #include "emittext.hpp"
 
@@ -23,14 +23,10 @@ CValue CEmitter::genWorkflowExpr(const Expr& expr) {
     if (const auto* ctor = std::get_if<GenericNewExpr>(&expr.kind)) {
         return genGenericNew(expr, *ctor);
     }
-    // TODO: lower AwaitExpr, SelectExpr, and now() once the course lands on
-    // the engine's journal
     unsupportedAt(expr, "a workflow expression in a pledge body");
     return badValue();
 }
 
-// TODO: lower SleepStmt and TogetherStmt once the course lands on the
-// engine's timer and fan out primitives
 void CEmitter::genWorkflowStmt(const Stmt&) {
     lookup_.unsupported(spanLo_, spanHi_, "a workflow statement in a pledge body");
 }

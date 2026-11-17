@@ -1,0 +1,4 @@
+course local 'direct' cannot hold a contract instance
+course local 'nested' cannot hold a contract instance
+course local 'instance' cannot hold a contract instance
+signing another contract and holding its instance in a course is not allowed

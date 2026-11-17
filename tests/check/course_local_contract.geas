@@ -1,0 +1,16 @@
+contract Child {
+    pledge run() -> Unit
+}
+contract Flow {
+    clause children() -> List<Child> { return [Child.sign()] }
+    clause child() -> Option<Child> { return Some(Child.sign()) }
+    course {
+        let direct = Child.sign()
+        let nested = [Some((Child.sign(), 1))]
+        for instance in children() { instance.status() }
+        match child() {
+            Some(instance) -> instance.status()
+            None -> "none"
+        }
+    }
+}

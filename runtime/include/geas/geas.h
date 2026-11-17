@@ -42,7 +42,15 @@ typedef enum GeasEventKind {
     GEAS_EVENT_RESUMED = 11,
     GEAS_EVENT_CANCELLED = 12,
     GEAS_EVENT_RECLAIMED = 13,
-    GEAS_EVENT_LOST = 14
+    GEAS_EVENT_LOST = 14,
+    /* The course of an engine driven contract, item NULL, both states the
+     * contract's current one */
+    GEAS_EVENT_COURSE_STARTED = 15,
+    GEAS_EVENT_COURSE_SUSPENDED = 16,
+    GEAS_EVENT_COURSE_RESUMED = 17,
+    GEAS_EVENT_COURSE_FINISHED = 18,
+    GEAS_EVENT_COURSE_HALTED = 19,
+    GEAS_EVENT_COURSE_CANCELLED = 20
 } GeasEventKind;
 
 /* The prefix through seq is permanent, later fields append after it
@@ -169,6 +177,154 @@ GeasStatus geas_runtime_set_clock(GeasRuntime* rt, GeasClockFn now_fn,
  * call a host timer makes so a deadline lapses when it passes and not when the
  * next call happens to arrive. See geas_instance_tick. */
 GeasStatus geas_runtime_tick(GeasRuntime* rt);
+
+/* Starts a runtime thread that calls geas_runtime_tick every interval_ms of
+ * real time, the timer a host without one of its own uses so deadlines and
+ * course waits fall due on time. A second start while one runs is
+ * GEAS_ERR_STATE, an interval of 0 or a NULL runtime GEAS_ERR_TYPE. Stop
+ * joins the thread before it returns and is GEAS_ERR_STATE when no ticker
+ * runs; shutdown stops a running ticker first. */
+GeasStatus geas_runtime_start_ticker(GeasRuntime* rt, uint32_t interval_ms);
+GeasStatus geas_runtime_stop_ticker(GeasRuntime* rt);
+
+/* ---- the course ---- */
+
+/* A contract whose descriptor carries a course is engine driven: the course
+ * starts on the runtime's pool when the contract signs or resumes, runs the
+ * contract's pledges inline through geas_course_call, and suspends at a wait,
+ * its thread going back to the pool. A signal delivery, a tick that finds a
+ * wait due, or a joined call that finishes enters it again at its saved step.
+ * A host fulfillment of a pledge on such a contract is GEAS_ERR_STATE and its
+ * body never runs; signals are delivered as usual.
+ *
+ * The operations below are called by the course function on the thread the
+ * runtime entered it on, with the ctx and frame it was handed. Called from any
+ * other thread, from a pledge or remedy body, or for an instance with no
+ * course they answer GEAS_ERR_STATE. An operation refused because the
+ * contract reached Remedying or Broken or a break was requested answers
+ * GEAS_ERR_STATE and the course ends CANCELLED whatever the function returns
+ * after it. An event delivery another thread holds on the instance is waited
+ * out, at every operation, at a call's gate and the end of its retry delay,
+ * and at a checkpoint, and never answers GEAS_ERR_STATE to the course. */
+
+/* One of the contract's own pledges, by pledges table index, run inline
+ * through the machinery a host fulfillment uses: the gate, terms, retries,
+ * the latch, the policy, events, and the remedy pass a break makes due. out
+ * receives the pledge's value on GEAS_OK, instance owned. Another status is
+ * the fulfillment's, the course stops on it. A signal index is GEAS_ERR_TYPE,
+ * an index past the table GEAS_ERR_NAME, a count mismatch GEAS_ERR_TYPE. */
+GeasStatus geas_course_call(void* ctx, GeasCourseFrame* f, uint32_t pledge,
+                            const GeasValue* args, size_t nargs, GeasValue* out);
+
+/* Waits for a signal, by pledges table index. With has_within 0 it is ready
+ * once the signal is delivered and out is the payload. With has_within 1 it
+ * is ready once the signal is delivered or within_ms has passed since its
+ * first poll, and out is Some of the payload or None. A signal whose own
+ * within lapsed can never be delivered: with has_within 1 the answer is None
+ * at once, with has_within 0 the call is GEAS_ERR_STATE and the course halts,
+ * or ends CANCELLED when the lapse broke the contract. *ready receives
+ * GEAS_COURSE_READY or GEAS_COURSE_WAIT. */
+GeasStatus geas_course_await(void* ctx, GeasCourseFrame* f, uint32_t signal,
+                             int has_within, int64_t within_ms,
+                             uint32_t* ready, GeasValue* out);
+
+/* Ready once duration_ms has passed since its first poll. */
+GeasStatus geas_course_sleep(void* ctx, GeasCourseFrame* f, int64_t duration_ms,
+                             uint32_t* ready);
+
+/* Ready once any arm is, *chosen the first ready arm in arm order. payload is
+ * the signal's payload for an await arm and Unit for a timeout arm. A select
+ * whose every arm is an await on a lapsed signal is GEAS_ERR_STATE. */
+GeasStatus geas_course_select(void* ctx, GeasCourseFrame* f, const GeasCourseArm* arms,
+                              size_t narms, uint32_t* ready, uint32_t* chosen,
+                              GeasValue* payload);
+
+/* Concurrent calls of the contract's own pledges, one step. The first poll
+ * copies every call's arguments onto the instance, starts each call on the
+ * runtime's pool through the machinery geas_course_call uses, and answers
+ * GEAS_OK with *ready GEAS_COURSE_WAIT; the course returns SUSPENDED. The
+ * bodies run at once, each with the instance lock released, except a pledge
+ * of a transactional subcontract, which keeps it. Once every call has an
+ * outcome the course is entered again at the same step, and that poll is
+ * *ready GEAS_COURSE_READY with outs[i] the i-th call's value, instance
+ * owned, an Err as readable as an Ok. A call whose status was not GEAS_OK
+ * makes the poll answer the first such status in call order, the course stops
+ * on it, and the outcomes the other calls latched stand. A call whose after
+ * is not met is GEAS_ERR_STATE without running. A break or an automatic
+ * Broken while calls run cancels the course: running bodies finish and
+ * latch, calls not yet started never start. An empty or NULL calls, a NULL
+ * outs, a signal index, or a count mismatch is GEAS_ERR_TYPE, an index past
+ * the table GEAS_ERR_NAME. The poll must name the same pledges in the same
+ * order each time it runs at that step. */
+GeasStatus geas_course_together(void* ctx, GeasCourseFrame* f, const GeasCourseCall* calls,
+                                size_t ncalls, uint32_t* ready, GeasValue* outs);
+
+/* The runtime clock, 0 for a NULL ctx. */
+int64_t geas_course_now(void* ctx);
+
+/* Called after every step advance. It publishes the frame's step to
+ * geas_course_info at once, so a host reads the step a running course stands
+ * at. With autopark set it writes the park row
+ * for the frame as it stands, so a resume enters the course at the step just
+ * stored; the write's failure status is the answer, and the course stops on
+ * it. Without autopark it answers GEAS_OK. A write that failed earlier, at a
+ * latch or a state change, is answered here too. GEAS_ERR_TYPE for a NULL
+ * argument. */
+GeasStatus geas_course_checkpoint(void* ctx, GeasCourseFrame* f);
+
+/* Where a course stands. NONE is a contract with no course. RUNNING covers a
+ * course scheduled on the pool, running, or delivering the events of its
+ * last entry. WAITING is suspended at a wait. FINISHED returned DONE, HALTED
+ * stopped on the non OK status in status, CANCELLED was cut off because the
+ * contract reached Remedying or Broken, a break was requested, or an
+ * operation was refused for one of those reasons. */
+typedef enum GeasCourseState {
+    GEAS_COURSE_NONE = 0,
+    GEAS_COURSE_RUNNING,
+    GEAS_COURSE_WAITING,
+    GEAS_COURSE_FINISHED,
+    GEAS_COURSE_HALTED,
+    GEAS_COURSE_CANCELLED
+} GeasCourseState;
+
+/* size is set by the caller to sizeof(GeasCourseInfo) of its header; the
+ * runtime fills only the fields that fit and leaves size as it was. */
+typedef struct GeasCourseInfo {
+    uint32_t size;
+    uint32_t state;
+    uint32_t step;
+    uint32_t status;
+    int64_t  wait_due_ms;
+} GeasCourseInfo;
+
+/* Reads where the course stands without waiting on the instance lock: the
+ * tick runs first when the lock is free. The step is published at every
+ * step boundary, so a running course reads the step it stands at. A NULL
+ * argument or a size too small to hold state is GEAS_ERR_TYPE. */
+GeasStatus geas_course_info(GeasContract* c, GeasCourseInfo* out);
+
+/* Blocks until the course is not RUNNING, then fills out like
+ * geas_course_info and answers GEAS_OK. timeout_ms is real time, a negative
+ * value waits forever; when it runs out the call answers GEAS_OK as well
+ * with out read as it stands, state RUNNING, so the caller tells the two
+ * apart by state. A caller holding an instance lock or delivering events,
+ * a body or a hook, is GEAS_ERR_STATE without waiting. */
+GeasStatus geas_course_wait(GeasContract* c, int64_t timeout_ms, GeasCourseInfo* out);
+
+/* Names the store and key an instance parks itself into from now on. The
+ * runtime keeps copies of both; a NULL dsn clears them and writes nothing
+ * more. The row is the one geas_instance_park writes, under its rules, and
+ * is written at the next release of the instance lock after every latch,
+ * lapse, contract state change, retry saved, and remedy start or end, before
+ * every remedy body, at every geas_course_checkpoint, and whenever a course
+ * waits or ends. A moment the park rules refuse, a body running or a future
+ * not waited, defers the write to the next such point. A failed write is
+ * reported on stderr; on a course instance the course's next operation
+ * answers it and the course halts, and a course about to wait halts instead.
+ * A host driven instance writes again at its next change. An instance ended
+ * by an explicit break writes nothing more, the last row stands. A NULL
+ * contract, or a dsn with a NULL key, is GEAS_ERR_TYPE. */
+GeasStatus geas_contract_set_autopark(GeasContract* c, const char* dsn, const char* key);
 
 /* ---- the iname table ---- */
 
@@ -419,8 +575,18 @@ GeasStatus  geas_partial_remedy_error(GeasContract* c, size_t i,
  * outcomes, the ones not yet started resume where the pass left off, and the
  * one in flight, if the park came from inside its body or during its retry
  * delay, is recorded as failed with GEAS_ERR_STATE so no remedy ever runs
- * twice. A NULL argument is GEAS_ERR_TYPE; a backend that will not take the
- * row is GEAS_ERR_STORE. */
+ * twice.
+ *
+ * An instance whose contract carries a course parks its frame too, the step,
+ * the slots, the wait's absolute due time, the status, and the course hash.
+ * A course that waits or ended parks; a running one parks only inside a
+ * geas_course_call's retry wait or remedy pass, and the row then enters that
+ * call again on resume. The outcomes a together already has are recorded and
+ * its other calls run again. A slot the wire cannot carry, an instance
+ * handle, is GEAS_ERR_TYPE and writes nothing. A course parks from its own
+ * thread too, from a remedy body or the sleep a retry waits through. A
+ * NULL argument is GEAS_ERR_TYPE; a backend that will not take the row is
+ * GEAS_ERR_STORE. */
 GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key);
 
 /* Reads the row key names out of the store behind dsn and stands the
@@ -439,6 +605,14 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
  * existed resumes as it always did: its signing time stands for the
  * millisecond one, items with nothing to wait on are eligible from sign, the
  * rest from the resume, and no latch reads as a lapse.
+ *
+ * A row with a course frame needs the registered course hash to match, else
+ * GEAS_ERR_VERSION. A course that was waiting or running is entered again at
+ * its saved step with its slots; one that finished, halted, or was cancelled
+ * is not run again and geas_course_info reads it as it was. A sleep or a
+ * within keeps its absolute due time. A course contract whose row has no
+ * frame, a row from before the frame existed, starts its course at step 0.
+ * Resume emits RESUMED and COURSE_RESUMED and replays no earlier event.
  *
  * The recorded version and shape hash must match the registered module's,
  * and a nonzero expected_hash must match as well, else GEAS_ERR_VERSION, the
@@ -525,7 +699,9 @@ GeasStatus geas_pledge_bind_user(GeasRuntime* rt, const char* pledge_name,
  * fulfillment when an attempt fails, waiting the term's delay between
  * attempts on the worker with the instance lock released, and only the last
  * attempt's outcome latches and is delivered. Fulfilling a signal is
- * GEAS_ERR_TYPE; a signal is delivered, see geas_signal. */
+ * GEAS_ERR_TYPE; a signal is delivered, see geas_signal. A contract with a
+ * course runs its own pledges, so fulfilling one of them is GEAS_ERR_STATE,
+ * here and through geas_pledge_fulfill_sync. */
 GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
                               const GeasValue* args, size_t nargs,
                               const GeasRef* refs, size_t nrefs);

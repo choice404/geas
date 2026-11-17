@@ -34,7 +34,7 @@ std::string_view aggregateKind(std::string_view operation) {
 // result and status land in, nullopt after a fault
 std::optional<StoreOp> CEmitter::openStoreOp(const Expr& expr, const CallExpr& call) {
     const auto* schemaName =
-        call.args.empty() ? nullptr : std::get_if<Identifier>(&ast().expr(call.args[0].value).kind);
+        call.args.empty() ? nullptr : std::get_if<Identifier>(&arena().expr(call.args[0].value).kind);
     std::size_t index = 0;
     const std::vector<const SchemaDecl*>& schemas = shape_->schemas;
     while (index < schemas.size() &&

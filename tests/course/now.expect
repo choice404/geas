@@ -1,0 +1,45 @@
+Courses [
+    Course "Flow" {
+        hash: 0x2eb447dea37a4ad3,
+        entry: 0,
+        slots: [
+            Slot(0) "started": Time (local),
+            Slot(1) "$hidden1": Time (temporary),
+            Slot(2) "$hidden2": Int (temporary),
+            Slot(3) "$hidden3": Unit (temporary),
+            Slot(4) "$hidden4": Duration (temporary),
+            Slot(5) "elapsed": Duration (local),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [Slot(1), Slot(2)],
+                result: Slot(3),
+                question: false,
+            },
+            Step 2 await {
+                signal: 1,
+                arguments: [],
+                result: Slot(2),
+                question: false,
+                within: None,
+            },
+            Step 3 sleep {
+                arguments: [Slot(4)],
+                result: None,
+                question: false,
+            },
+        ],
+        statements: [
+            Store Slot(0) = Call(Ident("now"), []),
+            Store Slot(1) = Call(Ident("now"), []),
+            Resume 2,
+            Resume 1,
+            Evaluate Slot(3),
+            Store Slot(4) = Sub(Call(Ident("now"), []), Slot(0)),
+            Resume 3,
+            Store Slot(5) = Sub(Call(Ident("now"), []), Slot(0)),
+            Return,
+        ],
+    },
+]

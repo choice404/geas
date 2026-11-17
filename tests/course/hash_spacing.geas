@@ -1,0 +1,12 @@
+// The block has the same token spellings as straight_line
+contract Flow {
+ pledge first( value: Int ) -> Option<Int>
+ signal ready(value: String)
+ course /* A comment before the block */ {
+  let value = first( 1 ) // A trailing comment
+
+  let ready = await /* A comment between tokens */ ready
+  sleep 1s
+  first( value? )
+ }
+}

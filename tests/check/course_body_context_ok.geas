@@ -1,0 +1,9 @@
+contract Flow {
+    pledge step() -> Unit { return }
+    remedy undo for step() -> Unit { return }
+    clause ordinary() -> Int { return 1 }
+    course {
+        ordinary()
+        step()
+    }
+}

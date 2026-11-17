@@ -2,8 +2,11 @@
  *  contract modules, binds dusk functions over abstract pledges and remedies,
  *  signs and resumes instances, fulfills pledges synchronously or through a
  *  future, delivers signals, drives the clock and the tick, and reads the
- *  partial surface, the lapses, and the remedies. geas_attrs reads the
- *  declared settings.
+ *  partial surface, the lapses, and the remedies. For a contract that carries
+ *  a course, which the runtime drives by itself from the moment it signs, it
+ *  reads where the course stands, waits for it to rest, names the store the
+ *  instance parks itself into, and starts the runtime's own ticker.
+ *  geas_attrs reads the declared settings.
  *
  *  The host links libgeasrt by its SONAME, -l:libgeasrt.so.0, so build with
  *  LIBRARY_PATH and run with LD_LIBRARY_PATH pointing at the directory that
@@ -68,6 +71,12 @@ foreign "C" {
     func geas_module_load(rt: int64, path: *raw char) -> int32
     func geas_runtime_freeze(rt: int64) -> int32
     func geas_runtime_tick(rt: int64) -> int32
+    func geas_runtime_start_ticker(rt: int64, interval_ms: uint32) -> int32
+    func geas_runtime_stop_ticker(rt: int64) -> int32
+    func geas_course_info(c: int64, out: *raw CourseRow) -> int32
+    func geas_course_wait(c: int64, timeout_ms: int64, out: *raw CourseRow) -> int32
+    func geas_contract_set_autopark(c: int64, dsn: *raw char, key: *raw char) -> int32
+    func gd_clear_autopark(c: int64) -> int64
     func geas_contract_sign(rt: int64, name: *raw char, vows: int64, n: int64, hash: uint64, out: *raw int64) -> int32
     func geas_instance_resume(rt: int64, dsn: *raw char, key: *raw char, hash: uint64, out: *raw int64) -> int32
     func geas_instance_park(c: int64, dsn: *raw char, key: *raw char) -> int32
@@ -144,6 +153,25 @@ export struct RemedyFailure {
     err: *Value,
 }
 
+/** Where a course stands: one of the course_* states, the step it is at or
+ *  stopped on, the status a halted course stopped on, and the clock time its
+ *  wait falls due, 0 when the wait has no deadline of its own */
+export struct CourseInfo {
+    state: int64,
+    step: int64,
+    status: int64,
+    wait_due_ms: int64,
+}
+
+// GeasCourseInfo, 24 bytes, size set by the caller before the runtime fills it
+struct CourseRow {
+    size: uint32,
+    state: uint32,
+    step: uint32,
+    status: uint32,
+    wait_due_ms: int64,
+}
+
 // The bytes a pledge binding hands the shim: the handler and its state
 struct PledgeSlot<S> {
     state: *S,
@@ -189,9 +217,28 @@ export func item_pending() -> int64 { return 0 }
 export func item_fulfilled() -> int64 { return 1 }
 export func item_broken() -> int64 { return 2 }
 
+/** Course states. None is a contract with no course, running covers a course
+ *  scheduled, running, or delivering the events of its last entry, waiting is
+ *  suspended at a wait, and the last three are the ways a course ends */
+export func course_none() -> int64 { return 0 }
+export func course_running() -> int64 { return 1 }
+export func course_waiting() -> int64 { return 2 }
+export func course_finished() -> int64 { return 3 }
+export func course_halted() -> int64 { return 4 }
+export func course_cancelled() -> int64 { return 5 }
+
 /** The lowercase spelling of an instance state */
 export func state_name(state: int64) -> string {
     names: string[6] = ["unsigned", "signed", "fulfilled", "partial", "broken", "remedying"]
+    if state >= 0 && state < 6 {
+        return names[state]
+    }
+    return "unknown"
+}
+
+/** The lowercase spelling of a course state */
+export func course_state_name(state: int64) -> string {
+    names: string[6] = ["none", "running", "waiting", "finished", "halted", "cancelled"]
     if state >= 0 && state < 6 {
         return names[state]
     }
@@ -254,6 +301,24 @@ export func runtime_freeze(rt: Runtime) -> error {
 /** Applies every passed deadline over every instance */
 export func runtime_tick(rt: Runtime) -> error {
     return status_error(int64(geas_runtime_tick(rt.h)), "geas_runtime_tick")
+}
+
+/** Starts a runtime thread that ticks every interval_ms of real time, the
+ *  timer a host without one of its own uses so deadlines and course waits
+ *  fall due on time. A second start while one runs is GEAS_ERR_STATE, an
+ *  interval the runtime's uint32 cannot hold is GEAS_ERR_TYPE */
+export func runtime_start_ticker(rt: Runtime, interval_ms: int64) -> error {
+    if interval_ms <= 0 || interval_ms > 4294967295 {
+        return status_error(status_err_type(), "geas_runtime_start_ticker")
+    }
+    st: int32 = geas_runtime_start_ticker(rt.h, uint32(interval_ms))
+    return status_error(int64(st), "geas_runtime_start_ticker")
+}
+
+/** Stops the ticker and joins its thread, GEAS_ERR_STATE when none runs.
+ *  Shutdown stops a running ticker by itself */
+export func runtime_stop_ticker(rt: Runtime) -> error {
+    return status_error(int64(geas_runtime_stop_ticker(rt.h)), "geas_runtime_stop_ticker")
 }
 
 /** Shuts the runtime down, then frees every binding and clock it held */
@@ -464,6 +529,60 @@ export func contract_vow(c: Contract, name: string) -> (*Value, error) {
         return (value_unit(), status_error(status_err_name(), "vow " + name))
     }
     return value_decode(h)
+}
+
+/* ---- the course ---- */
+
+// A zeroed GeasCourseInfo carrying its own size, freed by the caller
+func course_row() -> *raw CourseRow {
+    row: *raw CourseRow = alloc_bytes(sizeof(CourseRow))
+    row[0] = CourseRow { size: uint32(sizeof(CourseRow)), state: uint32(0), step: uint32(0), status: uint32(0), wait_due_ms: 0 }
+    return row
+}
+
+func course_info_of(row: CourseRow) -> CourseInfo {
+    return CourseInfo { state: int64(row.state), step: int64(row.step), status: int64(row.status), wait_due_ms: row.wait_due_ms }
+}
+
+/** Where the course stands, read without waiting on the instance lock. A
+ *  contract with no course reads course_none */
+export func contract_course_info(c: Contract) -> (CourseInfo, error) {
+    row: *raw CourseRow = course_row()
+    st: int32 = geas_course_info(c.h, row)
+    info: CourseInfo = course_info_of(row[0])
+    free(row)
+    return (info, status_error(int64(st), "geas_course_info"))
+}
+
+/** Blocks until the course is not running, then reads where it stands.
+ *  timeout_ms is real time and a negative value waits forever; when it runs
+ *  out there is no error and the info is the course as it stands, state
+ *  course_running() at the step it runs, so the state tells a slow course
+ *  from a settled one. Never call it from a handler or a clock, that is
+ *  GEAS_ERR_STATE at once */
+export func contract_course_wait(c: Contract, timeout_ms: int64) -> (CourseInfo, error) {
+    row: *raw CourseRow = course_row()
+    st: int32 = geas_course_wait(c.h, timeout_ms, row)
+    info: CourseInfo = course_info_of(row[0])
+    free(row)
+    return (info, status_error(int64(st), "geas_course_wait"))
+}
+
+/** Names the store and key the instance parks itself into from now on, the
+ *  row contract_park writes, written again after every latch, lapse, state
+ *  change, and course step. The runtime keeps its own copies of both */
+export func contract_set_autopark(c: Contract, dsn: string, key: string) -> error {
+    d: *raw char = cbuf(dsn)
+    k: *raw char = cbuf(key)
+    st: int32 = geas_contract_set_autopark(c.h, d, k)
+    free(d)
+    free(k)
+    return status_error(int64(st), "geas_contract_set_autopark " + key)
+}
+
+/** Stops the instance parking itself; the last row written stands */
+export func contract_clear_autopark(c: Contract) -> error {
+    return status_error(gd_clear_autopark(c.h), "geas_contract_set_autopark")
 }
 
 /* ---- fulfillment ---- */

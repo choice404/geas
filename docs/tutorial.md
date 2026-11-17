@@ -6,8 +6,9 @@ kept, and any language that can call a C library can sign it, fulfill its
 pledges, deliver events into it, and read where it stands, with the runtime
 holding every term and every allocation that crosses the line. This tutorial
 walks the whole language surface, drives one contract from C and from Python
-with no generated bindings on either side, and then walks an order saga, host
-driven, through its deadlines and its remedies.
+with no generated bindings on either side, and then walks an order saga
+through its deadlines and its remedies, first host driven and then engine
+driven, the contract running its own course.
 
 The bridge, contracts served over gRPC to other processes, is a real part of
 Geas and is out of scope here on purpose. Everything below is the in
@@ -789,15 +790,184 @@ make test-saga-python
 Two hosts, two clocks, one saga, and the rules never moved out of the
 contract.
 
-### What comes next
+## 14. A saga, engine driven
 
-The saga above is host driven. The next step on the roadmap is the engine
-driven mode, where the contract carries a `course` block, its orchestration
-written out, and the engine runs it, journaling every step so a parked instance
-resumes at the step it stopped on. The compiler already parses and checks a
-course, `geas check` holds every rule, and `geas build` refuses one with
-`workflow constructs are not emitted yet` until the engine runs it.
-[docs/grammar.md](grammar.md) has the course and amendment sections.
+So the saga above works, however look at what the host had to do, it called
+`authorize`, then `capture`, then `reserve`, then `ship`, in the right order,
+and the contract only checked that it did. The order lived in the contract as
+rules and in the host as code, twice. Now the engine driven mode puts it in one
+place: the contract carries a `course` block, the orchestration written out,
+and the runtime runs it from the moment the contract signs.
+`skeleton/order_course.geas` is the same order with its course:
+
+```text
+course {
+    if amount <= 0 {
+        return
+    }
+    let window = plan(hold)?
+    let auth = authorize(Card { number: card })?
+    together {
+        let receipt = capture(auth)?
+        let held = reserve(sku, window)?
+    }
+    let tracking = ship(held)?
+    let shipped = now()
+    let parcel = select {
+        await delivered as parcel -> parcel
+        timeout 2d -> {
+            chase(tracking, now() - shipped)?
+            await delivered
+        }
+    }
+}
+```
+
+Read it like any function, because that is what it is, with two differences.
+Every call of one of the contract's own pledges is a **step**: it runs through
+the same terms a host call gets, the `within`, the `after`, the retries, the
+latch, and once it returns the course remembers where it is, so a saga parked
+and resumed in another process picks up at the step it stopped on with every
+binding it had made. And a few statements **suspend**: `await` waits for a
+signal and hands back its payload, `select` takes whichever arm is ready first,
+an await or a timeout, `sleep` pauses, and `together` runs its calls at the
+same time and finishes when every one has. While the course waits, no thread
+waits with it, the course is just a step number and some values on the
+instance.
+
+`plan` is a Geas body, the hold plus the grace vow, and its `?` ends the course
+if the warehouse would not hold that long. `capture` and `reserve` really run
+at once, each on its own pool worker. The `select` gives the parcel two days,
+and if it is quiet the course calls `chase` with how long it has been out and
+keeps waiting; the `delivered` signal's own three days still decide whether it
+ever lands.
+
+Now the one thing that trips people up. The course ending is not the contract's
+state. When `ship` answers `Err(NoCarrier)`, the `?` ends the course, it reads
+finished, and it is the requirements that read the latch, see `!ship`, break
+the contract, and run the remedies, newest first, the same way the host driven
+saga did. A course is the order of the steps, the requirements are still the
+judge.
+
+### From C
+
+The host binds the bodies the contract leaves abstract, signs, and that is it,
+there is no step to call:
+
+```c
+geas_pledge_bind(rt, "OrderCourse.authorize", fn_authorize);
+geas_pledge_bind(rt, "OrderCourse.capture", fn_capture);
+geas_pledge_bind(rt, "OrderCourse.reserve", fn_reserve);
+geas_pledge_bind(rt, "OrderCourse.ship", fn_ship);
+geas_pledge_bind(rt, "OrderCourse.chase", fn_chase);
+geas_pledge_bind(rt, "OrderCourse.refund", fn_refund);
+geas_runtime_freeze(rt);
+geas_runtime_start_ticker(rt, 5);
+
+GeasContract* c = NULL;
+geas_contract_sign(rt, "OrderCourse", NULL, 0, 0, &c);
+```
+
+The ticker is a runtime thread that ticks every 5 milliseconds, which is what
+lets the `select`'s two days and the signal's three fall due with nobody
+calling in; a host with its own timer calls `geas_runtime_tick` from it
+instead, and that is what the gate does, over a fake clock it moves by hand.
+To see where the course is, read it, or wait for it to stop running:
+
+```c
+GeasCourseInfo info = { .size = sizeof(info) };
+geas_course_wait(c, 5000, &info);
+// info.state == GEAS_COURSE_WAITING, info.step == 5, the select
+// info.wait_due_ms is the moment the 2d timeout falls due
+```
+
+The course passes through WAITING at the `together` on its way, while
+`capture` and `reserve` run, so a host that wants the `select` in particular
+waits again until the step reads 5; `geas_course_info` reads the same thing
+without blocking. A wait that runs out is no error either, it answers
+`GEAS_OK` with `info.state` still `GEAS_COURSE_RUNNING` and `info.step` the
+step the course is on right now, since every step boundary publishes the step,
+so a host polling with a short timeout reads the state to tell a slow course
+from one at rest. The one wait that is refused is a wait from inside a body or
+an event hook, that answers `GEAS_ERR_STATE` at once, the course could be
+waiting on that very caller.
+
+Now the thing is the hook you install is called from whichever thread recorded
+the events, the ticker included, and while it runs the instance is reserved to
+that thread. The course does not care, a course that runs into somebody else's
+delivery, coming out of a retry delay or at its next step, waits for it to end
+and carries on, it never halts over a hook it had nothing to do with.
+
+A host fulfillment of a course's pledge answers `GEAS_ERR_STATE` and the body
+never runs, the course owns the order now. The host still hands signals in:
+
+```c
+GeasValue fields[2] = { str_val("ACME"), str_val("T-1") };
+GeasValue tracking = record_of(fields, 2);
+geas_signal(c, "delivered", &tracking, 1);
+geas_course_wait(c, 5000, &info);
+// info.state == GEAS_COURSE_FINISHED, geas_contract_state(c) == GEAS_FULFILLED
+```
+
+For a saga that has to live through a restart, arm it once with a store and a
+key, and the runtime writes its row at every step from then on:
+
+```c
+geas_contract_set_autopark(c, dsn, "order-1");
+```
+
+Kill the process anywhere and resume the row in a fresh one with
+`geas_instance_resume`, and the course comes back at the step the row named. A
+step that finished before the row was written never runs again, and the step
+that was running when the process died runs again from its start, so steps are
+at least once and a body that must not act twice keys its side effect, the way
+any worker does. The gate kills the saga at every step boundary and inside
+every host body and checks exactly that.
+
+The row also remembers which course wrote it. A module whose course changed,
+even one duration in a `timeout`, refuses the row with `GEAS_ERR_VERSION`,
+since a step number from one course means nothing to another, so a course that
+changes ships as a new contract version.
+
+```sh
+make test-course-saga
+```
+
+### From Python
+
+`interop/python/demo_course.py` walks the same saga. The binding grows a few
+calls, `start_ticker`, `course_wait`, `course_info`, and `set_autopark`, and the
+rest is what you already know:
+
+```python
+rt.bind("OrderCourse.ship", host.ship)
+rt.bind("OrderCourse.chase", host.chase)
+rt.bind("OrderCourse.refund", host.refund)
+rt.freeze()
+rt.start_ticker(5)
+
+saga = rt.sign("OrderCourse")
+info = saga.course_wait(5000)
+# CourseInfo(state=waiting, step=5, ...) once the together is behind it
+saga.signal("delivered", Record("ACME", "T-1"))
+info = saga.course_wait(5000)
+# info.state == GEAS_COURSE_FINISHED, saga.state() == GEAS_FULFILLED
+```
+
+A `course_wait` that runs out raises nothing, it hands back the `CourseInfo`
+with `state` running and `step` where the course is, and only a wait from a
+body or a hook raises `GeasError` with `GEAS_ERR_STATE`.
+
+The demo also has the carrier refuse, so the course finishes at the `ship`
+step while the saga reads Broken with `refund` handed the receipt, and it parks
+the saga at the `select`, shuts the runtime down, resumes the row in a fresh
+one, and finishes it there with no host body run twice.
+
+```sh
+make test-course-python
+```
+
+Same saga, same rules, and now the order lives in exactly one place.
 
 ## Where to go next
 
@@ -805,7 +975,8 @@ course, `geas check` holds every rule, and `geas build` refuses one with
   this tutorial showed and the ones it did not.
 - [docs/abi.md](abi.md) is the ABI a foreign host compiles against, the value
   layouts, the thunk frame, ownership, mangling, the hash, and the workflow
-  surface: the clock and the tick, terms, signals, remedies, and the park row.
+  surface: the clock and the tick, terms, signals, remedies, the course, and
+  the park row.
 - [docs/bridge.md](bridge.md) is the layer this tutorial skipped: the same
   contracts served over gRPC, the wire surface emitted by the compiler and
   driven from any language with stock tooling.

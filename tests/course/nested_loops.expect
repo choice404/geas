@@ -1,0 +1,73 @@
+Courses [
+    Course "Flow" {
+        hash: 0xede581b297c5d396,
+        entry: 0,
+        slots: [
+            Slot(0) "$hidden0": List<Int> (collection),
+            Slot(1) "$hidden1": Int (position),
+            Slot(2) "outer": Int (local),
+            Slot(3) "$hidden3": Option<Bool> (temporary),
+            Slot(4) "$hidden4": Bool (temporary),
+            Slot(5) "$hidden5": List<Int> (collection),
+            Slot(6) "$hidden6": Int (position),
+            Slot(7) "inner": Int (local),
+            Slot(8) "$hidden8": Int (temporary),
+            Slot(9) "$hidden9": Unit (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(3),
+                question: true,
+            },
+            Step 2 call {
+                pledge: 1,
+                arguments: [Slot(8)],
+                result: Slot(9),
+                question: false,
+            },
+        ],
+        statements: [
+            Store Slot(0) = List([Int(1), Int(2)]),
+            Store Slot(1) = Int(0),
+            Label(0):
+            ForNext(collection: Slot(0), position: Slot(1), variable: Slot(2), body: Label(1), done: Label(2)),
+            Label(1):
+            Label(3):
+            Resume 1,
+            Store Slot(4) = Question(Slot(3)),
+            Branch Slot(4) ? Label(4) : Label(5),
+            Label(4):
+            Store Slot(5) = List([Int(3), Int(4)]),
+            Store Slot(6) = Int(0),
+            Label(6):
+            ForNext(collection: Slot(5), position: Slot(6), variable: Slot(7), body: Label(7), done: Label(8)),
+            Label(7):
+            Branch Eq(Slot(7), Int(3)) ? Label(9) : Label(10),
+            Label(9):
+            Jump Label(6),
+            Jump Label(11),
+            Label(10):
+            Label(11):
+            Store Slot(8) = Add(Slot(2), Slot(7)),
+            Resume 2,
+            Evaluate Slot(9),
+            Jump Label(8),
+            Jump Label(6),
+            Label(8):
+            Branch Eq(Slot(2), Int(2)) ? Label(12) : Label(13),
+            Label(12):
+            Jump Label(5),
+            Jump Label(14),
+            Label(13):
+            Label(14):
+            Jump Label(3),
+            Jump Label(3),
+            Label(5):
+            Jump Label(0),
+            Label(2):
+            Return,
+        ],
+    },
+]

@@ -103,6 +103,7 @@ void Checker::bindVariant(const VariantPattern& pattern, TyId type, const Expr& 
 // Binds and type checks one pattern against the type it matches. Returns
 // whether the pattern is irrefutable, a wildcard or a plain binding
 bool Checker::bindPattern(PatternId id, TyId type, const Expr& at) {
+    tables_.patternTypes[static_cast<std::size_t>(id.index)] = type;
     const Pattern& pattern = ast_.pattern(id);
     if (std::holds_alternative<WildcardPattern>(pattern)) {
         return true;

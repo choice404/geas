@@ -1,0 +1,15 @@
+contract Flow {
+    signal ready()
+    pledge step() -> Unit {
+        sleep 1s
+    }
+    remedy undo for step() -> Unit {
+        await ready
+    }
+    course { ordinary() }
+    clause ordinary() -> Unit {
+        select { timeout 1s -> { return } }
+        together { step() }
+        step()
+    }
+}

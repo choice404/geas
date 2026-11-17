@@ -74,7 +74,7 @@ StoreGroups productOf(const StoreGroups& left, const StoreGroups& right) {
 // The disjunctive normal form of a Store predicate with every ! eliminated.
 // The checker already proved every leaf a comparison
 StoreGroups CEmitter::predicateGroups(ExprId id, bool isNegated) const {
-    const Expr& expr = ast().expr(id);
+    const Expr& expr = arena().expr(id);
     if (const auto* unary = std::get_if<UnaryExpr>(&expr.kind)) {
         if (unary->op == UnaryOp::Not) {
             return predicateGroups(unary->operand, !isNegated);
@@ -101,7 +101,7 @@ StoreGroups CEmitter::predicateGroups(ExprId id, bool isNegated) const {
 
 // The schema column a bare name in a Store call resolves to
 std::optional<FieldSlot> CEmitter::columnOf(const StoreOp& op, ExprId column) const {
-    const auto* name = std::get_if<Identifier>(&ast().expr(column).kind);
+    const auto* name = std::get_if<Identifier>(&arena().expr(column).kind);
     std::optional<FieldSlot> slot;
     for (std::size_t i = 0; name != nullptr && op.row != nullptr && i < op.row->fields.size();
          ++i) {
@@ -190,10 +190,10 @@ CValue CEmitter::genStoreQuery(const StoreOp& op) {
         return genStorePage(op);
     }
     const auto* order = args.size() == orderedArgs
-                            ? std::get_if<CallExpr>(&ast().expr(args[2].value).kind)
+                            ? std::get_if<CallExpr>(&arena().expr(args[2].value).kind)
                             : nullptr;
     const auto* direction =
-        order == nullptr ? nullptr : std::get_if<Identifier>(&ast().expr(order->callee).kind);
+        order == nullptr ? nullptr : std::get_if<Identifier>(&arena().expr(order->callee).kind);
     const bool isOrdered =
         direction != nullptr && (direction->name == "asc" || direction->name == "desc");
     if (isOrdered) {
@@ -244,10 +244,10 @@ CValue CEmitter::genStoreOrdered(const StoreOp& op, std::string_view direction, 
 // ordered result the count keeps
 CValue CEmitter::genStorePage(const StoreOp& op) {
     const std::vector<Argument>& args = op.call->args;
-    const auto* order = std::get_if<CallExpr>(&ast().expr(args[2].value).kind);
-    const auto* limit = std::get_if<CallExpr>(&ast().expr(args[3].value).kind);
+    const auto* order = std::get_if<CallExpr>(&arena().expr(args[2].value).kind);
+    const auto* limit = std::get_if<CallExpr>(&arena().expr(args[3].value).kind);
     const auto* direction =
-        order == nullptr ? nullptr : std::get_if<Identifier>(&ast().expr(order->callee).kind);
+        order == nullptr ? nullptr : std::get_if<Identifier>(&arena().expr(order->callee).kind);
     const std::optional<FieldSlot> column =
         order == nullptr ? std::nullopt : columnOf(op, order->args.front().value);
     if (!column || limit == nullptr) {

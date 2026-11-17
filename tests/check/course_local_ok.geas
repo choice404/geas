@@ -1,0 +1,17 @@
+contract Child {
+    pledge run() -> Unit
+}
+contract Flow {
+    clause signed() -> Child { return Child.sign() }
+    clause consume(instance: Child, value: Int) -> Int { return value }
+    course {
+        consume(Child.sign(), 1)
+        let values = [Some((1, 2))]
+        for item in values {
+            match item {
+                Some(pair) -> pair
+                None -> (0, 0)
+            }
+        }
+    }
+}

@@ -1,14 +1,10 @@
-// The gate in front of code generation for the engine driven half of the
-// workflow surface: the course, amends, await, select, sleep, together, and
-// now. The host driven half, terms, remedies, signals, the term attribute,
-// the Duration and Time types, and the generic constructors, lowers onto the
-// runtime's descriptor tail and its signal and clock surface; what the gate
-// still names lands with the engine's journal, and a program that uses any
-// of it is refused whole before a byte is emitted, never lowered halfway.
-//
-// This is the first of the two seams the course lowering lands on: when an
-// emitter learns a construct, its entry leaves this scan. The second is
-// emitworkflow.cpp, where the body level constructs get their lowering
+// The gate in front of code generation for the one workflow construct the
+// emitters do not lower: an amends block, which migrates a parked instance
+// of an earlier version. Everything else of the workflow surface lowers,
+// the host driven half onto the descriptor tail and the signal and clock
+// surface, and the course onto a resumable C function the runtime drives. A
+// program with an amends block is refused whole before a byte is emitted,
+// never lowered halfway
 #pragma once
 
 #include <string>
@@ -19,10 +15,11 @@
 namespace geas {
 
 /**
- * Finds every workflow construct a checked program uses.
+ * Finds every workflow construct a checked program uses that the emitters
+ * do not lower.
  * @params checked - a checked program
- * @returns {std::vector<std::string>} - one description per kind of construct in first appearance
- * order, empty when the program stays inside what the emitters lower
+ * @returns {std::vector<std::string>} - one description per amends block in declaration order,
+ * empty when the program stays inside what the emitters lower
  */
 std::vector<std::string> findWorkflowConstructs(const CheckedProgram& checked);
 

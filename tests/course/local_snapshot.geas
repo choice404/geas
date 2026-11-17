@@ -1,0 +1,25 @@
+contract Flow {
+    pledge next() -> Option<Int>
+    clause combine(first: Int, second: Int) -> Int { return first + second }
+    course {
+        let mut value = 1
+        let result = combine(value, match true {
+            true -> {
+                value = 2
+                next()?
+            }
+            false -> 0
+        })
+        let mut values = [0, 1]
+        values[match true {
+            true -> 0
+            false -> 1
+        }] = next()?
+        let short = false && match true {
+            true -> { value = 3
+                true
+            }
+            false -> false
+        }
+    }
+}

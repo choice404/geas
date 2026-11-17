@@ -81,12 +81,16 @@ void CEmitter::emitContract(const ContractShape& shape) {
             emitRemedyThunk(remedy);
         }
     }
+    const std::string course = emitCourse(shape);
     emitVows(shape);
     emitPledgeTable(shape);
     const RequirementCounts counts = emitRequirements(shape);
     const std::string subFlagsRef = emitSubFlags(shape);
     std::vector<std::string> tail = emitWorkflowTail(shape);
     emitAttrTail(shape, tail);
+    if (std::string line = emitCourseTail(shape, course); !line.empty()) {
+        tail.push_back(std::move(line));
+    }
     emitDescriptor(shape, counts, subFlagsRef, tail);
 }
 

@@ -352,6 +352,63 @@ typedef struct GeasAttrDesc {
     GeasValue value;
 } GeasAttrDesc;
 
+/* ---- the course ---- */
+
+/* A contract's course is a resumable C function the compiler lowers its
+ * course block to, a state machine the runtime drives on its pool. The frame
+ * is the course's whole durable state: step is the resume point, 0 on the
+ * first entry, and slots hold every local that lives across a suspending
+ * operation. The slots are instance owned and zero filled before the first
+ * entry. wait_due_ms is the deadline of the wait in progress and wait_step
+ * the step that owns it, both 0 when no wait is pending. status is the
+ * GeasStatus that stopped the course, GEAS_OK otherwise. */
+typedef struct GeasCourseFrame {
+    uint32_t   step;
+    uint32_t   nslots;
+    GeasValue* slots;
+    int64_t    wait_due_ms;
+    uint32_t   wait_step;
+    uint32_t   status;
+} GeasCourseFrame;
+
+/* What a course function answers each time the runtime enters it: DONE when
+ * the course reached its end, a return, or a ? on Err or None; SUSPENDED when
+ * an operation asked to wait, with step naming where to enter again; STOPPED
+ * when an operation failed, with status holding why. */
+enum {
+    GEAS_COURSE_DONE      = 0,
+    GEAS_COURSE_SUSPENDED = 1,
+    GEAS_COURSE_STOPPED   = 2
+};
+
+/* ctx is the contract instance, the same ctx a pledge body is handed */
+typedef uint32_t (*GeasCourseFn)(void* ctx, GeasCourseFrame* frame);
+
+/* The two answers of a polled operation: READY when it completed, WAIT when
+ * the course has to suspend and poll it again on the next entry */
+enum {
+    GEAS_COURSE_READY = 0,
+    GEAS_COURSE_WAIT  = 1
+};
+
+/* One arm of a select. A timeout arm carries is_timeout 1 and timeout_ms
+ * counted from the select's first poll; an await arm names a signal by its
+ * pledges table index. */
+typedef struct GeasCourseArm {
+    uint32_t is_timeout;
+    uint32_t signal;
+    int64_t  timeout_ms;
+} GeasCourseArm;
+
+/* One call of a together block: a pledge by its pledges table index and its
+ * arguments. The runtime copies the arguments on the poll that starts the
+ * call, so the array needs to live only through that poll. */
+typedef struct GeasCourseCall {
+    uint32_t         pledge;
+    const GeasValue* args;
+    size_t           nargs;
+} GeasCourseCall;
+
 /* The requirements surface rides at the tail of the contract descriptor so a
  * zero-filled handwritten descriptor stays valid: no atoms and no lines means
  * the runtime applies the structural default policy over subs and loose
@@ -416,6 +473,13 @@ typedef struct GeasContractDesc {
     /* Declared attributes only, absent when nattrs is zero */
     uint32_t              nattrs;
     const GeasAttrDesc*    attrs;
+    /* The course, absent when course_fn is NULL. course_nslots is the slot
+     * count of its frame, course_hash the fingerprint of the lowered course
+     * a park row carries. A descriptor whose reported size ends before
+     * course_hash carries no course. */
+    GeasCourseFn          course_fn;
+    uint32_t              course_nslots;
+    uint64_t              course_hash;
 } GeasContractDesc;
 
 /* The byte size of the descriptor every module built before the workflow
@@ -427,6 +491,10 @@ typedef struct GeasContractDesc {
 /* The complete workflow descriptor before declared attributes */
 #define GEAS_CONTRACT_DESC_V2_SIZE \
     (offsetof(GeasContractDesc, term_ms) + sizeof(uint64_t))
+
+/* The descriptor with declared attributes and no course */
+#define GEAS_CONTRACT_DESC_V3_SIZE \
+    (offsetof(GeasContractDesc, attrs) + sizeof(const GeasAttrDesc*))
 
 /* A vow override a host supplies at sign. The value is copied onto the
  * instance, string bytes included; the runtime keeps nothing the host owns. */

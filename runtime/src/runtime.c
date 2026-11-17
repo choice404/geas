@@ -224,6 +224,10 @@ static void pool_enqueue(GeasRuntime* rt, struct GeasFuture* f) {
     pthread_mutex_unlock(&rt->qmu);
 }
 
+void geas_rt_pool_enqueue(GeasRuntime* rt, struct GeasFuture* f) {
+    pool_enqueue(rt, f);
+}
+
 /* Raised on pool worker threads and read by geas_pledge_fulfill_sync: a
  * synchronous fulfillment started from inside a thunk runs inline on the
  * worker rather than riding the queue it is draining. */
@@ -231,7 +235,9 @@ static __thread int t_pool_worker;
 
 /* Workers drain the queue until shutdown raises qstop, and even then they
  * finish what is queued before exiting, so shutdown never strands a future
- * an outstanding wait is parked on. */
+ * an outstanding wait is parked on. A course's node is the course's own
+ * memory and carries no hold, so it goes to the course engine and nothing is
+ * released after it. */
 static void* pool_worker(void* arg) {
     GeasRuntime* rt = (GeasRuntime*)arg;
     t_pool_worker = 1;
@@ -247,6 +253,10 @@ static void* pool_worker(void* arg) {
         }
         pthread_mutex_unlock(&rt->qmu);
         if (!f) return NULL;
+        if (f->is_course) {
+            geas_rt_course_task(f);
+            continue;
+        }
         run_task(f);
         future_unref(f); /* the pool's hold ends with the task */
     }
@@ -435,6 +445,8 @@ static void contract_free_owned(GeasContract* c) {
 
 void geas_runtime_shutdown(GeasRuntime* rt) {
     if (!rt) return;
+    /* The ticker goes first, so no tick schedules a course behind the drain */
+    geas_rt_ticker_shutdown(rt);
     /* Publish shutdown before waiting for a body that polls cancellation */
     __atomic_store_n(&rt->shutting_down, 1, __ATOMIC_RELEASE);
     pthread_mutex_lock(&rt->lock);
@@ -474,6 +486,8 @@ void geas_runtime_shutdown(GeasRuntime* rt) {
         free(c->pledge_err);
         free(c->sub_txn);
         geas_rt_flow_free(c);
+        geas_rt_course_free(c);
+        geas_rt_autopark_free(c);
         pthread_mutex_destroy(&c->mu);
         free(c);
     }
@@ -548,6 +562,13 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
     if (desc_size < offsetof(GeasContractDesc, attrs) + sizeof(own->attrs)) {
         own->nattrs = 0;
         own->attrs = NULL;
+    }
+    /* A partial course tail carries no course */
+    if (desc_size < offsetof(GeasContractDesc, course_hash) + sizeof(own->course_hash) ||
+        !own->course_fn) {
+        own->course_fn = NULL;
+        own->course_nslots = 0;
+        own->course_hash = 0;
     }
     GeasStatus attr_status = geas_rt_validate_attrs(own);
     if (attr_status != GEAS_OK) {
@@ -1974,6 +1995,8 @@ static void instance_discard(GeasContract* c) {
     free(c->pledge_err);
     free(c->sub_txn);
     geas_rt_flow_free(c);
+    geas_rt_course_free(c);
+    geas_rt_autopark_free(c);
     pthread_mutex_destroy(&c->mu);
     free(c);
 }
@@ -2062,6 +2085,7 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
      * connection, and one that fails to open or reconcile never publishes. */
     if (st == GEAS_OK) st = store_sign_reconcile(c);
     if (st == GEAS_OK) st = geas_rt_flow_init(c);
+    if (st == GEAS_OK) st = geas_rt_course_init(c);
     if (st == GEAS_OK) {
         /* One clock for both stamps: the millisecond time the terms count
          * from, and the Unix second the signature has always carried. */
@@ -2081,6 +2105,7 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
         if (st == GEAS_OK) {
             *out = c;
             geas_rt_event(c, GEAS_EVENT_STATE_CHANGED, NULL, GEAS_UNSIGNED);
+            geas_rt_course_start(c);
         }
         geas_rt_unlock(c);
     }
@@ -2205,6 +2230,7 @@ void geas_rt_reclaim(GeasContract* c) {
         c->store = NULL;
     }
     contract_free_owned(c);
+    if (c->course) geas_rt_course_reclaimed(c);
     geas_rt_set_state(c, GEAS_BROKEN);
     c->flow.reclaimed = 1;
     c->flow.break_pending = 0;
@@ -2718,6 +2744,7 @@ static void latch_pledge(GeasContract* c, uint32_t pidx, const GeasValue* out) {
     if (c->pledge_state[pidx] != PLEDGE_PENDING) return;
     if (out->ty == GEAS_TY_RESULT && out->tag == 1) {
         c->pledge_state[pidx] = PLEDGE_BROKEN;
+        geas_rt_autopark_mark(c);
         if (out->as.box) c->pledge_err[pidx] = *(const GeasValue*)out->as.box;
         geas_rt_event(c, GEAS_EVENT_LATCH_BROKEN, c->desc->pledges[pidx].name, c->state);
     } else {
@@ -2729,6 +2756,7 @@ static void latch_pledge(GeasContract* c, uint32_t pidx, const GeasValue* out) {
             ok = out->as.box ? (const GeasValue*)out->as.box : &unit;
         }
         c->pledge_state[pidx] = PLEDGE_FULFILLED;
+        geas_rt_autopark_mark(c);
         geas_rt_latched(c, pidx, ok);
         geas_rt_event(c, GEAS_EVENT_LATCH_FULFILLED, c->desc->pledges[pidx].name, c->state);
     }
@@ -2765,6 +2793,10 @@ static int32_t pledge_txn_sub(const GeasContractDesc* d, uint32_t pidx) {
     if (!d->sub_flags) return -1;
     if ((d->sub_flags[s] & GEAS_SUB_TRANSACTIONAL) == 0) return -1;
     return s;
+}
+
+int geas_rt_pledge_in_txn(const GeasContractDesc* d, uint32_t pidx) {
+    return pledge_txn_sub(d, pidx) >= 0;
 }
 
 /* Opens the episode before the thunk runs. A pledge outside any transactional
@@ -2882,7 +2914,8 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
             st = GEAS_ERR_TYPE;
             break;
         }
-        if (!geas_rt_live(c) || geas_rt_events_blocked(c)) {
+        /* A course runs its contract's pledges; the host delivers signals */
+        if (!geas_rt_live(c) || geas_rt_events_blocked(c) || c->course) {
             st = GEAS_ERR_STATE;
             break;
         }
@@ -2985,6 +3018,43 @@ GeasStatus geas_future_wait(GeasFuture* f, GeasValue* out) {
  * caller is this thread. The caller's own instance lock is already held
  * above this frame, which is exactly the instance-to-instance edge the
  * header comment audits. */
+/* The run both inline paths share, under the instance lock, once the call
+ * passed its state, name, kind, and count checks: the gate, the frame, the
+ * attempts, the latch, the policy, the episode, and the remedy pass. out
+ * receives the value on GEAS_OK only. */
+static GeasStatus fulfill_locked(GeasContract* c, uint32_t pidx,
+                                const GeasValue* args, size_t nargs,
+                                const GeasRef* refs, size_t nrefs,
+                                GeasValue* out) {
+    GeasStatus st = geas_rt_fulfill_gate(c, pidx);
+    if (st != GEAS_OK) return st;
+    GeasValue* frame = NULL;
+    st = prepare_frame(c, args, nargs, refs, nrefs, &frame);
+    if (st != GEAS_OK) return st;
+    st = txn_before(c, pidx);
+    if (st != GEAS_OK) return st;
+    GeasValue res;
+    memset(&res, 0, sizeof(res));
+    st = run_bound_attempts(c, pidx, c->fns[pidx], frame, nargs + nrefs, &res);
+    geas_rt_note_cancel(c);
+    if (st == GEAS_OK) {
+        latch_pledge(c, pidx, &res);
+        geas_rt_eval_policy(c);
+    }
+    st = txn_after(c, pidx, st, &res);
+    geas_rt_remedy_drive(c);
+    /* A host break that waited out the remedies reclaimed the heap the
+     * frame and the result live on; there is nothing left to hand back. */
+    if (c->flow.reclaimed) return GEAS_ERR_STATE;
+    if (st != GEAS_OK) return st;
+    if (nrefs > 0 && frame) {
+        st = write_back_refs(refs, frame + nargs, nrefs);
+        if (st != GEAS_OK) return st;
+    }
+    *out = res;
+    return GEAS_OK;
+}
+
 static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
                                 const GeasValue* args, size_t nargs,
                                 const GeasRef* refs, size_t nrefs,
@@ -2997,7 +3067,8 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
             st = GEAS_ERR_TYPE;
             break;
         }
-        if (!geas_rt_live(c) || geas_rt_events_blocked(c)) {
+        /* A course runs its contract's pledges; the host delivers signals */
+        if (!geas_rt_live(c) || geas_rt_events_blocked(c) || c->course) {
             st = GEAS_ERR_STATE;
             break;
         }
@@ -3015,47 +3086,34 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
             st = GEAS_ERR_TYPE;
             break;
         }
-        GeasStatus gate = geas_rt_fulfill_gate(c, pidx);
-        if (gate != GEAS_OK) {
-            st = gate;
-            break;
-        }
-        GeasValue* frame = NULL;
-        st = prepare_frame(c, args, nargs, refs, nrefs, &frame);
-        if (st != GEAS_OK) break;
-        gate = txn_before(c, pidx);
-        if (gate != GEAS_OK) {
-            st = gate;
-            break;
-        }
-        GeasValue res;
-        memset(&res, 0, sizeof(res));
-        st = run_bound_attempts(c, pidx, c->fns[pidx], frame, p->nargs, &res);
-        geas_rt_note_cancel(c);
-        if (st == GEAS_OK) {
-            latch_pledge(c, pidx, &res);
-            geas_rt_eval_policy(c);
-        }
-        st = txn_after(c, pidx, st, &res);
-        geas_rt_remedy_drive(c);
-        /* A host break that waited out the remedies reclaimed the heap the
-         * frame and the result live on; there is nothing left to hand back. */
-        if (c->flow.reclaimed) {
-            st = GEAS_ERR_STATE;
-            break;
-        }
-        if (st != GEAS_OK) break;
-        if (nrefs > 0 && frame) {
-            GeasStatus wb = write_back_refs(refs, frame + nargs, nrefs);
-            if (wb != GEAS_OK) {
-                st = wb;
-                break;
-            }
-        }
-        *out = res;
+        st = fulfill_locked(c, pidx, args, nargs, refs, nrefs, out);
     } while (0);
     geas_rt_unlock(c);
     return st;
+}
+
+/* The course's own call, and one call of a together on its worker. The
+ * caller holds the instance lock exactly once and this adds no hold of its
+ * own, so the retry delay and the gaps between remedies release the lock for
+ * real, the way they do on a pool worker. A retry a park row saved is waited
+ * out first, so a course resumed at a call parked in its retry wait goes on
+ * where the row left it. Another thread's event delivery is waited out
+ * before anything is read, with the lock given up for the wait, so the
+ * course never stops on a delivery it had no part in */
+GeasStatus geas_rt_course_fulfill(GeasContract* c, uint32_t pidx,
+                                const GeasValue* args, size_t nargs,
+                                GeasValue* out) {
+    geas_rt_course_settle(c);
+    geas_rt_tick(c);
+    if (c->flow.reclaimed) return GEAS_ERR_STATE;
+    if (nargs > 0 && !args) return GEAS_ERR_TYPE;
+    if (!geas_rt_live(c) || geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
+    if (pidx >= c->desc->npledges) return GEAS_ERR_NAME;
+    if (geas_rt_is_signal(c->desc, pidx)) return GEAS_ERR_TYPE;
+    if (nargs != c->desc->pledges[pidx].nargs) return GEAS_ERR_TYPE;
+    GeasStatus st = geas_rt_retry_hold(c, pidx);
+    if (st != GEAS_OK) return st;
+    return fulfill_locked(c, pidx, args, nargs, NULL, 0, out);
 }
 
 /* The synchronous form is exactly fulfill plus wait on the same path, so
@@ -3303,50 +3361,43 @@ static GeasValue park_int_param(int64_t i) {
     return v;
 }
 
-GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key) {
-    if (!c || !dsn || !key) return GEAS_ERR_TYPE;
-    geas_rt_lock(c);
-    geas_rt_tick(c);
-    GeasStatus st = GEAS_OK;
-    if (c->state == GEAS_UNSIGNED || geas_rt_event_park_blocked(c)) st = GEAS_ERR_STATE;
+GeasStatus geas_rt_park_ready(GeasContract* c) {
+    if (c->state == GEAS_UNSIGNED || geas_rt_event_park_blocked(c)) return GEAS_ERR_STATE;
     /* An explicit break reclaimed the instance heap the vows and payloads
      * live on; the latches still read, but there is nothing left to write
      * down. An automatic break keeps that heap on purpose and parks fine. */
-    if (st == GEAS_OK && c->desc->npledges > 0 && !c->owned) st = GEAS_ERR_STATE;
-    if (st == GEAS_OK && c->flow.reclaimed) st = GEAS_ERR_STATE;
+    if (c->desc->npledges > 0 && !c->owned) return GEAS_ERR_STATE;
+    if (c->flow.reclaimed) return GEAS_ERR_STATE;
     /* A pledge body has no durable checkpoint until its outcome lands
-     * Remedy bodies record their running state and resume as failed */
-    if (c->flow.in_thunk > 0 && !c->flow.remedy_active) st = GEAS_ERR_STATE;
+     * Remedy bodies record their running state and resume as failed. The
+     * bodies of a together count here too, running with the lock released */
+    if (c->flow.in_thunk > 0 && !c->flow.remedy_active) return GEAS_ERR_STATE;
     /* Retry waits and the outcome driving a remedy pass have durable state
      * Other unwaited receipts and open transactions still refuse a park */
-    if (st == GEAS_OK) {
-        for (struct GeasFuture* f = c->futures; f; f = f->next) {
-            pthread_mutex_lock(&f->mu);
-            int has_waited = f->waited;
-            pthread_mutex_unlock(&f->mu);
-            int can_snapshot = f->is_running &&
-                (c->flow.retry_waiting[f->pidx] || c->flow.remedy_active);
-            if (!has_waited && !can_snapshot) {
-                st = GEAS_ERR_STATE;
-                break;
-            }
-        }
+    for (struct GeasFuture* f = c->futures; f; f = f->next) {
+        pthread_mutex_lock(&f->mu);
+        int has_waited = f->waited;
+        pthread_mutex_unlock(&f->mu);
+        int can_snapshot = f->is_running &&
+            (c->flow.retry_waiting[f->pidx] || c->flow.remedy_active);
+        if (!has_waited && !can_snapshot) return GEAS_ERR_STATE;
     }
-    if (st == GEAS_OK && c->sub_txn) {
+    if (c->sub_txn) {
         for (uint32_t i = 0; i < c->desc->nsubs; i++) {
-            if (c->sub_txn[i] == TXN_OPEN) {
-                st = GEAS_ERR_STATE;
-                break;
-            }
+            if (c->sub_txn[i] == TXN_OPEN) return GEAS_ERR_STATE;
         }
     }
+    return GEAS_OK;
+}
+
+GeasStatus geas_rt_park_write(GeasContract* c, const char* dsn, const char* key) {
     uint8_t* vows_buf = NULL;
     size_t vows_len = 0;
     uint8_t* errs_buf = NULL;
     size_t errs_len = 0;
     uint8_t* flow_buf = NULL;
     size_t flow_len = 0;
-    if (st == GEAS_OK) st = geas_rt_flow_encode(c, &flow_buf, &flow_len);
+    GeasStatus st = geas_rt_flow_encode(c, &flow_buf, &flow_len);
     if (st == GEAS_OK && c->desc->nvows > 0) {
         st = park_encode_values(c->vow_vals, c->desc->nvows,
                                 &vows_buf, &vows_len);
@@ -3381,6 +3432,19 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
     free(vows_buf);
     free(errs_buf);
     free(flow_buf);
+    return st;
+}
+
+/* A course instance parks like any other: the flow blob carries its frame.
+ * The park rules for live work are the host driven ones, so a course parks
+ * while it waits, after it ended, and while it is inside a pledge call
+ * waiting out a retry or running a remedy pass */
+GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key) {
+    if (!c || !dsn || !key) return GEAS_ERR_TYPE;
+    geas_rt_lock(c);
+    geas_rt_tick(c);
+    GeasStatus st = geas_rt_park_ready(c);
+    if (st == GEAS_OK) st = geas_rt_park_write(c, dsn, key);
     if (st == GEAS_OK) geas_rt_event(c, GEAS_EVENT_PARKED, NULL, c->state);
     geas_rt_unlock(c);
     return st;
@@ -3575,8 +3639,11 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
 
     /* The workflow state replays last, over the latches it describes. The
      * signing time goes in first because a row from before the workflow
-     * state has no millisecond stamp and the decode falls back on it. */
+     * state has no millisecond stamp and the decode falls back on it. The
+     * course is built before the decode, which fills its frame when the row
+     * carries one; a row without a frame leaves it at step 0 */
     if (st == GEAS_OK) st = geas_rt_flow_init(c);
+    if (st == GEAS_OK) st = geas_rt_course_init(c);
     if (st == GEAS_OK) {
         c->signed_at = rsigned;
         st = geas_rt_flow_decode(c, bflow.ptr, bflow.len, geas_rt_now(rt));
@@ -3595,6 +3662,7 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
         if (st == GEAS_OK) {
             *out = c;
             geas_rt_event(c, GEAS_EVENT_RESUMED, NULL, c->state);
+            geas_rt_course_start(c);
         }
         geas_rt_unlock(c);
     }

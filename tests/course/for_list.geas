@@ -1,0 +1,9 @@
+contract Flow {
+    pledge visit(value: Int) -> Unit
+    course {
+        let values = [1, 2, 3]
+        for value in values {
+            visit(value)
+        }
+    }
+}

@@ -63,6 +63,10 @@ add_executable(geas
     src/checkstore.cpp
     src/checkmatch.cpp
     src/checkcourse.cpp
+    src/course.cpp
+    src/courseexpr.cpp
+    src/coursestmt.cpp
+    src/coursedump.cpp
     src/checkterms.cpp
     src/checkworkflow.cpp
     src/reqsolve.cpp
@@ -89,6 +93,9 @@ add_executable(geas
     src/emitstorequery.cpp
     src/emitmatch.cpp
     src/emitworkflow.cpp
+    src/emitcourse.cpp
+    src/emitcoursestep.cpp
+    src/emitcoursematch.cpp
     src/emitheader.cpp
     src/emitbin.cpp
     src/emitproto.cpp

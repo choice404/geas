@@ -45,6 +45,11 @@ std::string operatorHead(BinaryOp op, std::string_view tail) {
 TyId Checker::inferExpr(ExprId id, TyId want) {
     const TyId type = inferKind(ast_.expr(id), want);
     tables_.exprTypes[static_cast<std::size_t>(id.index)] = type;
+    const ExprKind& kind = ast_.expr(id).kind;
+    if (tables_.exprUses[static_cast<std::size_t>(id.index)] == ExprUse::CoursePledgeCall ||
+        std::holds_alternative<AwaitExpr>(kind) || std::holds_alternative<SelectExpr>(kind)) {
+        ++suspensionCount_;
+    }
     return type;
 }
 
@@ -201,6 +206,10 @@ TyId Checker::inferIdent(const Expr& expr, const Identifier& ident) {
         return unknown();
     }
     if (const Binding* binding = lookup(name)) {
+        if (binding->isPendingTogether) {
+            emitAt(expr, "together arguments cannot use binding " + quoted(name) +
+                " before the group completes; bind the earlier call with 'let' before together");
+        }
         markUse(expr, ExprUse::Local);
         return binding->type;
     }
@@ -233,7 +242,12 @@ TyId Checker::inferUnary(const Expr& expr, const UnaryExpr& unary) {
 TyId Checker::inferLogical(const Expr& expr, const BinaryExpr& binary) {
     const TyId boolType = scalar(TyKind::Bool);
     const TyId left = inferExpr(binary.lhs, boolType);
+    const std::size_t beforeRight = suspensionCount_;
     const TyId right = inferExpr(binary.rhs, boolType);
+    if (isInCourse_ && suspensionCount_ != beforeRight) {
+        emitAt(ast_.expr(binary.rhs), "a suspending operation in the right operand of " +
+            quoted(operatorText(binary.op)) + " is not allowed; bind it with 'let' first");
+    }
     if (!isCompatible(left, boolType) || !isCompatible(right, boolType)) {
         emitAt(expr, operatorHead(binary.op, " needs 'Bool' operands"));
     }

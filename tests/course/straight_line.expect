@@ -1,0 +1,51 @@
+Courses [
+    Course "Flow" {
+        hash: 0xad6af2ec55f32bfa,
+        entry: 0,
+        slots: [
+            Slot(0) "$hidden0": Option<Int> (temporary),
+            Slot(1) "value": Option<Int> (local),
+            Slot(2) "$hidden2": String (temporary),
+            Slot(3) "ready": String (local),
+            Slot(4) "$hidden4": Int (temporary),
+            Slot(5) "$hidden5": Option<Int> (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [Int(1)],
+                result: Slot(0),
+                question: false,
+            },
+            Step 2 await {
+                signal: 1,
+                arguments: [],
+                result: Slot(2),
+                question: false,
+                within: None,
+            },
+            Step 3 sleep {
+                arguments: [Duration(1000)],
+                result: None,
+                question: false,
+            },
+            Step 4 call {
+                pledge: 0,
+                arguments: [Slot(4)],
+                result: Slot(5),
+                question: false,
+            },
+        ],
+        statements: [
+            Resume 1,
+            Store Slot(1) = Slot(0),
+            Resume 2,
+            Store Slot(3) = Slot(2),
+            Resume 3,
+            Store Slot(4) = Question(Slot(1)),
+            Resume 4,
+            Evaluate Slot(5),
+            Return,
+        ],
+    },
+]

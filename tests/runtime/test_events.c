@@ -166,8 +166,16 @@ static void forbidden_calls(GeasContract* instance) {
     CHECK(geas_signal(instance, "delivered", &value, 1) == GEAS_ERR_STATE,
           "hook cannot signal");
     CHECK(geas_contract_break(instance) == GEAS_ERR_STATE, "hook cannot cancel");
-    CHECK(geas_instance_park(instance, "sqlite::memory:", "forbidden") == GEAS_ERR_STATE,
+    /* A real scratch store, so a park that wrongly went through would leave
+     * its file under /tmp and never in the working directory */
+    char dsn[] = "/tmp/geas_events_forbidden_XXXXXX";
+    int file = mkstemp(dsn);
+    CHECK(file >= 0, "forbidden park store created");
+    if (file < 0) return;
+    close(file);
+    CHECK(geas_instance_park(instance, dsn, "forbidden") == GEAS_ERR_STATE,
           "hook cannot park");
+    unlink(dsn);
 }
 
 static void observe(void* user, const GeasEvent* event) {

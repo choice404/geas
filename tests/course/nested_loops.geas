@@ -1,0 +1,17 @@
+contract Flow {
+    pledge again() -> Option<Bool>
+    pledge visit(value: Int) -> Unit
+    course {
+        for outer in [1, 2] {
+            while again()? {
+                for inner in [3, 4] {
+                    if inner == 3 { continue }
+                    visit(outer + inner)
+                    break
+                }
+                if outer == 2 { break }
+                continue
+            }
+        }
+    }
+}

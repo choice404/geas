@@ -1,0 +1,90 @@
+Courses [
+    Course "Flow" {
+        hash: 0x5276a3162a9c10d7,
+        entry: 0,
+        slots: [
+            Slot(0) "value": Int (local, mut),
+            Slot(1) "$hidden1": Int (temporary),
+            Slot(2) "$hidden2": Int (temporary),
+            Slot(3) "$hidden3": Option<Int> (temporary),
+            Slot(4) "result": Int (local),
+            Slot(5) "values": List<Int> (local, mut),
+            Slot(6) "$hidden6": Int (temporary),
+            Slot(7) "$hidden7": Option<Int> (temporary),
+            Slot(8) "$hidden8": Bool (temporary),
+            Slot(9) "$hidden9": Bool (temporary),
+            Slot(10) "short": Bool (local),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(3),
+                question: true,
+            },
+            Step 2 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(7),
+                question: true,
+            },
+        ],
+        statements: [
+            Store Slot(0) = Int(1),
+            Store Slot(1) = Slot(0),
+            Match true {
+                true -> Label(1) [],
+                false -> Label(2) [],
+            },
+            Label(1):
+            CheckTarget Slot(0) (insert: true),
+            Assign Slot(0) = Int(2),
+            Resume 1,
+            Store Slot(2) = Question(Slot(3)),
+            Jump Label(0),
+            Label(2):
+            Store Slot(2) = Int(0),
+            Jump Label(0),
+            Label(0):
+            Store Slot(4) = Call(Ident("combine"), [Slot(1), Slot(2)]),
+            Store Slot(5) = List([Int(0), Int(1)]),
+            CheckTarget Slot(5) (insert: false),
+            Match true {
+                true -> Label(4) [],
+                false -> Label(5) [],
+            },
+            Label(4):
+            Store Slot(6) = Int(0),
+            Jump Label(3),
+            Label(5):
+            Store Slot(6) = Int(1),
+            Jump Label(3),
+            Label(3):
+            CheckTarget Index(Slot(5), Slot(6)) (insert: true),
+            Resume 2,
+            Assign Index(Slot(5), Slot(6)) = Question(Slot(7)),
+            Branch false ? Label(6) : Label(7),
+            Label(7):
+            Store Slot(8) = false,
+            Jump Label(8),
+            Label(6):
+            Match true {
+                true -> Label(10) [],
+                false -> Label(11) [],
+            },
+            Label(10):
+            CheckTarget Slot(0) (insert: true),
+            Assign Slot(0) = Int(3),
+            Store Slot(9) = true,
+            Jump Label(9),
+            Label(11):
+            Store Slot(9) = false,
+            Jump Label(9),
+            Label(9):
+            Store Slot(8) = Slot(9),
+            Label(8):
+            Store Slot(10) = Slot(8),
+            Return,
+        ],
+    },
+]

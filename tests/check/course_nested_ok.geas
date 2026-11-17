@@ -1,0 +1,27 @@
+record Pair {
+    first: Int
+    second: Int
+}
+contract Flow {
+    pledge value(n: Int) -> Option<Int>
+    pledge flag() -> Option<Bool>
+    signal ready(value: Int)
+    clause add(a: Int, b: Int) -> Int {
+        return a + b
+    }
+    course {
+        let number = add(value(1)?, await ready)
+        let pair = Pair { first: value(2)?, second: value(3)? }
+        let list = [value(4)?, value(5)?]
+        let yes = flag()? && true
+        let no = flag()? || false
+        let selected = select {
+            await ready as n -> value(n)?
+            timeout 1s -> value(0)?
+        }
+        let matched = match value(6)? {
+            0 -> value(7)?
+            other -> value(other)?
+        }
+    }
+}

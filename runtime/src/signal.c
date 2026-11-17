@@ -65,10 +65,13 @@ GeasStatus geas_signal(GeasContract* c, const char* name,
         if (st == GEAS_OK) {
             c->pledge_state[pidx] = PLEDGE_FULFILLED;
             geas_rt_latched(c, pidx, &payload);
+            geas_rt_autopark_mark(c);
             geas_rt_event(c, GEAS_EVENT_LATCH_FULFILLED, c->desc->pledges[pidx].name, c->state);
             geas_rt_event(c, GEAS_EVENT_SIGNAL_DELIVERED, c->desc->pledges[pidx].name, c->state);
             geas_rt_eval_policy(c);
             geas_rt_remedy_drive(c);
+            /* A course polls its waits again on every first delivery */
+            if (c->course) geas_rt_course_wake(c);
         }
     }
     geas_rt_unlock(c);

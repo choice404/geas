@@ -7,6 +7,8 @@
 // payload to stderr and exits 1, and a fulfillment status other than
 // GEAS_OK is a rendered diagnostic and exit 1 as well. The wrapper text is
 // deterministic for a given root file, so it diffs like the module C
+#include <algorithm>
+
 #include "codegen.hpp"
 #include "emitlookup.hpp"
 #include "emittext.hpp"
@@ -156,6 +158,15 @@ std::vector<Diagnostic> checkMainContract(CheckedProgram& checked) {
     if (contract->isInternal) {
         lookup.fault(contract->lo, contract->hi,
                      "the Main contract cannot be internal: the entry wrapper signs it by name");
+        return faults;
+    }
+    // The entry wrapper fulfills run itself, which an engine driven contract
+    // refuses, since its course runs its pledges
+    const bool hasCourse = std::any_of(contract->members.begin(), contract->members.end(),
+        [](const Member& member) { return std::holds_alternative<CourseDecl>(member); });
+    if (hasCourse) {
+        lookup.fault(contract->lo, contract->hi,
+                     "the Main contract cannot carry a course: the entry wrapper fulfills run itself");
         return faults;
     }
     const PledgeDecl* run = findRunPledge(*contract);

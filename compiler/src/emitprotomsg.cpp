@@ -35,12 +35,17 @@ void ProtoEmitter::emitContractMessages(const ContractShape& shape) {
     emitSigned(shape, prefix);
     emitSessionMessages(prefix);
     // Each pledge's return, each distinct shape once per file. The
-    // contract's own Err is a value on an OK rpc, never a transport error
-    for (const PledgeShape& pledge : shape.pledges) {
-        ensureReturn(*pledge.decl, lookup_.pledgeSig(*pledge.decl).ret);
-    }
-    for (const PledgeShape& pledge : shape.pledges) {
-        emitRequestMessage(*pledge.decl, prefix);
+    // contract's own Err is a value on an OK rpc, never a transport error.
+    // A course runs its contract's pledges itself and no client calls one,
+    // so an engine driven contract carries neither their returns nor their
+    // requests
+    if (shape.course == nullptr) {
+        for (const PledgeShape& pledge : shape.pledges) {
+            ensureReturn(*pledge.decl, lookup_.pledgeSig(*pledge.decl).ret);
+        }
+        for (const PledgeShape& pledge : shape.pledges) {
+            emitRequestMessage(*pledge.decl, prefix);
+        }
     }
     emitSignalRequests(shape, prefix);
 }

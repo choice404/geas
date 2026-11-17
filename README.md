@@ -87,6 +87,30 @@ A `vow` is an immutable field locked when the contract is signed, and `grace` is
 
 So when any of it breaks, by an `Err`, by a missed deadline, or by the week running out, every step that already landed is undone through its remedy, newest first: `release` gets the reservation `reserve` produced, then `refund` gets the receipt `capture` produced.
 
+That contract leaves the order to its host. Give it a `course` and it runs itself, this is the heart of `skeleton/order_course.geas`, the same saga with its steps written out:
+
+```text
+course {
+    let window = plan(hold)?
+    let auth = authorize(Card { number: card })?
+    together {
+        let receipt = capture(auth)?
+        let held = reserve(sku, window)?
+    }
+    let tracking = ship(held)?
+    let shipped = now()
+    let parcel = select {
+        await delivered as parcel -> parcel
+        timeout 2d -> {
+            chase(tracking, now() - shipped)?
+            await delivered
+        }
+    }
+}
+```
+
+Every call there is a durable step held to the same terms, `capture` and `reserve` run at the same time, and a parcel quiet for two days gets chased and waited on again.
+
 ## The lifecycle
 
 A contract moves through six states.
@@ -104,23 +128,11 @@ Unsigned -> Signed -> Fulfilled
 
 Geas has two modes, and they share everything on the outside: the same requirements, terms, remedies, and lifecycle, so a contract can start in one and grow into the other without changing its shape.
 
-Host driven is the mode that runs today. A host signs the contract and calls its pledges in whatever order it likes, and the runtime enforces the terms: a step called before what it waits on answers a state error and never runs, a missed deadline latches the step broken, retries happen inside the runtime with their delays waited out, and remedies run on break. The host stays in charge of the order, and the contract stays in charge of the rules. `tests/runtime/test_saga.c` and `interop/python/demo_saga.py` each walk the order saga this way, from C and from Python.
+Host driven is the mode of a contract with no `course`. A host signs the contract and calls its pledges in whatever order it likes, and the runtime enforces the terms: a step called before what it waits on answers a state error and never runs, a missed deadline latches the step broken, retries happen inside the runtime with their delays waited out, and remedies run on break. The host stays in charge of the order, and the contract stays in charge of the rules. `tests/runtime/test_saga.c` and `interop/python/demo_saga.py` each walk the order saga this way, from C and from Python.
 
-Engine driven is the next step on the roadmap. A contract gets a `course` block, the orchestration written out:
+Engine driven is the mode of a contract with a `course`, like the one in the taste above. So the compiler lowers the course to a resumable state machine, and the runtime runs it from the moment the contract signs: each pledge call is a step that runs through the same terms a host call gets, `await` waits on a signal, `select` takes whichever of several awaits or a timeout is ready first, `sleep` pauses, and `together` runs its calls at the same time on the runtime's pool. While a course waits no thread waits with it, it is a step number and a few values on the instance, and a signal or a deadline enters it again right at that step. Armed with a store, the instance writes its row at every step, so a process can die anywhere and a fresh one resumes the course at the step it stopped on, with steps at least once, and a row from a course that has since changed is refused rather than run against the wrong steps. The host's job shrinks to binding the bodies the contract leaves abstract and handing signals in, a host call of one of its pledges is a state error. `tests/runtime/test_course_saga.c`, `interop/python/demo_course.py`, and `interop/dusk/demo_course.dusk` each drive `skeleton/order_course.geas` this way.
 
-```text
-course {
-    let auth = authorize(order.card)?
-    together {
-        let receipt = capture(auth)?
-        let res = reserve(order.sku, 1h)?
-    }
-    ship(res)?
-    await delivered
-}
-```
-
-The engine runs the course from the moment the contract signs, each pledge call is a durable step dispatched to its binding, every result is journaled, and a parked instance resumes at the step it stopped on rather than at the top. `await` waits on a signal, `select` takes whichever of several awaits or a timeout is ready first, `sleep` pauses durably, and `together` runs its steps concurrently. The compiler parses and checks all of it today, every rule in place, and `geas build` refuses a course with `workflow constructs are not emitted yet` until the engine lands.
+The course ending is not the contract's state, that stays with the requirements. A step that answers `Err` ends the course at its `?`, and it is the break line that breaks the contract and runs the remedies, exactly as in host driven mode.
 
 Next to it on the roadmap is amendment. A contract at version 2 carries an `amends 1` block that says exactly how a parked version 1 instance comes back as version 2, a vow supplied, a pledge renamed, a member retired, a new signal latched pending, and the design is that the checker refuses the build when the mapping misses a difference between the two shapes. That parses and checks today too, against what the new version alone can verify.
 
@@ -130,9 +142,9 @@ The compiler reads a `.geas` file, checks it, and emits plain C that includes on
 
 The runtime registers those descriptors in the iname table, a queryable registry of every contract and pledge signature with the type signature hash and the version baked into each mangled name, so a version mismatch is a descriptive error at link time instead of silent corruption at run time. A C program, or anything that can load a C library, looks up a contract, signs it, binds the steps it owns, fulfills pledges, delivers signals, and reads the partial surface, all through a handful of runtime calls; `geas_pledge_bind_user` lets one body carry a user pointer for many bindings, futures poll and release with `geas_future_poll` and `geas_future_release`, a running body sees a pending break through `geas_cancel_requested`, and `geas_runtime_set_event_hook` observes every lifecycle transition in order after the instance lock is released.
 
-Time runs through a clock the host can replace. The runtime keeps no timer thread of its own; every call that touches an instance checks its deadlines first, and a host that wants a lapse the moment it falls due calls `geas_runtime_tick` from whatever scheduler it already has. Swap the clock for a fake one and a three day deadline becomes a number a test moves, which is exactly how the saga gates run.
+Time runs through a clock the host can replace. Every call that touches an instance checks its deadlines first, and a host that wants a lapse, a `sleep`, or a `select` timeout the moment it falls due either calls `geas_runtime_tick` from whatever scheduler it already has or starts the runtime's own ticker thread with `geas_runtime_start_ticker`. Swap the clock for a fake one and a three day deadline becomes a number a test moves, which is exactly how the saga gates run.
 
-An instance's durable state fits in one store row: the vows, the latches, the error payloads, the transactional fates, and a versioned workflow column holding eligibility stamps, lapses, the `Ok` values the remedies will need, signal payloads, retry progress, and remedy progress. `geas_instance_park` writes it, including during a pledge retry wait or a remedy pass, `geas_instance_resume` stands it back up in another process with the same retry budget and only the remedies not yet started, and a deadline keeps counting from where it started across the park, since the clock is wall time.
+An instance's durable state fits in one store row: the vows, the latches, the error payloads, the transactional fates, and a versioned workflow column holding eligibility stamps, lapses, the `Ok` values the remedies will need, signal payloads, retry progress, remedy progress, and for a course its frame, the step it stands at and every value it bound. `geas_instance_park` writes it, `geas_contract_set_autopark` has the runtime write it at every step and every latch, including during a pledge retry wait or a remedy pass, `geas_instance_resume` stands it back up in another process with the same retry budget and only the remedies not yet started, and a deadline keeps counting from where it started across the park, since the clock is wall time.
 
 ## Next to other tools
 
@@ -163,7 +175,7 @@ An installed `geas` needs no environment variables. It probes for a repository c
 
 ## Usage
 
-New to Geas, start with [docs/tutorial.md](docs/tutorial.md): it walks the whole language, drives one contract from C and from Python with no generated bindings, and then walks the order saga host driven. [spec.md](spec.md) is the language reference, [docs/grammar.md](docs/grammar.md) is the normative grammar, [docs/abi.md](docs/abi.md) is the C surface a host compiles against, and [CHANGELOG.md](CHANGELOG.md) carries the history version by version.
+New to Geas, start with [docs/tutorial.md](docs/tutorial.md): it walks the whole language, drives one contract from C and from Python with no generated bindings, and then walks the order saga, host driven and then engine driven. [spec.md](spec.md) is the language reference, [docs/grammar.md](docs/grammar.md) is the normative grammar, [docs/abi.md](docs/abi.md) is the C surface a host compiles against, and [CHANGELOG.md](CHANGELOG.md) carries the history version by version.
 
 The whole pipeline runs end to end, and one target runs every gate:
 
@@ -205,6 +217,16 @@ make test-saga
 # the same saga from Python, a Python clock and Python steps
 make test-saga-python
 
+# the order saga engine driven: the course on its own, a failed step, a
+# retry, the select timing out into a chase, a lapse, the together running
+# both calls at once, a kill at every step and inside every body resumed in
+# a fresh runtime, a changed course refused, the host breaking it waiting,
+# running, and mid together, and the week running out
+make test-course-saga
+
+# the same course from Python
+make test-course-python
+
 # the runtime surface underneath, one gate each, all under ASan and UBSan
 make test-terms test-remedy test-signal test-workflow-park
 
@@ -216,7 +238,7 @@ make tsan-workflow
 
 ### Two languages, one contract
 
-The runtime binds from anything that can load a C library, and the repository proves it with Python and dusk. `interop/python/geas.py` is a ctypes binding written against [docs/abi.md](docs/abi.md) alone, no header parsed, no code generated, and exposes event delivery through `rt.on_event`. `interop/python/demo_payment.py` walks the payment contract: it binds a Python function over the abstract `charge` pledge, signs with a vow override, drives the partial, fulfilled, and broken paths, and takes a by reference argument back through the write back. `interop/python/demo_saga.py` points the runtime at a Python clock, binds Python callables over the saga's steps, and watches the remedies run. `interop/dusk` carries the same host surface through a thin C shim, with pledge and remedy handlers bound onto the runtime's worker threads.
+The runtime binds from anything that can load a C library, and the repository proves it with Python and dusk. `interop/python/geas.py` is a ctypes binding written against [docs/abi.md](docs/abi.md) alone, no header parsed, no code generated, and exposes event delivery through `rt.on_event`. `interop/python/demo_payment.py` walks the payment contract: it binds a Python function over the abstract `charge` pledge, signs with a vow override, drives the partial, fulfilled, and broken paths, and takes a by reference argument back through the write back. `interop/python/demo_saga.py` points the runtime at a Python clock, binds Python callables over the saga's steps, and watches the remedies run, and `interop/python/demo_course.py` lets the course run the same saga, then parks it at the `select` and finishes it in a fresh runtime. `interop/dusk` carries the same host surface through a thin C shim, with pledge and remedy handlers bound onto the runtime's worker threads.
 
 ```sh
 make test-python
@@ -279,11 +301,10 @@ make test-bin
 
 ## Status
 
-What runs today, host driven, end to end: contracts with vows, pledges, clauses, subcontracts, and requirements policies, records and sums, match, loops, propagation, imports with package visibility, and a standard library under `lib/std`. `Duration` and `Time`, with duration literals like `1h30m`, and size literals like `64M`, `512K`, `1G`, and `2T`, binary byte counts typed as `Int`. Declared attributes, typed settings named at the top level and carried by contracts, subcontracts, pledges, signals, and remedies for a host to read before or after sign. `Bytes`, an arbitrary byte buffer with String's layout and no UTF-8 rule, across the runtime, park, proto, Go, TypeScript, and Python wherever String goes except map keys and schema columns. A written requirements block holds up to 64 distinct atoms, checked by satisfiability search so fulfill and break cannot both hold, while a contract with no block synthesizes its default for up to 255 items. Terms, `within`, `after`, and `retry ... every ... backoff ... cap ... on`, on pledges, subcontracts, signals, and remedies, plus the contract `term`. Remedies and the `Remedying` state. Signals, delivered from C, from Python, and from another contract's body, with a typed `Signal` rpc per signal on the emitted gRPC surface. The clock and the tick, the partial surface with its lapses and remedy outcomes, and a park row that carries all of it across processes. The C runtime enforces the lifecycle with per pledge latching, user-bound host bodies, pollable and releasable futures, cancellation a body can read, and the out pointer helpers `geas_string_copy_into`, `geas_map_new_into`, and `geas_state_value_into`, runs fulfillments on a worker pool, owns every allocation an instance makes, and reclaims it all at break. Golden and compile fail suites, sanitizer gates, thread sanitizer gates, a determinism gate, store gates, and bridge gates hold the line on every build.
+What runs today, end to end, host driven and engine driven: contracts with vows, pledges, clauses, subcontracts, and requirements policies, records and sums, match, loops, propagation, imports with package visibility, and a standard library under `lib/std`. `Duration` and `Time`, with duration literals like `1h30m`, and size literals like `64M`, `512K`, `1G`, and `2T`, binary byte counts typed as `Int`. Declared attributes, typed settings named at the top level and carried by contracts, subcontracts, pledges, signals, and remedies for a host to read before or after sign. `Bytes`, an arbitrary byte buffer with String's layout and no UTF-8 rule, across the runtime, park, proto, Go, TypeScript, and Python wherever String goes except map keys and schema columns. A written requirements block holds up to 64 distinct atoms, checked by satisfiability search so fulfill and break cannot both hold, while a contract with no block synthesizes its default for up to 255 items. Terms, `within`, `after`, and `retry ... every ... backoff ... cap ... on`, on pledges, subcontracts, signals, and remedies, plus the contract `term`. Remedies and the `Remedying` state. The `course`, `await`, `select`, `sleep`, `together`, and `now()`, lowered to a resumable state machine the runtime drives on its pool, with autopark writing the row at every step, resume entering at the saved step, the course hash refusing a row from a changed course, a ticker thread, and the course read and waited on from C, Python, and dusk and over the bridge with a `GetCourse` rpc. Signals, delivered from C, from Python, and from another contract's body, with a typed `Signal` rpc per signal on the emitted gRPC surface. The clock and the tick, the partial surface with its lapses and remedy outcomes, and a park row that carries all of it across processes. The C runtime enforces the lifecycle with per pledge latching, user-bound host bodies, pollable and releasable futures, cancellation a body can read, and the out pointer helpers `geas_string_copy_into`, `geas_map_new_into`, and `geas_state_value_into`, runs fulfillments on a worker pool, owns every allocation an instance makes, and reclaims it all at break. Golden and compile fail suites, sanitizer gates, thread sanitizer gates, a determinism gate, store gates, and bridge gates hold the line on every build.
 
 The roadmap, in order:
 
-- The engine driven mode: the `course` block, `await`, `select`, `sleep`, `together`, and `now()` emitted and run by the engine, with each step journaled and replayed so a parked instance resumes at the step it stopped on. The syntax and every checker rule are in place today.
 - Amendment: `amends` blocks checked against the parked version's own shape, so a mapping that misses a difference fails the build, and emitted so a resume runs it. The syntax and the rules the new version alone can verify are in place today.
 - Signals on the reference bridge server: `emit-proto` already writes a `Signal` rpc per signal and a helper in each session wrapper, and the Python reference server in `interop/grpc` serves them next.
 

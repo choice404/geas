@@ -32,6 +32,7 @@ Checker::Checker(const Program& program, const Resolved& resolved, const Sigs& s
 CheckTables Checker::run() && {
     tables_.exprTypes.assign(ast_.exprs.size(), TyId{});
     tables_.exprUses.assign(ast_.exprs.size(), ExprUse::None);
+    tables_.patternTypes.assign(ast_.patterns.size(), TyId{});
     for (const Decl& decl : ast_.decls) {
         if (const auto* contract = std::get_if<ContractDecl>(&decl)) {
             checkContract(*contract);
@@ -90,6 +91,11 @@ void Checker::popScope() {
 
 // Declares a binding in the innermost scope, replacing any shadowed name
 void Checker::declare(const std::string& name, TyId type, bool isMutable) {
+    if (isInCourse_ && hasContractType(type)) {
+        emitInBody("course local " + quoted(name) + " cannot hold a contract instance, even inside "
+                   "a composite; signing another contract and holding its instance in a course "
+                   "is not allowed");
+    }
     scopes_.back().insert_or_assign(name, Binding{type, isMutable});
 }
 

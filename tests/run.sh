@@ -2,7 +2,8 @@
 # The golden test runner for the geas front end. Each suite directory pairs
 # with a geas command: tests/lex with `geas lex`, tests/parse with
 # `geas parse`, tests/check and tests/typeck with `geas check`, and
-# tests/shape with `geas dump-shape`, the debug command that prints every
+# tests/course with `geas dump-course`, and tests/shape with
+# `geas dump-shape`, the debug command that prints every
 # shape string, shape hash, and mangled name. Every NAME.geas with a
 # NAME.expect beside it must be accepted and its dump must match the golden
 # byte for byte; check writes nothing to stdout, so its goldens are a single
@@ -186,6 +187,7 @@ run_suite parse parse
 run_suite check check
 run_suite typeck check
 run_suite shape dump-shape
+run_suite course dump-course
 run_multi_suite check/mfa
 run_bin_suite
 

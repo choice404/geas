@@ -2,3 +2,4 @@ select arms disagree in type; got 'Int' where 'String'
 select arms disagree in type; got 'Float' where 'String'
 'Some' pattern needs an Option scrutinee, got 'String'
 pattern literal has type 'String' but the scrutinee is 'Int'
+the 'as' pattern of a select arm must be irrefutable

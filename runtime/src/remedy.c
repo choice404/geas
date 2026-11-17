@@ -113,6 +113,7 @@ static void remedy_fail(GeasContract* c, uint32_t r, GeasStatus st,
     f->remedy_state[r] = REMEDY_FAILED;
     f->remedy_status[r] = (int32_t)st;
     f->remedy_lapsed[r] = (uint8_t)(lapsed ? 1 : 0);
+    geas_rt_autopark_mark(c);
     memset(&f->remedy_err[r], 0, sizeof(GeasValue));
     if (st == GEAS_OK && out && geas_rt_is_err(out) && out->as.box) {
         f->remedy_err[r] = *(const GeasValue*)out->as.box;
@@ -165,11 +166,16 @@ static void run_remedy(GeasContract* c, uint32_t r) {
     /* The host clock runs between remedies, before this one starts */
     int64_t started = geas_rt_now(c->rt);
     f->remedy_state[r] = REMEDY_RUNNING;
+    geas_rt_autopark_mark(c);
     geas_rt_event(c, GEAS_EVENT_REMEDY_STARTED, rd->name, c->state);
     if (rd->has_param && !f->pledge_ok_set[rd->target]) {
         remedy_fail(c, r, GEAS_ERR_TYPE, NULL, 0);
         return;
     }
+    /* An armed autopark records the remedy as running before its body, so
+     * a crash inside the body resumes it failed and never runs it twice. A
+     * failed write is reported by the flush itself */
+    (void)geas_rt_autopark_flush(c, NULL);
     GeasValue arg;
     memset(&arg, 0, sizeof(arg));
     if (rd->has_param) arg = f->pledge_ok[rd->target];
@@ -183,6 +189,7 @@ static void run_remedy(GeasContract* c, uint32_t r) {
         if (f->break_pending) geas_rt_event_cancel(c);
         if (st == GEAS_OK && !geas_rt_is_err(&out)) {
             f->remedy_state[r] = REMEDY_DONE;
+            geas_rt_autopark_mark(c);
             geas_rt_event(c, GEAS_EVENT_REMEDY_DONE, rd->name, c->state);
             return;
         }

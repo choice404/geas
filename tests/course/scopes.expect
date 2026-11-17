@@ -1,0 +1,88 @@
+Courses [
+    Course "Flow" {
+        hash: 0x8bc8bc98545e1254,
+        entry: 0,
+        slots: [
+            Slot(0) "number": Int (local),
+            Slot(1) "$hidden1": Int (temporary),
+            Slot(2) "$hidden2": Option<Int> (temporary),
+            Slot(3) "number": Int (local),
+            Slot(4) "$hidden4": Int (temporary),
+            Slot(5) "$hidden5": Option<Int> (temporary),
+            Slot(6) "$hidden6": Payload (temporary),
+            Slot(7) "$hidden7": Int (temporary),
+            Slot(8) "number": Int (local),
+            Slot(9) "$hidden9": Int (temporary),
+            Slot(10) "$hidden10": Option<Int> (temporary),
+            Slot(11) "selected": Int (local),
+            Slot(12) "$hidden12": Int (temporary),
+            Slot(13) "$hidden13": Option<Int> (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [Slot(1)],
+                result: Slot(2),
+                question: true,
+            },
+            Step 2 call {
+                pledge: 0,
+                arguments: [Slot(4)],
+                result: Slot(5),
+                question: true,
+            },
+            Step 3 await {
+                signal: 1,
+                arguments: [],
+                result: Slot(6),
+                question: false,
+                within: None,
+            },
+            Step 4 call {
+                pledge: 0,
+                arguments: [Slot(9)],
+                result: Slot(10),
+                question: true,
+            },
+            Step 5 call {
+                pledge: 0,
+                arguments: [Slot(12)],
+                result: Slot(13),
+                question: true,
+            },
+        ],
+        statements: [
+            Store Slot(0) = Int(1),
+            Branch true ? Label(0) : Label(1),
+            Label(0):
+            Store Slot(1) = Slot(0),
+            Resume 1,
+            Store Slot(3) = Question(Slot(2)),
+            Store Slot(4) = Slot(3),
+            Resume 2,
+            Evaluate Question(Slot(5)),
+            Jump Label(2),
+            Label(1):
+            Label(2):
+            Resume 3,
+            Match Slot(6) {
+                Number(number) -> Label(4) [number -> Slot(8)],
+                Missing -> Label(5) [],
+            },
+            Label(4):
+            Store Slot(9) = Slot(8),
+            Resume 4,
+            Store Slot(7) = Question(Slot(10)),
+            Jump Label(3),
+            Label(5):
+            Store Slot(7) = Slot(0),
+            Jump Label(3),
+            Label(3):
+            Store Slot(11) = Slot(7),
+            Store Slot(12) = Add(Slot(0), Slot(11)),
+            Resume 5,
+            Evaluate Question(Slot(13)),
+            Return,
+        ],
+    },
+]

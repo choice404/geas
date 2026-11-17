@@ -1,0 +1,1 @@
+together arguments cannot use binding 'first' before the group completes; bind the earlier call with 'let' before together

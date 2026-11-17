@@ -1,0 +1,10 @@
+contract Flow {
+    pledge first(value: Int) -> Option<Int>
+    signal ready(value: String)
+    course {
+        let value = first(1)
+        let ready = await ready
+        sleep 1s
+        first(value?)
+    }
+}

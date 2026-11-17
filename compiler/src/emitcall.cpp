@@ -20,7 +20,7 @@ std::string countOf(std::size_t count) {
 }  // namespace
 
 CValue CEmitter::genCall(const Expr& expr, const CallExpr& call) {
-    const Expr& callee = ast().expr(call.callee);
+    const Expr& callee = arena().expr(call.callee);
     if (const auto* identifier = std::get_if<Identifier>(&callee.kind)) {
         if (std::optional<CValue> value = genNamedCall(expr, call, *identifier)) {
             return *value;
@@ -67,7 +67,7 @@ std::optional<CValue> CEmitter::genNamedCall(const Expr& expr, const CallExpr& c
 // name, or an operation of the Store namespace
 std::optional<CValue> CEmitter::genStaticCall(const Expr& expr, const CallExpr& call,
                                               const MemberExpr& callee) {
-    const auto* base = std::get_if<Identifier>(&ast().expr(callee.base).kind);
+    const auto* base = std::get_if<Identifier>(&arena().expr(callee.base).kind);
     if (base == nullptr || lookupLocal(base->name) != nullptr) {
         return std::nullopt;
     }

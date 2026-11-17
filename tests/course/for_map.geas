@@ -1,0 +1,12 @@
+contract Flow {
+    pledge visit(key: String, value: Int) -> Unit
+    course {
+        let mut values = Map<String, Int>()
+        values["first"] = 1
+        values["second"] = 2
+        for key in values {
+            visit(key, values[key]?)
+            values[key] = 3
+        }
+    }
+}

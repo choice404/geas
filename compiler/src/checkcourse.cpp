@@ -6,6 +6,8 @@
 // '?' on any Option or Result just ends it
 #include "checker.hpp"
 
+#include "overloaded.hpp"
+
 namespace geas {
 
 void Checker::checkCourse(const CourseDecl& course) {
@@ -59,7 +61,8 @@ TyId Checker::inferAwait(const Expr& expr, const AwaitExpr& await) {
 }
 
 // The arms of a select agree on one type the way match arms do. An await arm
-// may bind its payload with a pattern, checked against the payload type
+// may bind its payload with an irrefutable pattern, a name or a wildcard,
+// checked against the payload type
 TyId Checker::checkSelect(const Expr& expr, const SelectExpr& select, TyId want) {
     if (!isInCourse_) {
         emitAt(expr, "'select' appears outside a course");
@@ -71,9 +74,13 @@ TyId Checker::checkSelect(const Expr& expr, const SelectExpr& select, TyId want)
         pushScope();
         if (awaited != nullptr) {
             const SignalDecl* signal = awaitedSignal(expr, awaited->signal);
-            if (awaited->binding) {
+            // The payload is bound, never tested: a select has no next arm to fall to
+            const bool isIrrefutable = !awaited->binding ||
                 bindPattern(*awaited->binding,
                             signal == nullptr ? unknown() : signalPayload(*signal), expr);
+            if (!isIrrefutable) {
+                emitAt(expr, "the 'as' pattern of a select arm must be irrefutable, a name or "
+                             "'_'; bind the payload and match it inside the arm");
             }
         }
         const ArmBody& body = awaited != nullptr ? awaited->body : std::get<TimeoutArm>(arm).body;
@@ -90,6 +97,7 @@ TyId Checker::checkSelect(const Expr& expr, const SelectExpr& select, TyId want)
 }
 
 void Checker::checkSleep(const SleepStmt& sleep) {
+    ++suspensionCount_;
     const Expr& duration = ast_.expr(sleep.duration);
     if (!isInCourse_) {
         emitAt(duration, "'sleep' appears outside a course");
@@ -105,16 +113,19 @@ void Checker::checkSleep(const SleepStmt& sleep) {
 // They check in the enclosing scope, so a binding made inside is visible
 // after the block
 void Checker::checkTogether(const TogetherStmt& together) {
+    ++suspensionCount_;
     if (!isInCourse_) {
         emitInBody("'together' appears outside a course");
     }
     for (const StmtId statement : ast_.block(together.body).stmts) {
-        checkStmt(statement);
+        checkTogetherStatement(statement);
+    }
+    for (auto& [name, binding] : scopes_.back()) {
+        binding.isPendingTogether = false;
     }
 }
 
-// The clock read, now(). The engine journals it on first run and replays it
-// on resume, which only a course can do. The arguments were already walked
+// The clock read runs once at this position and its value can live in a frame slot
 TyId Checker::checkNow(const Expr& expr, const CallExpr& call) {
     if (!isInCourse_) {
         emitAt(expr, "now() is only available inside a course");
@@ -123,6 +134,92 @@ TyId Checker::checkNow(const Expr& expr, const CallExpr& call) {
     }
     markUse(expr, ExprUse::NowCall);
     return scalar(TyKind::Time);
+}
+
+bool Checker::hasContractType(TyId type) const {
+    if (!type.isSet()) {
+        return false;
+    }
+    const TyNode& node = types_.node(type);
+    if (node.kind == TyKind::Contract || hasContractType(node.ret)) {
+        return true;
+    }
+    for (const TyId argument : node.args) {
+        if (hasContractType(argument)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+namespace {
+
+std::string togetherExpressionName(const Ast& ast, ExprId expression) {
+    return std::visit(Overloaded{
+        [&](const CallExpr& call) {
+            const auto* name = std::get_if<Identifier>(&ast.expr(call.callee).kind);
+            return name == nullptr ? std::string{"a member or value call"} :
+                "a call to " + quoted(name->name);
+        },
+        [](const AwaitExpr&) { return std::string{"an await"}; },
+        [](const SelectExpr&) { return std::string{"a select"}; },
+        [](const MatchExpr&) { return std::string{"a match"}; },
+        [](const BinaryExpr&) { return std::string{"a binary expression"}; },
+        [](const UnaryExpr&) { return std::string{"a unary expression"}; },
+        [](const QuestionExpr&) { return std::string{"a '?' expression"}; },
+        [](const Identifier&) { return std::string{"a name"}; },
+        [](const auto&) { return std::string{"a literal or constructor"}; },
+    }, ast.expr(expression).kind);
+}
+
+std::string togetherStatementName(const Stmt& statement) {
+    return std::visit(Overloaded{
+        [](const LetStmt&) { return "a let initializer"; },
+        [](const AssignStmt&) { return "an assignment"; },
+        [](const ReturnStmt&) { return "a return"; },
+        [](const IfStmt&) { return "an if statement"; },
+        [](const WhileStmt&) { return "a while loop"; },
+        [](const ForStmt&) { return "a for loop"; },
+        [](const BreakStmt&) { return "a break"; },
+        [](const ContinueStmt&) { return "a continue"; },
+        [](const ExprStmt&) { return "an expression"; },
+        [](const SleepStmt&) { return "a sleep"; },
+        [](const TogetherStmt&) { return "a together block"; },
+    }, statement);
+}
+
+}  // namespace
+
+void Checker::checkTogetherStatement(StmtId statement) {
+    const std::size_t beforeStatement = suspensionCount_;
+    checkStmt(statement);
+    const Stmt& node = ast_.stmt(statement);
+    ExprId value;
+    if (const auto* binding = std::get_if<LetStmt>(&node)) {
+        value = binding->value;
+    } else if (const auto* expression = std::get_if<ExprStmt>(&node)) {
+        value = expression->expr;
+    }
+    if (value.index >= 0) {
+        if (const auto* question = std::get_if<QuestionExpr>(&ast_.expr(value).kind)) {
+            value = question->operand;
+        }
+        if (tables_.exprUses[static_cast<std::size_t>(value.index)] == ExprUse::CoursePledgeCall) {
+            if (suspensionCount_ != beforeStatement + 1) {
+                emitAt(ast_.expr(value), "a together call argument cannot contain a suspending "
+                                         "operation; bind it with 'let' first");
+            }
+            if (const auto* binding = std::get_if<LetStmt>(&node)) {
+                scopes_.back().at(binding->name).isPendingTogether = true;
+            }
+            return;
+        }
+    }
+    std::string found = togetherStatementName(node);
+    if (value.index >= 0) {
+        found += " (" + togetherExpressionName(ast_, value) + ")";
+    }
+    emitInBody("together holds only single calls of this contract's own pledges; found " + found);
 }
 
 }  // namespace geas

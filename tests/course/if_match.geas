@@ -1,0 +1,20 @@
+contract Flow {
+    pledge flag() -> Option<Bool>
+    pledge value(input: Int) -> Option<Int>
+    course {
+        if flag()? {
+            value(1)?
+        } else if flag()? {
+            value(2)?
+        } else {
+            value(3)?
+        }
+        let chosen = match value(4) {
+            Some(number) -> value(number)?
+            None -> {
+                sleep 1s
+                value(0)?
+            }
+        }
+    }
+}

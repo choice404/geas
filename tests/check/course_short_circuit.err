@@ -1,0 +1,2 @@
+a suspending operation in the right operand of '&&' is not allowed; bind it with 'let' first
+a suspending operation in the right operand of '||' is not allowed; bind it with 'let' first

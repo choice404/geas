@@ -1,0 +1,16 @@
+contract Flow {
+    pledge first(value: Int) -> Option<Int>
+    subcontract Second {
+        signal ready(value: Int)
+        pledge second(value: Int) -> Option<Int>
+    }
+    clause argument() -> Int { return 2 }
+    course {
+        together {
+            let left = first(argument())?
+            let right = second(argument())?
+        }
+        first(left + right)?
+        await ready
+    }
+}

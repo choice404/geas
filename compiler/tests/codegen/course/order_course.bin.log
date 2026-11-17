@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/course/src/order_course.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The order saga, engine driven. The course runs the steps itself: it
+  ^

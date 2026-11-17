@@ -20,7 +20,7 @@
 
 namespace {
 
-constexpr std::string_view versionString = "geas 0.8.3";
+constexpr std::string_view versionString = "geas 0.9.0";
 constexpr int exitSuccess = 0;
 constexpr int exitFailure = 1;
 
@@ -128,6 +128,20 @@ int runDumpShape(std::string_view path) {
     return exitSuccess;
 }
 
+int runDumpCourse(std::string_view path) {
+    const auto checked = geas::checkProgram(path);
+    if (!checked) {
+        for (const std::string& fault : checked.error()) {
+            printError(fault);
+        }
+        return exitFailure;
+    }
+    const std::string listing = geas::dumpCourses(*checked);
+    std::fwrite(listing.data(), 1, listing.size(), stdout);
+    std::fflush(stdout);
+    return exitSuccess;
+}
+
 int missingFile(std::string_view command) {
     printError("geas: " + std::string{command} + " needs a file argument");
     printUsage();
@@ -169,6 +183,9 @@ int runFileCommand(std::span<char*> args, std::string_view command) {
     if (command == "dump-shape") {
         return runDumpShape(args[2]);
     }
+    if (command == "dump-course") {
+        return runDumpCourse(args[2]);
+    }
     return runLex(args[2]);
 }
 
@@ -190,7 +207,8 @@ int main(int argc, char** argv) {
         return geas::runRequirementsSelfTest(args.subspan(2));
     }
     const bool isFrontEnd =
-        command == "lex" || command == "parse" || command == "check" || command == "dump-shape";
+        command == "lex" || command == "parse" || command == "check" ||
+        command == "dump-shape" || command == "dump-course";
     const bool isArtifact =
         command == "build" || command == "emit-header" || command == "emit-proto";
     if (isFrontEnd || isArtifact) {

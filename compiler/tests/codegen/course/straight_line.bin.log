@@ -1,0 +1,4 @@
+exit 1
+tests/course/straight_line.geas: 1:1: error: a --bin build needs exactly one Main contract
+  contract Flow {
+  ^

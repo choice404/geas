@@ -1,0 +1,21 @@
+// a select arm binds its payload and never tests it, so its as pattern is a
+// name or a wildcard and anything that could fail to match is refused
+Answer is either Yes or No
+
+contract Flow {
+    signal maybe(value: Option<Int>)
+    signal answer(value: Answer)
+    signal count(n: Int)
+    course {
+        let picked = select {
+            await maybe as Some(n) -> n
+            await answer as Yes -> 1
+            await count as 3 -> 3
+        }
+        let fine = select {
+            await maybe as m -> 0
+            await answer as _ -> 1
+            timeout 1h -> 2
+        }
+    }
+}

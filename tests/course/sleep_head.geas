@@ -1,0 +1,6 @@
+contract Flow {
+    pledge duration() -> Option<Duration>
+    course {
+        sleep duration()?
+    }
+}

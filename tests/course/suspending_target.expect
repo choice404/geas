@@ -1,0 +1,36 @@
+Courses [
+    Course "Flow" {
+        hash: 0xee32573ed7850d2c,
+        entry: 0,
+        slots: [
+            Slot(0) "values": List<Int> (local, mut),
+            Slot(1) "$hidden1": Option<Int> (temporary),
+            Slot(2) "$hidden2": Int (temporary),
+            Slot(3) "$hidden3": Option<Int> (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(1),
+                question: true,
+            },
+            Step 2 call {
+                pledge: 1,
+                arguments: [],
+                result: Slot(3),
+                question: true,
+            },
+        ],
+        statements: [
+            Store Slot(0) = List([Int(0), Int(1)]),
+            CheckTarget Slot(0) (insert: false),
+            Resume 1,
+            Store Slot(2) = Question(Slot(1)),
+            CheckTarget Index(Slot(0), Slot(2)) (insert: true),
+            Resume 2,
+            Assign Index(Slot(0), Slot(2)) = Question(Slot(3)),
+            Return,
+        ],
+    },
+]

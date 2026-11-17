@@ -1,0 +1,36 @@
+Courses [
+    Course "Flow" {
+        hash: 0x825b62e7a95111c2,
+        entry: 0,
+        slots: [
+            Slot(0) "values": List<Int> (local),
+            Slot(1) "$hidden1": List<Int> (collection),
+            Slot(2) "$hidden2": Int (position),
+            Slot(3) "value": Int (local),
+            Slot(4) "$hidden4": Int (temporary),
+            Slot(5) "$hidden5": Unit (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [Slot(4)],
+                result: Slot(5),
+                question: false,
+            },
+        ],
+        statements: [
+            Store Slot(0) = List([Int(1), Int(2), Int(3)]),
+            Store Slot(1) = Slot(0),
+            Store Slot(2) = Int(0),
+            Label(0):
+            ForNext(collection: Slot(1), position: Slot(2), variable: Slot(3), body: Label(1), done: Label(2)),
+            Label(1):
+            Store Slot(4) = Slot(3),
+            Resume 1,
+            Evaluate Slot(5),
+            Jump Label(0),
+            Label(2):
+            Return,
+        ],
+    },
+]

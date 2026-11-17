@@ -1,0 +1,13 @@
+Courses [
+    Course "Flow" {
+        hash: 0x92bad23e24338233,
+        entry: 0,
+        slots: [
+        ],
+        steps: [
+        ],
+        statements: [
+            Return,
+        ],
+    },
+]

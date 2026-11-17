@@ -1,0 +1,8 @@
+contract Flow {
+    pledge index() -> Option<Int>
+    pledge value() -> Option<Int>
+    course {
+        let mut values = [0, 1]
+        values[index()?] = value()?
+    }
+}

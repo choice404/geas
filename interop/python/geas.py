@@ -123,6 +123,31 @@ GEAS_EVENT_RESUMED = 11
 GEAS_EVENT_CANCELLED = 12
 GEAS_EVENT_RECLAIMED = 13
 GEAS_EVENT_LOST = 14
+GEAS_EVENT_COURSE_STARTED = 15
+GEAS_EVENT_COURSE_SUSPENDED = 16
+GEAS_EVENT_COURSE_RESUMED = 17
+GEAS_EVENT_COURSE_FINISHED = 18
+GEAS_EVENT_COURSE_HALTED = 19
+GEAS_EVENT_COURSE_CANCELLED = 20
+
+# Where an engine driven course stands, docs/abi.md, The course. NONE is a
+# contract with no course, RUNNING one scheduled, running, or delivering the
+# events of its last entry, WAITING one suspended at a wait.
+GEAS_COURSE_NONE = 0
+GEAS_COURSE_RUNNING = 1
+GEAS_COURSE_WAITING = 2
+GEAS_COURSE_FINISHED = 3
+GEAS_COURSE_HALTED = 4
+GEAS_COURSE_CANCELLED = 5
+
+COURSE_STATE_NAMES = {
+    GEAS_COURSE_NONE: "none",
+    GEAS_COURSE_RUNNING: "running",
+    GEAS_COURSE_WAITING: "waiting",
+    GEAS_COURSE_FINISHED: "finished",
+    GEAS_COURSE_HALTED: "halted",
+    GEAS_COURSE_CANCELLED: "cancelled",
+}
 
 GEAS_INAME_CONTRACT = 0
 GEAS_INAME_PLEDGE = 1
@@ -239,6 +264,42 @@ class GeasEvent(C.Structure):
 GeasEventFn = C.CFUNCTYPE(None, C.c_void_p, C.POINTER(GeasEvent))
 
 
+class GeasCourseInfo(C.Structure):
+    """Where a course stands. size is the caller's sizeof of this header,
+    the runtime fills only the fields that fit and leaves size as it was."""
+
+    _fields_ = [
+        ("size", C.c_uint32),
+        ("state", C.c_uint32),
+        ("step", C.c_uint32),
+        ("status", C.c_uint32),
+        ("wait_due_ms", C.c_int64),
+    ]
+
+
+class CourseInfo:
+    """A course reading copied into Python: its GEAS_COURSE_* state, the step
+    its frame stands at, the non OK status a HALTED course stopped on, and
+    the clock reading its current wait falls due at, 0 when it has none."""
+
+    __slots__ = ("state", "step", "status", "wait_due_ms")
+
+    def __init__(self, info):
+        self.state = info.state
+        self.step = info.step
+        self.status = info.status
+        self.wait_due_ms = info.wait_due_ms
+
+    @property
+    def state_name(self):
+        return COURSE_STATE_NAMES.get(self.state, "?")
+
+    def __repr__(self):
+        return (f"CourseInfo(state={self.state_name}, step={self.step}, "
+                f"status={_STATUS_NAMES.get(self.status, self.status)}, "
+                f"wait_due_ms={self.wait_due_ms})")
+
+
 class Event:
     """One transition, copied into Python with its borrowed Contract handle."""
 
@@ -273,6 +334,7 @@ assert C.sizeof(GeasValue) == 40
 assert C.sizeof(GeasRef) == 40
 assert C.sizeof(GeasInameEntry) == 48
 assert C.sizeof(GeasRuntimeConfig) == 8
+assert C.sizeof(GeasCourseInfo) == 24
 
 # ---------------------------------------------------------------------------
 # The sum shaped values, seen from Python. Ok and Err wrap a Result's payload,
@@ -630,6 +692,18 @@ class Runtime:
         lib.geas_partial_remedy_lapsed.restype = C.c_int
         lib.geas_partial_remedy_error.argtypes = [v, z, C.POINTER(VP)]
         lib.geas_partial_remedy_error.restype = i
+        # The course surface: the runtime's ticker, where a course stands,
+        # the wait on it, and the park row an instance keeps writing itself
+        lib.geas_runtime_start_ticker.argtypes = [v, C.c_uint32]
+        lib.geas_runtime_start_ticker.restype = i
+        lib.geas_runtime_stop_ticker.argtypes = [v]
+        lib.geas_runtime_stop_ticker.restype = i
+        lib.geas_course_info.argtypes = [v, C.POINTER(GeasCourseInfo)]
+        lib.geas_course_info.restype = i
+        lib.geas_course_wait.argtypes = [v, C.c_int64, C.POINTER(GeasCourseInfo)]
+        lib.geas_course_wait.restype = i
+        lib.geas_contract_set_autopark.argtypes = [v, s, s]
+        lib.geas_contract_set_autopark.restype = i
 
     # ---- lifecycle ----
 
@@ -689,6 +763,22 @@ class Runtime:
     def tick(self):
         """Applies every deadline that has passed, over every instance."""
         _check(self._lib.geas_runtime_tick(self._rt), "geas_runtime_tick")
+
+    def start_ticker(self, interval_ms):
+        """Starts the runtime's own timer thread, a tick every interval_ms of
+        real time, so deadlines and course waits fall due on time without the
+        host calling tick. The tick reads the clock set_clock installed, so a
+        Python clock is called from that thread too. A second start while one
+        runs raises GEAS_ERR_STATE, an interval of 0 GEAS_ERR_TYPE."""
+        _check(self._lib.geas_runtime_start_ticker(self._rt, interval_ms),
+               "geas_runtime_start_ticker")
+
+    def stop_ticker(self):
+        """Stops the ticker and joins its thread before returning. With no
+        ticker running it raises GEAS_ERR_STATE; shutdown stops a running
+        ticker on its own."""
+        _check(self._lib.geas_runtime_stop_ticker(self._rt),
+               "geas_runtime_stop_ticker")
 
     def shutdown(self):
         if self._rt:
@@ -1209,3 +1299,53 @@ class Contract:
                 "err": decode(ev[0]) if st == GEAS_OK and ev else None,
             })
         return out
+
+    # ---- the course ----
+
+    def course_info(self):
+        """Where this instance's course stands, as a CourseInfo, read without
+        waiting on the instance lock. A contract with no course reads
+        GEAS_COURSE_NONE."""
+        info = GeasCourseInfo(size=C.sizeof(GeasCourseInfo))
+        _check(self._rt._lib.geas_course_info(self._ptr, C.byref(info)),
+               "geas_course_info")
+        return CourseInfo(info)
+
+    def course_wait(self, timeout_ms=-1):
+        """Blocks until the course is not RUNNING and returns the CourseInfo
+        it settled at, WAITING, FINISHED, HALTED, or CANCELLED. timeout_ms is
+        real time and a negative value waits forever. A wait that runs out
+        raises nothing, it returns the CourseInfo as it stands with state
+        running and the step the course runs, so a caller polling with a
+        timeout reads info.state to tell a slow course from a settled one.
+        Called from a pledge body or an event hook it raises GeasError with
+        GEAS_ERR_STATE at once, since the course could be waiting on that
+        very caller, and the reading as it stood rides on the error's info
+        attribute.
+
+        The library is loaded through CDLL, which releases the GIL for the
+        length of every foreign call, so pool workers running Python bodies,
+        the clock, and the event hook all take the GIL while this thread sits
+        in the wait. The call returns only after the events of the run it
+        waited on were delivered, which makes it the point after which a
+        signal on this instance does not race a delivery in flight."""
+        info = GeasCourseInfo(size=C.sizeof(GeasCourseInfo))
+        status = self._rt._lib.geas_course_wait(self._ptr, int(timeout_ms),
+                                                C.byref(info))
+        if status != GEAS_OK:
+            error = GeasError(status, "geas_course_wait")
+            error.info = CourseInfo(info)
+            raise error
+        return CourseInfo(info)
+
+    def set_autopark(self, dsn, key=None):
+        """Names the store and key this instance parks itself into from now
+        on, the row instance park writes, at every latch, lapse, state change,
+        retry saved, remedy start and end, step checkpoint, and whenever a
+        course waits or ends. The runtime keeps its own copies of both. A dsn
+        of None clears them and nothing more is written; a dsn with no key
+        raises GEAS_ERR_TYPE."""
+        _check(self._rt._lib.geas_contract_set_autopark(
+            self._ptr, dsn.encode() if dsn is not None else None,
+            key.encode() if key is not None else None),
+            f"geas_contract_set_autopark {key}")

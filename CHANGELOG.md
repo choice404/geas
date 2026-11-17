@@ -4,6 +4,55 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.9.0] the course
+
+Geas now runs the obligation as well as holding it, a contract can carry
+its own course, leave the abstract bodies with its host, and move from one
+durable step to the next on the runtime pool. The compiler turns the course
+into one resumable C state machine, the frame and every wait cross a park
+in the same row as the contract, and signals, deadlines, parallel calls,
+event delivery, and automatic parking bring it back at the step it named,
+so the host owns the work at the edges while the contract owns the order
+in the middle.
+
+- make a contract with a `course` engine driven, start it at sign and again
+  at resume, leave its pledge bodies and signals with the host, and refuse a
+  host fulfillment of one of its pledges with `GEAS_ERR_STATE`
+- lower every course to one C function with a dispatch switch and resume
+  labels, hoist suspending operations into statement position, number its
+  steps, put every local in a frame slot, and show the result with
+  `geas dump-course`
+- run calls of the contract's own pledges as durable steps, add `await` with
+  and without `within`, `select` over signals and timeouts, durable `sleep`,
+  `now()`, and `together` calls running at once on the worker pool
+- suspend a waiting course without holding its worker, wake it on a signal,
+  a lapse, or a due deadline at a tick, and add `geas_runtime_start_ticker`
+  for a runtime thread that supplies those ticks
+- move the workflow blob to version 4 with the course step, frame slots,
+  wait, and course hash, resume at that saved step, refuse a changed course
+  with `GEAS_ERR_VERSION`, and keep rows from the earlier formats readable
+- add `geas_contract_set_autopark`, writing the row at course steps and
+  every latch, signal, state change, remedy step, and saved retry for engine
+  driven and host driven instances, with steps remaining at least once
+- add `geas_course_info` and `geas_course_wait`, join course transitions in
+  the ordered event hook, and let a course wait out another thread's event
+  delivery instead of stopping on it
+- check where a suspending operation may stand, refuse one in the right side
+  of `&&` or `||`, restrict a `together` block to own pledge calls, keep
+  instance typed values out of the frame, require an irrefutable `as`
+  pattern in a select arm, and keep a course off `Main`
+- leave pledge RPCs out of the emitted proto for an engine driven contract,
+  add `GetCourse`, and carry its read and wait helpers into the Go and
+  TypeScript session wrappers
+- carry the course surface into Python and dusk, with `demo_course` in
+  each, so both hosts bind bodies, deliver signals, read progress, park, and
+  resume
+- add `skeleton/order_course.geas` and the `test-course`,
+  `test-course-park`, `test-course-saga`, and `test-course-python` gates for
+  the lowering, runtime, durable saga, and binding surfaces
+- keep typed amendment next on the roadmap, with `amends` continuing to
+  parse and check while its emitted resume mapping follows the course
+
 ## [v0.8.3] the watched job
 
 The runtime now lets a host watch an obligation as it moves, park work while a

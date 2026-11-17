@@ -1,0 +1,88 @@
+// An order course with payment, reservation, shipping, and delivery
+
+record Card {
+    number: String
+    expiry: String
+}
+
+record Item {
+    sku: String
+    quantity: Int
+}
+
+record Order {
+    card: Card
+    total: Float
+    items: List<Item>
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+}
+
+record Reservation {
+    id: String
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderSaga [version: 2, term: 7d] {
+    vow order: Order
+    vow dsn: String
+
+    subcontract Payment {
+        pledge authorize(card: Card, amount: Float) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    pledge reserve(items: List<Item>) -> Result<Reservation, StockError>
+        within 5m
+    pledge ship(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+        within 48h
+
+    signal delivered(tracking: Tracking) after ship within 14d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 10 every 1m backoff 2.0 cap 1h
+    remedy release for reserve(r: Reservation) -> Unit
+
+    requirements {
+        fulfill: Payment && reserve && ship && delivered
+        partial: Payment || reserve
+        break: !Payment || !reserve || !ship || !delivered
+    }
+
+    course {
+        let auth = authorize(order.card, order.total)?
+        together {
+            let receipt = capture(auth)?
+            let res = reserve(order.items)?
+        }
+        ship(res)?
+        await delivered
+    }
+
+    amends 1 {
+        vow dsn = prior.store_url
+        rename dispatch -> ship
+        latch delivered as pending
+    }
+}

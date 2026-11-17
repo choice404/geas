@@ -1,0 +1,113 @@
+Courses [
+    Course "Flow" {
+        hash: 0x771c73c5027d6e3f,
+        entry: 0,
+        slots: [
+            Slot(0) "$hidden0": Option<Bool> (temporary),
+            Slot(1) "$hidden1": Option<Int> (temporary),
+            Slot(2) "$hidden2": Option<Bool> (temporary),
+            Slot(3) "$hidden3": Option<Int> (temporary),
+            Slot(4) "$hidden4": Option<Int> (temporary),
+            Slot(5) "$hidden5": Option<Int> (temporary),
+            Slot(6) "$hidden6": Int (temporary),
+            Slot(7) "number": Int (local),
+            Slot(8) "$hidden8": Int (temporary),
+            Slot(9) "$hidden9": Option<Int> (temporary),
+            Slot(10) "$hidden10": Option<Int> (temporary),
+            Slot(11) "chosen": Int (local),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(0),
+                question: true,
+            },
+            Step 2 call {
+                pledge: 1,
+                arguments: [Int(1)],
+                result: Slot(1),
+                question: true,
+            },
+            Step 3 call {
+                pledge: 0,
+                arguments: [],
+                result: Slot(2),
+                question: true,
+            },
+            Step 4 call {
+                pledge: 1,
+                arguments: [Int(2)],
+                result: Slot(3),
+                question: true,
+            },
+            Step 5 call {
+                pledge: 1,
+                arguments: [Int(3)],
+                result: Slot(4),
+                question: true,
+            },
+            Step 6 call {
+                pledge: 1,
+                arguments: [Int(4)],
+                result: Slot(5),
+                question: false,
+            },
+            Step 7 call {
+                pledge: 1,
+                arguments: [Slot(8)],
+                result: Slot(9),
+                question: true,
+            },
+            Step 8 sleep {
+                arguments: [Duration(1000)],
+                result: None,
+                question: false,
+            },
+            Step 9 call {
+                pledge: 1,
+                arguments: [Int(0)],
+                result: Slot(10),
+                question: true,
+            },
+        ],
+        statements: [
+            Resume 1,
+            Branch Question(Slot(0)) ? Label(0) : Label(1),
+            Label(0):
+            Resume 2,
+            Evaluate Question(Slot(1)),
+            Jump Label(2),
+            Label(1):
+            Resume 3,
+            Branch Question(Slot(2)) ? Label(3) : Label(4),
+            Label(3):
+            Resume 4,
+            Evaluate Question(Slot(3)),
+            Jump Label(5),
+            Label(4):
+            Resume 5,
+            Evaluate Question(Slot(4)),
+            Label(5):
+            Label(2):
+            Resume 6,
+            Match Slot(5) {
+                Some(number) -> Label(7) [number -> Slot(7)],
+                None -> Label(8) [],
+            },
+            Label(7):
+            Store Slot(8) = Slot(7),
+            Resume 7,
+            Store Slot(6) = Question(Slot(9)),
+            Jump Label(6),
+            Label(8):
+            Resume 8,
+            Resume 9,
+            Store Slot(6) = Question(Slot(10)),
+            Jump Label(6),
+            Label(6):
+            Store Slot(11) = Slot(6),
+            Return,
+        ],
+    },
+]

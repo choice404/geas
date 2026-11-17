@@ -44,6 +44,10 @@ std::expected<CheckedProgram, std::vector<std::string>> checkProgram(std::string
     }
     checked.contracts =
         buildContractShapes(checked.program, checked.sigs, checked.types, checked.tables);
+    const auto lowered = lowerCourses(checked);
+    if (!lowered) {
+        return std::unexpected(std::vector<std::string>{lowered.error()});
+    }
     return checked;
 }
 

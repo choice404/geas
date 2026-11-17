@@ -1,0 +1,10 @@
+contract Flow {
+    pledge stamp(at: Time, value: Int) -> Unit
+    signal ready(value: Int)
+    course {
+        let started = now()
+        stamp(now(), await ready)
+        sleep now() - started
+        let elapsed = now() - started
+    }
+}

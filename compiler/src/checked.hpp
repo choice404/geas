@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ast.hpp"
+#include "course.hpp"
 #include "types.hpp"
 
 namespace geas {
@@ -48,6 +49,8 @@ struct CheckTables {
     // typed the node, a schema name or a column in a Store call for instance
     std::vector<TyId> exprTypes;
     std::vector<ExprUse> exprUses;
+    std::vector<TyId> patternTypes;
+    std::unordered_map<const ContractDecl*, LoweredCourse> courses;
     std::unordered_map<const RemedyDecl*, const PledgeDecl*> remedyTargets;
     std::unordered_map<const Term*, std::vector<OrderTarget>> afterTargets;
 };

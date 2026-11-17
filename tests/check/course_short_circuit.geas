@@ -1,0 +1,14 @@
+contract Flow {
+    pledge flag() -> Option<Bool>
+    signal ready(value: Bool)
+    course {
+        let first = true && flag()?
+        let second = false || await ready
+        let nested = true && match true {
+            true -> { sleep 1s
+                true
+            }
+            false -> false
+        }
+    }
+}

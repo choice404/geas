@@ -34,7 +34,7 @@ CValue CEmitter::genWrap(const WrapExpr& wrap, TyId want) {
 CValue CEmitter::genBoxed(const CValue& payload, std::string_view tag, int variant, TyId type) {
     const std::string box = freshName();
     line(joined("GeasValue* ", box, " = geas_box(cc);"));
-    line(joined("if (!", box, ") return GEAS_ERR_OOM;"));
+    line(joined("if (!", box, ") ", failExit("GEAS_ERR_OOM")));
     line(joined("*", box, " = ", payload.name, ";"));
     std::string value = newValue();
     setTag(value, tag);
@@ -92,10 +92,10 @@ CValue CEmitter::genList(const ListExpr& list, TyId want) {
     const std::string_view tag = elementTag.empty() ? "GEAS_TY_UNIT" : elementTag;
     std::string value = newValue();
     line(joined("if (geas_list_new(cc, ", tag, ", ", countOf(list.elements.size()), ", &", value,
-                ") != GEAS_OK) return GEAS_ERR_OOM;"));
+                ") != GEAS_OK) ", failExit("GEAS_ERR_OOM")));
     for (const CValue& item : values) {
         line(joined("if (geas_list_push(cc, &", value, ", &", item.name,
-                    ") != GEAS_OK) return GEAS_ERR_OOM;"));
+                    ") != GEAS_OK) ", failExit("GEAS_ERR_OOM")));
     }
     return CValue{std::move(value), types().list(element)};
 }
@@ -114,7 +114,7 @@ CValue CEmitter::genTuple(const TupleExpr& tuple, TyId want) {
     }
     std::string value = newValue();
     line(joined("if (geas_tuple_new(cc, ", countOf(tuple.elements.size()), ", &", value,
-                ") != GEAS_OK) return GEAS_ERR_OOM;"));
+                ") != GEAS_OK) ", failExit("GEAS_ERR_OOM")));
     for (std::size_t i = 0; i < values.size(); ++i) {
         line(joined("((GeasValue*)", value, ".as.list.data)[", countOf(i), "] = ", values[i].name,
                     ";"));
@@ -127,7 +127,7 @@ std::string CEmitter::genFieldArray(std::size_t count) {
     std::string array = freshName();
     line(joined("GeasValue* ", array, " = (GeasValue*)geas_bytes(cc, ", countOf(count),
                 " * sizeof(GeasValue));"));
-    line(joined("if (!", array, ") return GEAS_ERR_OOM;"));
+    line(joined("if (!", array, ") ", failExit("GEAS_ERR_OOM")));
     return array;
 }
 
@@ -233,7 +233,7 @@ CValue CEmitter::genInstanceVow(const Expr& expr, const MemberExpr& member, cons
     const std::string borrowed = freshName();
     line(joined("const GeasValue* ", borrowed, " = geas_vow_ref((GeasContract*)", base.name,
                 ".as.box, \"", member.name, "\");"));
-    line(joined("if (!", borrowed, ") return GEAS_ERR_NAME;"));
+    line(joined("if (!", borrowed, ") ", failExit("GEAS_ERR_NAME")));
     std::string home = newValue();
     const std::string status = freshName();
     line(
@@ -258,7 +258,7 @@ CValue CEmitter::genMapIndex(const CValue& base, const IndexExpr& index) {
     ++indent_;
     const std::string box = freshName();
     line(joined("GeasValue* ", box, " = geas_box(cc);"));
-    line(joined("if (!", box, ") return GEAS_ERR_OOM;"));
+    line(joined("if (!", box, ") ", failExit("GEAS_ERR_OOM")));
     const std::string status = freshName();
     line(joined("GeasStatus ", status, " = geas_value_deep_copy(cc, ", borrowed, ", ", box, ");"));
     returnUnlessOk(status);
@@ -289,7 +289,7 @@ CValue CEmitter::genIndex(const Expr& expr, const IndexExpr& index) {
     const std::string slot = freshName();
     line(joined("const GeasValue* ", slot, " = geas_list_get(&", base.name, ", (uint64_t)",
                 position.name, ".as.i);"));
-    line(joined("if (!", slot, ") return GEAS_ERR_TYPE;"));
+    line(joined("if (!", slot, ") ", failExit("GEAS_ERR_TYPE")));
     std::string value = freshName();
     line(joined("GeasValue ", value, " = *", slot, ";"));
     return copyOut(CValue{std::move(value), node.args[0]});
@@ -298,7 +298,7 @@ CValue CEmitter::genIndex(const Expr& expr, const IndexExpr& index) {
 // Bytes use the List index rule, including the unsigned rejection of negatives
 CValue CEmitter::genBytesIndex(const CValue& base, const CValue& position) {
     line(joined("if ((uint64_t)", position.name, ".as.i >= ", base.name,
-                ".as.s.len) return GEAS_ERR_TYPE;"));
+                ".as.s.len) ", failExit("GEAS_ERR_TYPE")));
     std::string value = newValue();
     setTag(value, "GEAS_TY_BYTE");
     line(joined(value, ".as.b = ", base.name, ".as.s.ptr[(uint64_t)", position.name, ".as.i];"));
@@ -316,8 +316,13 @@ CValue CEmitter::genQuestion(const Expr& expr, const QuestionExpr& question) {
         return badValue();
     }
     const std::string_view failTag = node.kind == TyKind::Result ? "1" : "0";
-    line(joined("if (", operand.name, ".tag == ", failTag, ") { *out = ", operand.name,
-                "; return GEAS_OK; }"));
+    // A course has no caller to hand the failure to, so it ends there
+    if (course_ != nullptr) {
+        line(joined("if (", operand.name, ".tag == ", failTag, ") return GEAS_COURSE_DONE;"));
+    } else {
+        line(joined("if (", operand.name, ".tag == ", failTag, ") { *out = ", operand.name,
+                    "; return GEAS_OK; }"));
+    }
     std::string value = freshName();
     line(joined("GeasValue ", value, " = *(const GeasValue*)", operand.name, ".as.box;"));
     return CValue{std::move(value), node.args[0]};

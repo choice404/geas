@@ -1,0 +1,49 @@
+Courses [
+    Course "Flow" {
+        hash: 0x8ade6111f698c939,
+        entry: 0,
+        slots: [
+            Slot(0) "values": Map<String, Int> (local, mut),
+            Slot(1) "$hidden1": Map<String, Int> (collection),
+            Slot(2) "$hidden2": Int (position),
+            Slot(3) "key": String (local),
+            Slot(4) "$hidden4": String (temporary),
+            Slot(5) "$hidden5": Int (temporary),
+            Slot(6) "$hidden6": Unit (temporary),
+            Slot(7) "$hidden7": String (temporary),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: 0,
+                arguments: [Slot(4), Slot(5)],
+                result: Slot(6),
+                question: false,
+            },
+        ],
+        statements: [
+            Store Slot(0) = MapNew(Map<String, Int>),
+            CheckTarget Slot(0) (insert: false),
+            CheckTarget Index(Slot(0), Str("first")) (insert: true),
+            Assign Index(Slot(0), Str("first")) = Int(1),
+            CheckTarget Slot(0) (insert: false),
+            CheckTarget Index(Slot(0), Str("second")) (insert: true),
+            Assign Index(Slot(0), Str("second")) = Int(2),
+            Store Slot(1) = Slot(0),
+            Store Slot(2) = Int(0),
+            Label(0):
+            ForNext(collection: Slot(1), position: Slot(2), variable: Slot(3), body: Label(1), done: Label(2)),
+            Label(1):
+            Store Slot(4) = Slot(3),
+            Store Slot(5) = Question(Index(Slot(0), Slot(3))),
+            Resume 1,
+            Evaluate Slot(6),
+            CheckTarget Slot(0) (insert: false),
+            Store Slot(7) = Slot(3),
+            CheckTarget Index(Slot(0), Slot(7)) (insert: true),
+            Assign Index(Slot(0), Slot(7)) = Int(3),
+            Jump Label(0),
+            Label(2):
+            Return,
+        ],
+    },
+]

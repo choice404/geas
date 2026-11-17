@@ -1,0 +1,20 @@
+Problem is either Failed
+contract Flow {
+    pledge value() -> Result<Int, Problem>
+    signal ready(value: Int)
+    course {
+        let mut number = value()?
+        number = (await ready within 1s)?
+        value()?
+        let selected = select {
+            await ready as payload -> Some(payload)
+            timeout 1s -> None
+        }?
+        together {
+            value()?
+            let other = value()?
+        }
+        let total = number + selected + other
+        return
+    }
+}
