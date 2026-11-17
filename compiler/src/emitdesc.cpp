@@ -4,6 +4,7 @@
 // table the contract has no entries for is not emitted and the descriptor
 // references NULL in its place
 #include "emitc.hpp"
+#include "attributes.hpp"
 #include "emittext.hpp"
 #include "hash.hpp"
 
@@ -99,7 +100,7 @@ std::string CEmitter::vowDefaultText(const VowDecl& vow, TyId type) const {
 }
 
 // Emits the vow descriptor table of one contract. A vow whose type is not
-// one union field or a String is outside what a descriptor can carry
+// one union field, a String, or Bytes is outside what a descriptor can carry
 void CEmitter::emitVows(const ContractShape& shape) {
     if (shape.vows.empty()) {
         return;
@@ -108,7 +109,8 @@ void CEmitter::emitVows(const ContractShape& shape) {
     for (const VowDecl* vow : shape.vows) {
         const TyId type = lookup_.vowType(*vow);
         const bool isCarriable =
-            !lookup_.unionFieldOf(type).empty() || kindOf(type) == TyKind::String;
+            !lookup_.unionFieldOf(type).empty() || kindOf(type) == TyKind::String ||
+            kindOf(type) == TyKind::Bytes;
         if (!isCarriable) {
             lookup_.unsupported(vow->lo, vow->hi, "a vow of this type in a compiled module");
             continue;
@@ -193,6 +195,92 @@ void CEmitter::emitDescriptor(const ContractShape& shape, const RequirementCount
     }
     top("};");
     top("");
+}
+
+
+namespace {
+
+std::string ownerTag(AttrTarget target) {
+    switch (target) {
+        case AttrTarget::Contract: return "GEAS_ATTR_CONTRACT";
+        case AttrTarget::Subcontract: return "GEAS_ATTR_SUBCONTRACT";
+        case AttrTarget::Pledge: return "GEAS_ATTR_PLEDGE";
+        case AttrTarget::Signal: return "GEAS_ATTR_SIGNAL";
+        case AttrTarget::Remedy: return "GEAS_ATTR_REMEDY";
+    }
+    return "GEAS_ATTR_CONTRACT";
+}
+
+std::string floatDigits(std::string_view spelling) {
+    std::string digits;
+    for (const char digit : spelling) {
+        if (digit != '_') digits.push_back(digit);
+    }
+    return digits;
+}
+
+}  // namespace
+
+std::string CEmitter::attrValueText(ExprId value) const {
+    const Expr* literal = &ast().expr(value);
+    const auto* unary = std::get_if<UnaryExpr>(&literal->kind);
+    const bool isNegative = unary != nullptr;
+    if (isNegative) literal = &ast().expr(unary->operand);
+    const std::string sign = isNegative ? "-" : "";
+    std::string tag = "GEAS_TY_INT";
+    std::string arm;
+    if (const auto* integer = std::get_if<IntLiteral>(&literal->kind)) {
+        arm = joined(".i = ", sign, decimal(integer->value));
+    } else if (const auto* duration = std::get_if<DurationLiteral>(&literal->kind)) {
+        arm = joined(".i = ", sign, decimal(duration->milliseconds));
+    } else if (const auto* number = std::get_if<FloatLiteral>(&literal->kind)) {
+        tag = "GEAS_TY_FLOAT";
+        arm = joined(".f = ", sign, floatDigits(number->spelling));
+    } else if (const auto* boolean = std::get_if<BoolLiteral>(&literal->kind)) {
+        tag = "GEAS_TY_BOOL";
+        arm = joined(".b = ", boolean->value ? "1" : "0");
+    } else if (const auto* text = std::get_if<StringLiteral>(&literal->kind)) {
+        tag = "GEAS_TY_STRING";
+        const CString lowered = cString(text->body);
+        arm = joined(".s = { (uint8_t*)", lowered.literal, ", ", decimal(lowered.length), " }");
+    }
+    return joined("{ .ty = ", tag, ", .as = { ", arm, " } }");
+}
+
+void CEmitter::appendAttrEntries(const std::vector<Attr>& attrs, AttrTarget target,
+                                 std::size_t index, std::vector<std::string>& entries) const {
+    for (const Attr& attr : attrs) {
+        if (isBuiltinAttr(attr.key, target)) continue;
+        entries.push_back(joined("    { ", ownerTag(target), ", ",
+                                 decimal(static_cast<std::int64_t>(index)), ", \"", attr.key,
+                                 "\", ", attrValueText(attr.value), " },"));
+    }
+}
+
+void CEmitter::emitAttrTail(const ContractShape& shape, std::vector<std::string>& tail) {
+    std::vector<std::string> entries;
+    appendAttrEntries(shape.decl->attrs, AttrTarget::Contract, 0, entries);
+    for (std::size_t i = 0; i < shape.pledges.size(); ++i) {
+        appendAttrEntries(shape.pledges[i].decl->attrs, AttrTarget::Pledge, i, entries);
+    }
+    for (std::size_t i = 0; i < shape.subs.size(); ++i) {
+        appendAttrEntries(shape.subs[i]->attrs, AttrTarget::Subcontract, i, entries);
+    }
+    for (std::size_t i = 0; i < shape.signals.size(); ++i) {
+        appendAttrEntries(shape.signals[i].decl->attrs, AttrTarget::Signal,
+                          shape.pledges.size() + i, entries);
+    }
+    for (std::size_t i = 0; i < shape.remedies.size(); ++i) {
+        appendAttrEntries(shape.remedies[i].decl->attrs, AttrTarget::Remedy, i, entries);
+    }
+    if (entries.empty()) return;
+    const std::string symbol = joined("k_", shape.decl->name, "_attrs");
+    top(joined("static const GeasAttrDesc ", symbol, "[] = {"));
+    for (const std::string& entry : entries) top(entry);
+    top("};");
+    top("");
+    tail.push_back(joined("    .nattrs = ", decimal(static_cast<std::int64_t>(entries.size())),
+                          ", .attrs = ", symbol, ","));
 }
 
 }  // namespace geas

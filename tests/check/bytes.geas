@@ -1,0 +1,51 @@
+record Packet {
+    data: Bytes
+}
+
+PacketKind is either Vacant or Payload(data: Bytes)
+
+contract Buffers {
+    vow seed: Bytes
+
+    remedy observe_raw for raw(data: Bytes) -> Unit {
+        let count = len(data)
+        return
+    }
+
+    pledge raw(data: Bytes) -> Bytes {
+        return data
+    }
+    signal received(data: Bytes)
+    pledge host(data: Bytes) -> Result<Bytes, Bytes>
+
+    clause copy(data: Bytes) -> Bytes {
+        return data
+    }
+
+    pledge exercise(data: Bytes) -> Result<Bytes, Bytes> {
+        let raw: Bytes = bytes("a\0é")
+        let octets: List<Byte> = byte_list(data)
+        let packed = bytes(octets)
+        let literalList = bytes([0, 255])
+        let empty = bytes([])
+        let decoded: Option<String> = text(raw)
+        let count: Int = len(data)
+        let first: Byte = raw[0]
+        let same: Bool = raw == packed
+        let different: Bool = raw != data
+        let joined: Bytes = raw + data
+        let row = Packet { data: joined }
+        let payload = Payload(row.data)
+        let values: List<Bytes> = [data, packed]
+        let mut table = Map<String, Bytes>()
+        table["raw"] = data
+        let found: Option<Bytes> = table["raw"]
+        let pair: Tuple<Bytes, Int> = (data, count)
+        let optional: Option<Bytes> = Some(data)
+        let result: Result<Bytes, Bytes> = Ok(copy(seed))
+        let bytes: Int = 1
+        let text: Int = 2
+        let byte_list: Int = 3
+        return Ok(row.data)
+    }
+}

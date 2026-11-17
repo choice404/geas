@@ -234,6 +234,25 @@ static GeasValue mk_map(GeasContract* a) {
     return m;
 }
 
+static GeasValue mk_bytes(GeasContract* owner) {
+    static const uint8_t bytes[] = { 0, 0xff, 0x80, 'A', 0 };
+    return geas_bytes_copy(owner, bytes, sizeof(bytes));
+}
+
+static GeasValue mk_bytes_empty(GeasContract* owner) {
+    return geas_bytes_copy(owner, NULL, 0);
+}
+
+static GeasValue mk_bytes_list(GeasContract* owner) {
+    GeasValue list;
+    CHECK(geas_list_new(owner, GEAS_TY_BYTES, 2, &list) == GEAS_OK, "Bytes list");
+    GeasValue bytes = mk_bytes(owner);
+    CHECK(geas_list_push(owner, &list, &bytes) == GEAS_OK, "raw bytes element");
+    bytes = mk_bytes_empty(owner);
+    CHECK(geas_list_push(owner, &list, &bytes) == GEAS_OK, "empty bytes element");
+    return list;
+}
+
 typedef struct Fixture {
     const char* name;
     GeasValue (*build)(GeasContract*);
@@ -257,6 +276,9 @@ static const Fixture k_fixtures[] = {
     { "result_ok", mk_result_ok },
     { "result_err", mk_result_err },
     { "map", mk_map },
+    { "bytes", mk_bytes },
+    { "bytes_empty", mk_bytes_empty },
+    { "bytes_list", mk_bytes_list },
 };
 
 enum { N_FIXTURES = sizeof(k_fixtures) / sizeof(k_fixtures[0]) };
@@ -622,6 +644,15 @@ static void test_encode_refusals(void) {
     v = zeroed(GEAS_TY_PLEDGE_REF);
     CHECK(geas_wire_encode_value(&v, NULL, 0, &need) == GEAS_ERR_TYPE,
           "encoder refuses GEAS_TY_PLEDGE_REF");
+
+    v = zeroed(GEAS_TY_BYTES);
+    v.as.s.len = 1;
+    CHECK(geas_wire_encode_value(&v, NULL, 0, &need) == GEAS_ERR_TYPE,
+          "Bytes with a missing buffer refuse");
+    v.as.s.len = 0;
+    v.tag = 1;
+    CHECK(geas_wire_encode_value(&v, NULL, 0, &need) == GEAS_ERR_TYPE,
+          "Bytes has no variant tag");
 
     /* A hand built list whose element disagrees with its elem_ty. */
     GeasValue elem = bool_val(1);

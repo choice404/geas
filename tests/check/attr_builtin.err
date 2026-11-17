@@ -1,0 +1,3 @@
+attribute 'version' shadows a builtin key on contract
+attribute 'abi' shadows a builtin key on pledge
+attribute 'symbol' shadows a builtin key on remedy

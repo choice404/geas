@@ -1,0 +1,2 @@
+attribute queue: String on contract
+contract Job [queue: "a", queue: "b"] {}

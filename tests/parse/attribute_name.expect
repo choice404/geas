@@ -1,0 +1,65 @@
+File {
+    imports: [],
+    decls: [
+        Sum {
+            name: "attribute",
+            variants: [
+                Variant {
+                    name: "On",
+                    fields: [],
+                },
+                Variant {
+                    name: "Off",
+                    fields: [],
+                },
+            ],
+        },
+        Record {
+            name: "Setting",
+            fields: [
+                Field {
+                    name: "attribute",
+                    ty: Named("Int"),
+                },
+                Field {
+                    name: "on",
+                    ty: Named("String"),
+                },
+            ],
+        },
+        Contract {
+            internal: false,
+            name: "attribute",
+            attrs: [],
+            members: [
+                Vow {
+                    name: "on",
+                    ty: Named("Int"),
+                    init: Int(1),
+                },
+                Pledge {
+                    name: "attribute",
+                    params: [
+                        Field {
+                            name: "on",
+                            ty: Named("String"),
+                        },
+                    ],
+                    ret: Named("Unit"),
+                    attrs: [],
+                    body: Block {
+                        stmts: [
+                            Let {
+                                mutable: false,
+                                name: "attribute",
+                                ty: None,
+                                value: Ident("on"),
+                            },
+                            Return(None),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

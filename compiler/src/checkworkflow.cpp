@@ -32,15 +32,6 @@ void Checker::checkContractAttrs(const ContractDecl& contract) {
     }
 }
 
-void Checker::refuseTermAttr(const std::vector<Attr>& attrs, const std::string& label) {
-    for (const Attr& attr : attrs) {
-        if (attr.key == termKey) {
-            emitAt(ast_.expr(attr.value),
-                   "the term attribute belongs on a contract, not on " + label);
-        }
-    }
-}
-
 // A transactional episode is all or nothing under one open transaction, so
 // a retry, which would run a failed attempt's writes and the next one's
 // inside it with the instance lock let go between them, and a signal, which
@@ -111,7 +102,7 @@ void Checker::checkRemedy(const ContractDecl& contract, const RemedyDecl& remedy
 }
 
 // The parameter receives the pledge's Ok value, so its type is the T of the
-// target's Result<T, E>. A target that yields nothing, Unit, an Option, or a
+// target's Result<T, E>, or Bytes for a bare buffer return. Unit, an Option, or a
 // Result of Unit, leaves the remedy no parameter to take
 void Checker::checkRemedyParam(const RemedyDecl& remedy, const PledgeDecl& target) {
     if (!remedy.param) {
@@ -122,20 +113,22 @@ void Checker::checkRemedyParam(const RemedyDecl& remedy, const PledgeDecl& targe
     if (yielded.kind == TyKind::Unknown) {
         return;
     }
-    const bool hasValue = yielded.kind == TyKind::Result && kindOf(yielded.args[0]) != TyKind::Unit;
+    const bool hasValue = yielded.kind == TyKind::Bytes ||
+        (yielded.kind == TyKind::Result && kindOf(yielded.args[0]) != TyKind::Unit);
     if (!hasValue) {
         emit(remedy.lo, remedy.hi,
              label + " cannot take a parameter; pledge " + quoted(target.name) +
                  " yields no Ok value");
         return;
     }
+    const TyId payload = yielded.kind == TyKind::Bytes ? scalar(TyKind::Bytes) : yielded.args[0];
     const std::vector<TyId>& params = remedySig(remedy).params;
-    if (params.empty() || isCompatible(yielded.args[0], params.front())) {
+    if (params.empty() || isCompatible(payload, params.front())) {
         return;
     }
     emit(remedy.lo, remedy.hi,
          typesMessage("the parameter of " + label + " has type ", params.front(),
-                      " but pledge " + quoted(target.name) + " yields ", yielded.args[0]));
+                      " but pledge " + quoted(target.name) + " yields ", payload));
 }
 
 // A remedy with a body checks like a pledge body, one with none is abstract

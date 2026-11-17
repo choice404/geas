@@ -4,6 +4,42 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.8.2] the declared setting
+
+Geas carries the settings and the bytes a durable obligation needs without
+making either a private host convention: a size is an Int measured in binary
+bytes, a declared attribute is a typed setting the module publishes before
+or after sign, and Bytes crosses the same boundary as String without asking
+raw data to be text. The requirements checker now answers its one hard
+question by satisfiability search, so a written policy stays direct while
+the compiler proves fulfill and break cannot both hold, and the skeletons
+give each surface a small contract a host can start from.
+
+- add size literals: `64M`, `512K`, `1G`, and `2T` are one token, binary
+  multiples carried as an `Int` byte count wherever an integer literal may
+  stand
+- declare host settings at the top level with `attribute NAME: Type on
+  TARGET`, importable and internal like other declarations, for contracts,
+  subcontracts, pledges, signals, and remedies with Int, Float, Bool,
+  String, or Duration values
+- check an attribute list against its declaration beside the builtin keys,
+  carry the descriptors through the module, and let a host read them before
+  or after sign through `geas_attr_count`, `geas_attr_at`,
+  `geas_contract_attr`, `geas_item_attr`, and the instance forms, outside
+  the shape hash so a setting can change under a parked instance
+- add Bytes: an arbitrary byte buffer with String's pointer and length
+  layout but no UTF-8 rule, carried through values, frames, park, proto,
+  Go, TypeScript, and Python everywhere String goes except map keys and
+  schema columns, with `bytes`, `text`, and `byte_list` beside len, index,
+  equality, and concatenation
+- make the fulfill and break exclusion a satisfiability search, cap a
+  written requirements block at 64 distinct atoms, synthesize a default
+  policy for up to 255 items, and cross check the search against enumeration
+  in the hidden self test
+- add `skeleton/jobstep.geas`, `skeleton/jobattrs.geas`, and
+  `skeleton/blob.geas`, with `test-attrs` and `test-bytes` holding the new
+  host surfaces
+
 ## [v0.8.1] the plain host
 
 The host becomes a plain resident of the runtime, one shared body and its

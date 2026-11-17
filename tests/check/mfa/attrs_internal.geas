@@ -1,0 +1,2 @@
+import attrs.decls
+contract Job [secret: 7] {}

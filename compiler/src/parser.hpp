@@ -94,6 +94,7 @@ private:
     void parseFile();
     void parseImport();
     void parseDecl();
+    AttributeDecl parseAttribute(bool isInternal);
     void parseInternalDecl();
     RecordDecl parseRecord();
     SumDecl parseSum();

@@ -10,6 +10,7 @@
 
 #include "duration.hpp"
 #include "lexdump.hpp"
+#include "size.hpp"
 
 namespace geas {
 
@@ -69,8 +70,10 @@ Term Parser::parseRetry() {
     const std::int64_t lo = current().lo;
     bump();
     RetryTerm retry{0, std::nullopt, std::nullopt, std::nullopt, {}};
-    if (at(TokenKind::Int)) {
-        retry.count = intValue(text_, current().lo, current().hi);
+    if (at(TokenKind::Int) || at(TokenKind::Size)) {
+        retry.isSizeCount = at(TokenKind::Size);
+        retry.count = retry.isSizeCount ? parseSize(tokenText(current())).value_or(0)
+                                       : intValue(text_, current().lo, current().hi);
         bump();
     } else {
         error(expectedFound("the number of retries after 'retry'"));
@@ -135,10 +138,11 @@ std::int64_t Parser::expectDuration(std::string_view what) {
     return milliseconds;
 }
 
-// Steps over an Int, a Float, or a name sitting on the current line, the
+// Steps over an integer, a size, a float, or a name sitting on the current line, the
 // recovery after a term option took the wrong kind of value
 void Parser::skipStrayValue() {
-    const bool isValue = at(TokenKind::Int) || at(TokenKind::Float) || at(TokenKind::Ident);
+    const bool isValue = at(TokenKind::Int) || at(TokenKind::Size) ||
+                         at(TokenKind::Float) || at(TokenKind::Ident);
     if (isValue && !isNewlineTerminator()) {
         bump();
     }
@@ -195,11 +199,13 @@ SignalDecl Parser::parseSignal() {
     const std::int64_t hi = previousHi();
     std::vector<Field> params = parseParams();
     std::vector<Term> terms = parseTerms();
+    std::vector<Attr> attrs = parseAttrsOnLine();
     if (at(TokenKind::LBrace) && !hasNewlineHere()) {
         error("a signal has no body; the host delivers it into the instance");
         parseBlock();
     }
-    return SignalDecl{std::move(name), lo, hi, std::move(params), std::move(terms)};
+    return SignalDecl{std::move(name), lo, hi, std::move(params), std::move(terms),
+                      std::move(attrs)};
 }
 
 // course Block
@@ -215,8 +221,10 @@ AmendsDecl Parser::parseAmends() {
     const std::int64_t lo = current().lo;
     bump();
     std::int64_t version = 0;
-    if (at(TokenKind::Int)) {
-        version = intValue(text_, current().lo, current().hi);
+    const bool isSizeVersion = at(TokenKind::Size);
+    if (at(TokenKind::Int) || at(TokenKind::Size)) {
+        version = isSizeVersion ? parseSize(tokenText(current())).value_or(0)
+                                : intValue(text_, current().lo, current().hi);
         bump();
     } else {
         error(expectedFound("the version number this block amends from"));
@@ -231,7 +239,7 @@ AmendsDecl Parser::parseAmends() {
         guardProgress(before, "unexpected token in the amends block");
     }
     expectClose("the amends block is not closed; expected '}' before end of input");
-    return AmendsDecl{lo, hi, version, std::move(items)};
+    return AmendsDecl{lo, hi, version, std::move(items), isSizeVersion};
 }
 
 // One item, an unknown one reported and its line skipped

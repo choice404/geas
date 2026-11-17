@@ -50,7 +50,7 @@ The lexer produces exactly these kinds, each carrying its source span and the li
 
 | Class | Kinds |
 | ----- | ----- |
-| Names and literals | `IDENT`, `INT`, `FLOAT`, `DURATION`, `STRING`, `CHAR` |
+| Names and literals | `IDENT`, `INT`, `SIZE`, `FLOAT`, `DURATION`, `STRING`, `CHAR` |
 | Grouping | `(` `)` `[` `]` `{` `}` |
 | Punctuation | `,` `.` `:` `?` `->` `_` `=` |
 | Arithmetic | `+` `-` `*` `/` `%` |
@@ -60,7 +60,7 @@ The lexer produces exactly these kinds, each carrying its source span and the li
 
 The lexer takes the longest token that fits: `->` over `-`, `==` over `=`, `!=` over `!`, `<=` over `<`, `>=` over `>`, and `ms` over `m` inside a duration. A lone `&` or `|` is a lex error, there are no bitwise operators. There is no shift operator, so `>>` is never a token and `List<List<Int>>` closes on two `>` tokens. `_` alone is its own token; `_x` is an `IDENT`.
 
-Lex errors are reported with their span and then skipped past, so one bad character does not end the file: an unterminated string, char, or block comment, a raw line break inside a string, an invalid escape, a char literal holding zero or several scalar values, invalid UTF-8, an integer above the `Int` maximum, a duration with units out of order, repeated, or unknown, and a stray character.
+Lex errors are reported with their span and then skipped past, so one bad character does not end the file: an unterminated string, char, or block comment, a raw line break inside a string, an invalid escape, a char literal holding zero or several scalar values, invalid UTF-8, an integer or size above the `Int` maximum, a size suffix followed by identifier characters, a duration with units out of order, repeated, or unknown, and a stray character.
 
 ## Identifiers and keywords
 
@@ -95,10 +95,11 @@ Contextual keywords, ordinary identifiers except in the positions named:
 - `every`, `backoff`, `cap`, and `on` are options inside a `retry` term.
 - `as` and `timeout` belong to `select` arms.
 - `rename`, `retire`, `latch`, `as`, and `prior` belong to an `amends` block, and `fulfilled`, `pending`, and `broken` follow `latch NAME as`.
-- `version`, `term`, `abi`, and `symbol` are attribute keys.
+- `version`, `term`, `abi`, and `symbol` are builtin attribute keys.
+- `attribute` opens an attribute declaration when followed by an identifier at the top level, and `on` separates its type from its target. Both remain ordinary identifiers elsewhere.
 - `sign`, `resume`, `status`, `park`, and `partial` are builtin contract methods.
 - `List`, `Map`, `Option`, `Result`, and `Tuple` open type arguments, see Expressions.
-- `len` is a builtin in callee position, and `now` is a builtin in callee position inside a course.
+- `len`, `bytes`, `text`, and `byte_list` are builtins in callee position, and `now` is a builtin in callee position inside a course.
 
 One carve out: after `.` any keyword is accepted as a member name. That is what lets `payment.break()` parse while `break` stays a hard keyword for loop control.
 
@@ -106,6 +107,7 @@ One carve out: after `.` any keyword is accepted as a member name. That is what 
 
 ```text
 INT      ::= decimal | "0x" hex | "0b" binary        // underscores allowed as separators
+SIZE     ::= decimal ( "K" | "M" | "G" | "T" )
 FLOAT    ::= digits "." digits [ ("e"|"E") ["+"|"-"] digits ]
 DURATION ::= DurPart { DurPart }
 DurPart  ::= digits ( "d" | "h" | "m" | "s" | "ms" )
@@ -115,9 +117,11 @@ BOOL     ::= "true" | "false"
 escape   ::= "\n" | "\t" | "\r" | "\0" | "\\" | "\"" | "\'" | "\u{" hex "}"
 ```
 
-An `INT` literal types as `Int` unless the expected type at its position is `UInt` or `Byte` and the value fits. A `FLOAT` literal types as `Float`. `CHAR` holds one Unicode scalar value. There is no implicit numeric conversion anywhere, widening included.
+An `INT` or `SIZE` literal types as `Int` unless the expected type at its position is `UInt` or `Byte` and the value fits. A `FLOAT` literal types as `Float`. `CHAR` holds one Unicode scalar value. There is no implicit numeric conversion anywhere, widening included.
 
-A `DURATION` is one token, `30s`, `250ms`, `1h30m`, `7d`, with no whitespace inside it, and types as `Duration`. Its units run from largest to smallest, `d h m s ms`, each at most once, so `30m1h` and `1h1h` are lex errors. After the digits of a decimal literal the lexer looks at what follows: a `.` and a digit make a `FLOAT`, a run of letters that is exactly a unit makes a `DURATION`, any other letter run is a lex error, so `5mx` and `3days` are refused rather than split into a number and a name, and anything else leaves an `INT`. A literal with a `0x` or `0b` prefix is never a duration, so `0x1d` is an `INT`.
+A `SIZE` is one token, `64M`, `512K`, `1G`, with no whitespace before its uppercase suffix. The suffix counts bytes in binary multiples: `K` is 1024, `M` is 1024 squared, `G` is 1024 cubed, and `T` is 1024 to the fourth power. A size is an integer spelling, legal wherever an integer literal is legal, including attributes, vow defaults, patterns, retry counts, and amendment versions. Unary minus applies the same way, so `-512K` is an `Int` value of -524288. The decoded value must fit `Int` before negation; `64Mb`, `1Gx`, and a suffix followed by any other identifier character are lex errors. The lex and parse dumps retain `Size(bytes)`, while emitted C carries the plain integer. Where a production below calls for `INT`, `SIZE` is accepted too.
+
+A `DURATION` is one token, `30s`, `250ms`, `1h30m`, `7d`, with no whitespace inside it, and types as `Duration`. Its units run from largest to smallest, `d h m s ms`, each at most once, so `30m1h` and `1h1h` are lex errors. After the digits of a decimal literal the lexer looks at what follows: a `.` and a digit make a `FLOAT`, `K`, `M`, `G`, or `T` opens a `SIZE`, and a duration unit opens a `DURATION`. Other letter runs are lex errors, so `5mx`, `3days`, and lowercase `5k` are refused rather than split into a number and a name. Case matters: `5m` is five minutes and `5M` is five mebibytes. A literal with a `0x` or `0b` prefix takes neither suffix, and a float takes neither suffix, so `0x1d` is an `INT` while `0x1K`, `0b1M`, and `1.5G` are lex errors.
 
 A raw line break inside a string literal is an error; a string that needs one writes `\n`. An integer literal above the `Int` maximum is a lex error, so the largest `UInt` values are not writable as literals yet. A `\u{...}` escape naming a surrogate or a value above `0x10FFFF` is an error.
 
@@ -132,6 +136,7 @@ The fixed representations, identical on every target:
 | Byte     | 8 bit unsigned              |
 | Char     | 32 bit Unicode scalar value |
 | String   | UTF-8, pointer plus byte length, no terminator |
+| Bytes    | arbitrary bytes, pointer plus byte length, no terminator |
 | Duration | 64 bit signed milliseconds  |
 | Time     | 64 bit signed milliseconds since the Unix epoch |
 
@@ -144,7 +149,9 @@ TupleType  ::= "Tuple" "<" Type { "," Type } ">"
 PledgeType ::= "pledge" "(" [ Type { "," Type } ] ")" "->" Type
 ```
 
-The builtin named types are `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `String`, `Unit`, `Duration`, `Time`, `List<T>`, `Map<K, V>`, `Option<T>`, `Result<T, E>`, and `Tuple<...>`. Type arguments belong to the builtin composites only. A user declaration does not take type parameters. Every instantiation is monomorphized, and only instantiations reachable from a pledge signature get an ABI descriptor.
+The builtin named types are `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `String`, `Bytes`, `Unit`, `Duration`, `Time`, `List<T>`, `Map<K, V>`, `Option<T>`, `Result<T, E>`, and `Tuple<...>`. Type arguments belong to the builtin composites only. A user declaration does not take type parameters. Every instantiation is monomorphized, and only instantiations reachable from a pledge signature get an ABI descriptor.
+
+`Bytes` holds arbitrary bytes, including zeros and invalid UTF-8, in one buffer. A user declaration named `Bytes` wins over the builtin, the rule `Duration` and `Time` follow. It crosses pledge and signal parameters and pledge returns, and fits inside `Result`, `Option`, records, sum payloads, lists, map values, tuples, and local bindings. A `Bytes` vow has no default and must be supplied at sign. `Bytes` is neither a map key nor a schema column.
 
 `Map<K, V>` keys are restricted to `Int`, `UInt`, `Bool`, `Byte`, `Char`, and `String`.
 
@@ -169,7 +176,7 @@ A contract name used as a type denotes a signed instance, and an instance never 
 ```text
 File        ::= { Import NL } { TopDecl NL }
 Import      ::= "import" IDENT { "." IDENT }
-TopDecl     ::= RecordDecl | SumDecl | ProvClause | ContractDecl
+TopDecl     ::= RecordDecl | SumDecl | ProvClause | ContractDecl | AttributeDecl
 ```
 
 A file is a module. A directory is a package. `import std.math` brings a module into scope by its dotted path. `internal` on a contract or provisional clause keeps it inside its package and out of the descriptor table.
@@ -177,13 +184,33 @@ A file is a module. A directory is a package. `import std.math` brings a module 
 ## Attributes
 
 ```text
-Attrs ::= "[" IDENT ":" Literal { "," IDENT ":" Literal } "]"
+AttributeDecl ::= [ "internal" ] "attribute" IDENT ":" AttrType "on" AttrTarget
+AttrType      ::= "Int" | "Float" | "Bool" | "String" | "Duration"
+AttrTarget    ::= "contract" | "subcontract" | "pledge" | "signal" | "remedy"
+Attrs         ::= "[" IDENT ":" AttrValue { "," IDENT ":" AttrValue } "]"
+AttrValue     ::= [ "-" ] ( INT | SIZE | FLOAT | DURATION ) | BOOL | STRING
 ```
 
-An attribute list trails a declaration header, after any terms and on the same line. Unknown keys are compile errors. The known keys:
+An attribute declaration occupies one line and follows the module rules: declarations in loaded modules are visible across their package and through `import`, and `internal` keeps one inside its package. Attribute names have one namespace per target. A name may be declared on several targets, but a second declaration for the same target is an error, and a declaration cannot shadow a builtin key on a target that owns that key.
+
+An attribute list trails a declaration header, after every term and before the opening body brace when there is one. Its `[` opens on the line the signature or last term ends on, and the body brace opens on the line the list ends on. A subcontract puts its list after its name, optional `transactional`, and terms, immediately before `{`. A signal puts its list after its parameters and terms, with no body. The same positions apply to a pledge or signal inside a subcontract.
+
+A list accepts the builtin keys of its target and declared attributes in scope for that target. Unknown keys, a key declared for another target, a repeated key in one list, and a value of the wrong type are compile errors. Values use the usual literal rules, so a size is an `Int`, a duration is a `Duration`, and there is no numeric conversion. Unary minus applies to numbers and durations. Declared attributes are host settings, outside both the shape hash and mangled names, so changing a setting leaves a parked instance compatible.
+
+```text
+attribute program: String on pledge
+attribute region: Int on pledge
+attribute queue: String on contract
+
+contract Job [queue: "batch"] {
+    pledge copy(target: String) -> Result<Unit, CopyError> [program: "/bin/copy", region: 64M]
+}
+```
+
+The builtin keys:
 
 - `version: INT` on a contract. Defaults to 1. Baked into every mangled name the contract produces.
-- `term: DURATION` on a contract, its whole lifetime counted from sign. The duration must be greater than zero, and the key belongs on a contract only, a pledge or remedy carrying it is an error. When the term runs out while the contract is Signed or Partial, the contract breaks the way a matched break line breaks it, remedies included; a contract already Fulfilled met its terms and is left alone.
+- `term: DURATION` on a contract, its whole lifetime counted from sign. The duration must be greater than zero, and this builtin key belongs on a contract only. A pledge or remedy needs its own declared attribute to use the name `term`. When the term runs out while the contract is Signed or Partial, the contract breaks the way a matched break line breaks it, remedies included; a contract already Fulfilled met its terms and is left alone.
 - `abi: STRING` and `symbol: STRING` on a pledge or a remedy. Binds it to a foreign symbol. `"c"` is the only ABI.
 
 ## Data declarations
@@ -244,14 +271,14 @@ ClauseDecl   ::= "clause" IDENT "(" [ Params ] ")" "->" Type Block
 Params       ::= Param { "," Param }
 Param        ::= IDENT ":" Type
 
-SubcontractDecl ::= "subcontract" [ IDENT ] [ "transactional" ] Terms
+SubcontractDecl ::= "subcontract" [ IDENT ] [ "transactional" ] Terms [ Attrs ]
                     "{" NL { SubMember NL } "}"
 SubMember       ::= PledgeDecl | SignalDecl
 ```
 
 Semantic notes.
 
-- A pledge return type must be `Result<T, E>`, `Option<T>`, or `Unit`. Nothing else.
+- A pledge return type must be `Result<T, E>`, `Option<T>`, `Unit`, or `Bytes`. A bare `Bytes` return latches fulfilled on delivery.
 - A pledge with a `Block` is implemented in Geas. A pledge without one is abstract: it must be bound to a foreign symbol through `[abi: ..., symbol: ...]` or bound by the host through the runtime before the contract signs. Signing with an unbound pledge is an error.
 - A vow initializer must be a constant expression of the vow type. A vow without an initializer must be supplied at sign time.
 - Clauses are not first class. A clause is callable by bare name only inside its own contract.
@@ -324,7 +351,7 @@ Semantic notes.
 ## Signals
 
 ```text
-SignalDecl ::= "signal" IDENT "(" [ Params ] ")" Terms
+SignalDecl ::= "signal" IDENT "(" [ Params ] ")" Terms [ Attrs ]
 ```
 
 A signal is an outside event delivered into a live instance, a webhook, an approval, a delivery scan. It has no body and no return type.
@@ -356,13 +383,13 @@ ReqNot   ::= [ "!" ] ReqAtom
 ReqAtom  ::= IDENT | "(" ReqExpr ")"
 ```
 
-A `ReqAtom` names a named subcontract, a pledge declared outside any subcontract, or a signal declared outside any subcontract. A remedy is never an atom. A bare name means that item is fulfilled, `!` negates it. At most 16 atoms per contract.
+A `ReqAtom` names a named subcontract, a pledge declared outside any subcontract, or a signal declared outside any subcontract. A remedy is never an atom. A bare name means that item is fulfilled, `!` negates it. A written requirements block names at most 64 distinct atoms across its three lines.
 
 A pledge latches. It becomes fulfilled on its first `Ok` and broken on an `Err` that lands before any `Ok`, or on a lapse. Later calls still run and still return their results to the caller, but the latched state never changes, so contract state never regresses. A subcontract is fulfilled when every member inside it is, and broken when every member inside it is.
 
-The policy is evaluated after every latch, in priority order `break`, then `fulfill`, then `partial`, and the first line that matches sets the contract state. The `break` line arms only once at least one item has latched broken; before that it never matches, whatever its expression says. Without this rule a policy like `break: !Validation && !Processing` would tear the contract down after its very first successful fulfillment, when nothing has broken and nothing is yet fulfilled. A state that satisfies both `fulfill` and `partial` is therefore fine, `fulfill` wins. The one static rejection is a `fulfill` and a `break` that can be true at the same time, checked by enumerating the atom assignments, and the diagnostic names a witness.
+The policy is evaluated after every latch, in priority order `break`, then `fulfill`, then `partial`, and the first line that matches sets the contract state. The `break` line arms only once at least one item has latched broken; before that it never matches, whatever its expression says. Without this rule a policy like `break: !Validation && !Processing` would tear the contract down after its very first successful fulfillment, when nothing has broken and nothing is yet fulfilled. A state that satisfies both `fulfill` and `partial` is therefore fine, `fulfill` wins. The checker rejects a fulfill or break line that can never hold, and a `fulfill` and a `break` that can be true at the same time, checked by satisfiability search with unit propagation and atom branching, and the diagnostic names a witness.
 
-When the block is absent the defaults apply: `fulfill` when every subcontract, loose pledge, and loose signal is fulfilled, `partial` when at least one subcontract is, `break` when everything is broken.
+When the block is absent the defaults apply: `fulfill` when every subcontract, loose pledge, and loose signal is fulfilled, `partial` when at least one subcontract is, `break` when everything is broken. The 64 atom cap applies only to written blocks. Synthesized defaults work through 255 items, including loose pledges and signals, without that cap. When the fulfilled and broken atom rows would exceed the byte sized descriptor index, the runtime evaluates the same default directly over the subcontract and pledge tables; it keeps the same fulfill, partial, and break rules.
 
 ## Course
 
@@ -456,7 +483,7 @@ Bindings are immutable unless declared `let mut`. Assignment targets a `let mut`
 
 A block used as a value takes the type of its final expression statement, and `Unit` when it ends with anything else. Match arms must agree on one type wherever the match sits, so a statement position match with mixed arms ends each arm in a statement or returns.
 
-`+` on two `String` values concatenates into a new `String`. That is the one operator with a non numeric arm; a `String` never meets a numeric operand.
+`+` on two `String` values concatenates into a new `String`, and on two `Bytes` values into a new `Bytes`. The operands must have the same type. `Bytes` supports `==` and `!=`, comparing length then contents, and has no ordering comparisons.
 
 `&&` and `||` short circuit: the right operand is not evaluated when the left already decides the answer, so a bounds guard like `i < n && xs[i] == 0` never touches `xs[i]` out of range.
 
@@ -512,7 +539,20 @@ let miss = ages["bob"]     // None
 
 Indexing a map reads an `Option<V>`, `None` on a missing key, so a miss is a value and never a fault; `m[k] = v` inserts or updates. Entries keep insertion order, which is the order any serialization sees and the order `for k in m` walks the keys. Removal from a map is not in the language yet.
 
-`len(x)` is a builtin call, the length of a `List` or a `Map` as an `Int`: a list answers its element count and a map its entry count. It is reserved in callee position only, so a binding may still be named `len`; `len` applied to any other type, or to other than one argument, is an error. There is no method form.
+`len(x)` is a builtin call, the length of a `List`, `Map`, or `Bytes` as an `Int`: a list answers its element count, a map its entry count, and Bytes its byte count. It is reserved in callee position only, so a binding may still be named `len`; `len` applied to any other type, or to other than one argument, is an error. There is no method form.
+
+`b[i]` on Bytes takes an `Int` index and yields a `Byte`. It follows the List index rule: zero is the first byte, and a negative index or an index at or beyond `len(b)` faults the fulfillment with `GEAS_ERR_TYPE`. Bytes has no index assignment or iteration syntax; `byte_list(b)` supplies a list where either is needed.
+
+The byte conversions are builtin calls with one positional argument, reserved in callee position the way `len` is:
+
+| Call | Result |
+| --- | --- |
+| `bytes(s)` for a `String` | `Bytes`, the string's UTF-8 bytes |
+| `bytes(xs)` for a `List<Byte>` | `Bytes`, one byte per element |
+| `text(b)` for `Bytes` | `Option<String>`, `None` when UTF-8 is invalid |
+| `byte_list(b)` for `Bytes` | `List<Byte>`, one element per byte |
+
+Each conversion builds an independent value. `text` accepts embedded zeros and rejects truncated sequences, overlong encodings, surrogates, and values above U+10FFFF. There is no byte string literal, no implicit String conversion, and no Bytes vow default in this release. Build a buffer with `bytes("text")`, `bytes([0, 255])`, or a host value.
 
 An assignment target is a place, not a value, so the lvalue walk differs from reading in two ways. A map index in an assignment target names the value slot directly and types as `V`, not `Option<V>`: in final position `m[k] = v` inserts or updates and never faults, while a missing key in the middle of a chain, `m[k].field = v`, is a fault, the same status an out of range list index reports, because a place that does not exist cannot hang a `None` anywhere. And writing through a chain, `b.xs[0] = 99`, mutates the named binding in place; the copies value semantics make on reads never apply to the target being assigned.
 
@@ -562,7 +602,7 @@ There is no dynamic `fulfill(name, args)` form in the language. Dispatch by name
 MatchExpr ::= "match" Expr "{" NL { MatchArm NL } "}"
 MatchArm  ::= Pattern "->" ( Expr | Block )
 Pattern   ::= Literal
-            | "-" ( INT | FLOAT | DURATION )
+            | "-" ( INT | SIZE | FLOAT | DURATION )
             | "_"
             | IDENT                                   // binding
             | IDENT "(" Pattern { "," Pattern } ")"   // variant with payload

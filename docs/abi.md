@@ -16,7 +16,7 @@ typedef struct GeasValue {
         double    f;    /* Float */
         uint8_t   b;    /* Bool and Byte */
         uint32_t  ch;   /* Char, a Unicode scalar value */
-        GeasString s;    /* String */
+        GeasString s;    /* String or Bytes */
         GeasList   list; /* List */
         void*     box;  /* Option and Result payloads */
     } as;
@@ -32,9 +32,11 @@ typedef enum GeasTypeTag {
     GEAS_TY_UNIT = 0, GEAS_TY_INT, GEAS_TY_UINT, GEAS_TY_FLOAT, GEAS_TY_BOOL,
     GEAS_TY_BYTE, GEAS_TY_CHAR, GEAS_TY_STRING, GEAS_TY_LIST, GEAS_TY_MAP,
     GEAS_TY_TUPLE, GEAS_TY_OPTION, GEAS_TY_RESULT, GEAS_TY_RECORD,
-    GEAS_TY_PLEDGE_REF, GEAS_TY_SUM
+    GEAS_TY_PLEDGE_REF, GEAS_TY_SUM, GEAS_TY_INSTANCE, GEAS_TY_BYTES
 } GeasTypeTag;
 ```
+
+`GEAS_TY_INSTANCE` is 16 and stays internal. `GEAS_TY_BYTES` is 17, appended after it, with every earlier tag unchanged. Bytes rides `as.s.ptr` and `as.s.len`, arbitrary bytes including zeros, no terminator, and `tag` zero. Its instance ownership and deep copy follow String, and equality checks length then `memcmp`. No public struct grows.
 
 Strings are a fat value: a pointer and a byte length, UTF-8, no terminator. The bytes live wherever the value's owner put them; a compiled module points string constants into its own mapped image, and everything built at run time lives on a contract instance.
 
@@ -81,6 +83,14 @@ The value and allocation helpers cross the boundary with these shapes, every all
 uint8_t*  geas_bytes(GeasContract* c, uint64_t n);
 GeasValue* geas_box(GeasContract* c);
 GeasValue  geas_string_copy(GeasContract* c, const uint8_t* utf8, uint64_t len);
+GeasValue  geas_bytes_copy(GeasContract* c, const uint8_t* ptr, uint64_t len);
+GeasStatus geas_bytes_copy_into(GeasContract* c, const uint8_t* ptr,
+                                uint64_t len, GeasValue* out);
+GeasStatus geas_bytes_concat(GeasContract* c, const GeasValue* a,
+                             const GeasValue* b, GeasValue* out);
+GeasStatus geas_bytes_from(GeasContract* c, const GeasValue* value, GeasValue* out);
+GeasStatus geas_bytes_text(GeasContract* c, const GeasValue* value, GeasValue* out);
+GeasStatus geas_bytes_list(GeasContract* c, const GeasValue* value, GeasValue* out);
 GeasStatus geas_string_concat(GeasContract* c, const GeasValue* a,
                             const GeasValue* b, GeasValue* out);
 GeasStatus geas_list_new(GeasContract* c, uint32_t elem_ty, uint64_t cap,
@@ -103,13 +113,16 @@ Every helper returning a `GeasValue` directly also has a pointer form for hosts 
 
 | By value | Through `out` | Storage |
 | --- | --- | --- |
-| `geas_string_copy` | `geas_string_copy_into` | Bytes copied onto the instance |
+| `geas_string_copy` | `geas_string_copy_into` | UTF-8 copied onto the instance |
+| `geas_bytes_copy` | `geas_bytes_copy_into` | Raw bytes copied onto the instance |
 | `geas_map_new` | `geas_map_new_into` | Empty map, no allocation |
 | `geas_state_value` | `geas_state_value_into` | String borrowing static state bytes |
 
 A NULL instance or `out` is `GEAS_ERR_TYPE`. The string form also refuses NULL `utf8` when `len` is nonzero, while NULL with length zero builds an empty string. Failure to allocate the string is `GEAS_ERR_OOM`, the status spelling of the direct form's NULL byte pointer; a length that cannot fit an allocation is refused with the same status. An empty map's NULL data pointer is a successful value. The map and state forms allocate nothing.
 
-**Indexing out of bounds.** Compiled code bounds checks every list element read and write, reads through `geas_list_get` and writes through `geas_list_set`. An index outside the list, a negative one included through the unsigned cast, makes the pledge return `GEAS_ERR_TYPE` from its thunk: the status reports the fulfillment never produced a value, no latch moves, and host memory is never touched. This rule is normative for every compiled module.
+`geas_bytes_copy_into` follows the string pointer form, including its NULL and allocation checks. The raw allocator keeps the name `geas_bytes`; it returns memory, while `geas_bytes_copy` returns a tagged value. `geas_bytes_from` implements both `bytes` conversions, `geas_bytes_text` implements UTF-8 validation and `Option<String>`, and `geas_bytes_list` implements `byte_list`. Results live on the instance heap. A wrong input type is `GEAS_ERR_TYPE`, allocation failure is `GEAS_ERR_OOM`, and invalid UTF-8 is a successful `None`.
+
+**Indexing out of bounds.** Compiled code bounds checks every list element read and write, reads through `geas_list_get` and writes through `geas_list_set`. An index outside the list, a negative one included through the unsigned cast, makes the pledge return `GEAS_ERR_TYPE` from its thunk: the status reports the fulfillment never produced a value, no latch moves, and host memory is never touched. Bytes reads use the same Int index, unsigned bounds check, and `GEAS_ERR_TYPE` fault, returning one Byte on success. This rule is normative for every compiled module.
 
 **Indexing a map.** A map read is never a fault: compiled code lowers `m[k]` onto `geas_map_get` and wraps the answer in the `Option` the language promises, `Some` around an instance owned deep copy of the value on a hit, `None` on a miss. `m[k] = v` lowers onto `geas_map_set`, which deep copies the key and the value onto the instance before committing, replaces in place when the key exists, and appends in insertion order when it does not. `geas_map_new` builds the empty map; it allocates nothing, so it returns the value directly. `geas_map_get` hands back a borrow into the map's own pair storage, which a later `geas_map_set` on the same map may move, so a host copies it out before the next write.
 
@@ -119,6 +132,8 @@ A NULL instance or `out` is `GEAS_ERR_TYPE`. The string form also refuses NULL `
 GeasStatus geas_value_render(const GeasValue* v, char* buf, size_t cap,
                            size_t* need);
 ```
+
+Bytes renders as `Bytes(00ff; 2 bytes)`, at most 32 bytes in lowercase hex, an ellipsis when more bytes follow, and the full byte count.
 
 The spelling: `Int`, `UInt`, and `Float` as C would print them, `Bool` as `true` or `false`, `Byte` as its decimal value, `Char` as `U+0041`, `Unit` as `()`, strings quoted with `"` and `\` escaped and control bytes as `\xNN`, lists as `[a, b]`, tuples as `(a, b)`, records as `{a, b}` with the fields in declaration order, a sum as `#tag` with its payload in parens when it carries one, and `None`, `Some(v)`, `Ok(v)`, `Err(v)` through their boxes. A map renders as `{k: v, ...}` with its pairs in insertion order, the only order a map has, and an empty map as `{}`. Nesting deeper than eight levels renders as `...`, so a cyclic or absurd value cannot run the renderer away. The size protocol is `geas_iname_dump`'s: `*need` receives the full size including the terminating NUL, a `cap` at least that writes the text and returns `GEAS_OK`, anything smaller writes nothing and returns `GEAS_ERR_OOM`, so a NULL `buf` with `cap` 0 sizes the buffer.
 
@@ -218,6 +233,8 @@ typedef struct GeasContractDesc {
     uint32_t              nremedies;
     const GeasRemedyDesc* remedies;
     uint64_t              term_ms;
+    uint32_t              nattrs;
+    const GeasAttrDesc*    attrs;
 } GeasContractDesc;
 ```
 
@@ -233,6 +250,81 @@ enum { GEAS_SUB_TRANSACTIONAL = 1 };
 
 `GEAS_SUB_TRANSACTIONAL` marks a subcontract whose pledges run as one all-or-nothing episode: the runtime opens a transaction on the first fulfillment of one of its pledges, commits the instant the subcontract completes, and rolls back on the first `Err` or at a break before the commit. The bits ride their own array so the subs table and every descriptor emitted before the store layer stay byte identical, and a NULL `sub_flags` reads as all zero, the loose grouping every earlier contract carried. Both tails are pure additions the shape hash already covers, never a change to an existing field. The workflow tail after them, the kinds, terms, remedies, and contract term, follows the same rule and has its own section, The workflow surface.
 
+## Declared attributes
+
+So a declared attribute is a host setting carried by the module, available
+before sign and on an instance. The descriptor appends `nattrs` and `attrs`
+after `term_ms`. A contract with no declared settings emits no attribute table
+and no new initializer fields. Builtin keys keep their existing meanings and
+do not enter this table. Declared settings stay outside the shape hash and
+mangled names, so changing one leaves a parked instance compatible.
+
+```c
+typedef enum GeasAttrOwner {
+    GEAS_ATTR_CONTRACT = 0,
+    GEAS_ATTR_SUBCONTRACT = 1,
+    GEAS_ATTR_PLEDGE = 2,
+    GEAS_ATTR_SIGNAL = 3,
+    GEAS_ATTR_REMEDY = 4
+} GeasAttrOwner;
+
+typedef struct GeasAttrDesc {
+    uint32_t owner;
+    uint32_t owner_index;
+    const char* name;
+    GeasValue value;
+} GeasAttrDesc;
+
+typedef struct GeasAttrInfo {
+    uint32_t owner;
+    const char* owner_name;
+    const char* key;
+    const GeasValue* value;
+} GeasAttrInfo;
+```
+
+A contract owner has index zero, a subcontract indexes `subs`, pledges and
+signals index `pledges`, and a remedy indexes `remedies`. `Int` and size
+literals carry `GEAS_TY_INT` in `as.i`, a size counting bytes, and `Duration`
+uses the same tag and arm in milliseconds. `Float` uses `GEAS_TY_FLOAT` and
+`as.f`, `Bool` uses `GEAS_TY_BOOL` and `as.b`, and `String` uses
+`GEAS_TY_STRING` and `as.s`, pointing at module bytes. The value's variant tag
+is zero. On LP64, `GeasAttrDesc` is 56 bytes and `GeasAttrInfo` is 32 bytes,
+with natural C alignment.
+
+```c
+GeasStatus geas_attr_count(GeasRuntime*, const char* contract, size_t* count);
+GeasStatus geas_attr_at(GeasRuntime*, const char* contract, size_t index,
+                        GeasAttrInfo* out);
+GeasStatus geas_contract_attr(GeasRuntime*, const char* contract, const char* key,
+                              const GeasValue** out);
+GeasStatus geas_item_attr(GeasRuntime*, const char* contract, const char* item,
+                          const char* key, const GeasValue** out);
+GeasStatus geas_instance_attr_count(const GeasContract*, size_t* count);
+GeasStatus geas_instance_attr_at(const GeasContract*, size_t index, GeasAttrInfo* out);
+GeasStatus geas_instance_attr(const GeasContract*, const char* item, const char* key,
+                              const GeasValue** out);
+```
+
+Enumeration visits contract settings, pledges, subcontracts, signals, then
+remedies, in each table's declaration order and each list's written order.
+`owner_name` names that declaration, NULL for an anonymous subcontract. An
+item lookup names a pledge, signal, named subcontract, or remedy. On the
+instance lookup a NULL `item` selects the contract. Unknown contract or item
+names and an enumeration index past the end return `GEAS_ERR_NAME`. A key the
+owner does not carry returns `GEAS_OK` with `*out` NULL. NULL required arguments
+return `GEAS_ERR_TYPE`. Output pointers and counts are cleared before a failed
+lookup. The returned names, values, and string bytes are borrowed, immutable,
+and valid until runtime shutdown, including after an instance breaks.
+Anonymous subcontract attributes remain available through enumeration.
+
+Python exposes `rt.attrs(contract)` as a list of dictionaries with `owner`,
+`owner_name`, `key`, and a decoded `value`, and `rt.attr(contract, key,
+item=None)` returns a decoded value or `None` for an absent key. A signed
+contract also provides `attrs()` and `attr(key, item=None)`. Owner kinds are
+`contract`, `subcontract`, `pledge`, `signal`, and `remedy`. Python copies
+strings and values, so the returned objects survive shutdown.
+
 ## The registrar
 
 A module exports exactly one undecorated symbol:
@@ -242,6 +334,13 @@ GeasStatus geas_module_register(GeasRuntime* rt);
 ```
 
 `geas_module_load` dlopens the module, resolves the registrar, and calls it. The registrar hands each contract descriptor to `geas_register_contract` and stops at the first failure. Registering a contract name the runtime already holds is `GEAS_ERR_NAME`; a module that fails to register is closed and reported as `GEAS_ERR_LOAD` or the registrar's own status.
+
+The workflow prefix has size `GEAS_CONTRACT_DESC_V2_SIZE`, through `term_ms`.
+The sized registrar accepts that prefix with no attributes. It treats an
+incomplete attribute tail as absent, and validates every complete attribute
+row's owner index and scalar type before registering it. Both the V1 symbol
+and shorter sized descriptors continue to load without reading past their
+reported size.
 
 **Descriptor size.** The contract descriptor grows at its tail, so the registrar says how much of it the caller has:
 
@@ -380,14 +479,14 @@ typedef struct GeasRef {
 } GeasRef;
 ```
 
-`host_ptr` addresses the host's storage for a value of type `ty`: the raw scalar for the numeric and character types, an `GeasString` struct for strings. Those are the types that cross by reference in v1; a ref carrying anything else is refused with `GEAS_ERR_TYPE`, as is a null `host_ptr`.
+`host_ptr` addresses the host's storage for a value of type `ty`: the raw scalar for the numeric and character types, an `GeasString` struct for String or Bytes. Those are the types that cross by reference in v1; a ref carrying anything else is refused with `GEAS_ERR_TYPE`, as is a null `host_ptr`.
 
 The protocol has exactly two moments, both on a thread the host is blocked in a geas call with, so the runtime never touches host memory behind the host's back:
 
 1. Copy in, at fulfillment entry, inside `geas_pledge_fulfill` or `geas_pledge_fulfill_sync` on the caller's thread. The referenced value is deep copied onto the instance as a mutable slot appended after the value arguments. From here the pledge body mutates instance memory only.
 2. Write back, at delivery, inside the `geas_future_wait` that collects the outcome or before `geas_pledge_fulfill_sync` returns, on the waiting thread. Each slot's final value goes back to host memory: through `write_back` when the host supplied one, `user` passed through untouched, or by the default otherwise.
 
-The default write back writes scalars in place and writes a whole `GeasString` struct for strings. The string bytes it points at are instance owned and die at break; a host that wants the shouted bytes to outlive the instance supplies a `write_back` that copies them out, which is also where a capacity declared in `cap` gets honored. Write back happens only when the fulfillment itself reported `GEAS_OK`; a thunk error leaves host memory untouched. Every slot's type is checked against its ref before anything is written, so a pledge that swapped a slot's type writes nothing and the wait reports `GEAS_ERR_TYPE`.
+The default write back writes scalars in place and writes a whole `GeasString` struct for String or Bytes. The bytes it points at are instance owned and die at break; a host that wants the shouted bytes to outlive the instance supplies a `write_back` that copies them out, which is also where a capacity declared in `cap` gets honored. Write back happens only when the fulfillment itself reported `GEAS_OK`; a thunk error leaves host memory untouched. Every slot's type is checked against its ref before anything is written, so a pledge that swapped a slot's type writes nothing and the wait reports `GEAS_ERR_TYPE`.
 
 ## Requirements and the contract state
 
@@ -627,6 +726,12 @@ A break called from inside a body on its own instance returns `GEAS_OK` immediat
 
 Cancellation wakes a pledge's default retry delay and the fulfillment answers `GEAS_ERR_STATE` without another attempt. With a host supplied sleep callback, the receipt is forfeited immediately, and the worker makes no further attempt when the callback returns. The runtime never interrupts that callback; a scheduler that wants its worker back promptly wakes its own wait, or polls cancellation through its user context. Shutdown publishes its flag before joining workers, so bodies and sleep callbacks can finish cooperatively.
 
+## The value wire codec
+
+`geas_wire_encode_value` and `geas_wire_decode_value` carry Bytes with the same framing as String: a little endian u32 type tag of 17, a u32 variant tag of zero, a u64 byte length, then exactly that many bytes. There is no terminator or UTF-8 check for Bytes. An empty buffer still carries the length field. Lists declare `GEAS_TY_BYTES` as their element tag, and nested record, sum, map value, tuple, Option, and Result positions use the same encoding recursively. Bytes is not a map key.
+
+Every encoding that contains no Bytes stays byte identical. The codec and park versions stay unchanged, so rows written before Bytes read by the same rules. Bytes in vows, Ok values, error payloads, and signal payloads round trips through the existing value codec, including the workflow blob a remedy reads after resume.
+
 ## The park row
 
 `geas_instance_park` writes one row into the `geas_park` table and `geas_instance_resume` reads it back. The row has two generations and the runtime reads both.
@@ -775,6 +880,8 @@ A contract's shape hash is FNV-1a 64, offset basis `0xcbf29ce484222325` and prim
 ```text
 contract {name};vow {name}:{type};...pledge {name}:{sig};...
 ```
+
+Bytes has canonical type code `X`, distinct from String's `S`. A contract with no Bytes retains its canonical shape, hash, and mangled names byte for byte. Proto spells Bytes as `bytes`, with `BytesOption` and the usual result wrapper names, and a bare Bytes RPC result uses `BytesValue`. The generated Go message fields are `[]byte`; TypeScript session fields are `Uint8Array`, which accepts the Buffer values delivered by `@grpc/proto-loader`.
 
 Vows first, then pledges, each in declaration order, each type spelled in the checker's canonical form, the same spelling signature comparison uses. The string is deterministic by construction, no table iteration order touches it, so two builds of the same header agree byte for byte and any change to a vow type or a pledge signature moves the hash.
 

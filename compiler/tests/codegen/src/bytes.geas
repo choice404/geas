@@ -1,0 +1,54 @@
+record Packet {
+    data: Bytes
+}
+
+PacketPayload is either NoData or Data(data: Bytes)
+
+contract Buffer {
+    vow seed: Bytes
+
+    remedy observe_raw for raw(data: Bytes) -> Unit {
+        let count = len(data)
+        return
+    }
+
+    pledge raw(data: Bytes) -> Bytes {
+        return data
+    }
+    signal received(data: Bytes)
+
+    pledge host(data: Bytes) -> Result<Bytes, Bytes>
+
+    pledge convert(data: Bytes, label: String) -> Result<Bytes, Int> {
+        let packed = bytes(byte_list(data))
+        let raw = bytes([0, 255])
+        let empty = bytes([])
+        let count = len(packed)
+        if count > 0 && packed[0] == raw[0] {
+            return Ok(packed + bytes(label))
+        }
+        return Ok(seed + empty)
+    }
+
+    pledge decode(data: Bytes) -> Option<String> {
+        return text(data)
+    }
+
+    pledge maybe(data: Bytes) -> Option<Bytes> {
+        return Some(data)
+    }
+
+    pledge compare(left: Bytes, right: Bytes) -> Result<Bool, Int> {
+        return Ok(left == right && !(left != right))
+    }
+
+    pledge containers(data: Bytes) -> Result<Tuple<Packet, List<Bytes>, Map<String, Bytes>>, Int> {
+        let mut table = Map<String, Bytes>()
+        table["data"] = data
+        return Ok((Packet { data: data }, [data], table))
+    }
+
+    pledge payload(data: Bytes) -> Result<PacketPayload, Bytes> {
+        return Ok(Data(data))
+    }
+}

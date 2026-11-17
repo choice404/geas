@@ -168,7 +168,7 @@ signing and is refused. A pledge body reads a vow by name.
 
 A `pledge` is a callable commitment with a declared return type, and it is a
 first class element of the language. Its return type is a `Result`, an `Option`,
-or `Unit`, never a bare fallible value:
+`Unit`, or `Bytes`. A bare Bytes return latches fulfilled on delivery:
 
 ```text
 pledge charge(card: String, amount: Float) -> Result<Bool, Int>
@@ -220,6 +220,43 @@ in the policy. A subcontract may also hold signals, and it may carry `within`
 and `after` terms that cover every member inside it.
 
 ### Attributes
+
+So a host setting is a declared attribute, a literal the host reads from the
+contract descriptor before sign or from a signed instance. Its declaration
+names the type and the kind of declaration it belongs on:
+
+```text
+attribute program: String on pledge
+attribute region: Int on pledge
+attribute region_max: Int on pledge
+attribute threads: Int on pledge
+attribute queue: String on contract
+
+contract Job [queue: "batch"] {
+    pledge copy(target: String) -> Result<Unit, CopyError> [program: "/bin/copy", region: 64M, region_max: 512M, threads: 1]
+}
+```
+
+The type is `Int`, `Float`, `Bool`, `String`, or `Duration`, and the target is
+`contract`, `subcontract`, `pledge`, `signal`, or `remedy`. Each declaration ends
+at its newline. `attribute` and `on` are contextual words, ordinary names
+outside that declaration. Imports bring declarations into scope, declarations
+are visible across their package, and `internal attribute` keeps one inside
+its package. A name may serve several targets, but cannot repeat on one target
+or replace a builtin key that target owns.
+
+The list follows the signature and any terms, before the body brace when
+there is one. Subcontracts place it after their terms and before `{`, signals
+after their parameters and terms. The opening `[` shares the line with what
+precedes it. Values are literals checked against the declared type, sizes are
+`Int` values in bytes, durations retain their own source type, and numbers and
+durations allow unary minus. Unknown keys, wrong targets, wrong types, and a
+key repeated in one list are compile errors.
+
+Declared attributes stay outside the shape hash and mangled names. Changing a
+job's queue or a step's memory budget leaves a parked instance compatible. The
+runtime publishes those values as immutable descriptor data, available until
+runtime shutdown, and the host decides how to apply them.
 
 A contract carries an optional version attribute, `[version: N]`, default 1. The
 version is baked into every mangled name, so a host that signs against the wrong
@@ -444,11 +481,17 @@ break on the vacuous truth of its negations.
 
 The compiler proves at build time that no single state satisfies both the
 fulfill and the break line, naming a witness if one exists, and rejects a policy
-no state can satisfy. The requirements block compiles to a shared table the
+line no state can satisfy. It searches the boolean trees with unit propagation
+and atom branching, keeping the witness in the order the atoms were written.
+The requirements block compiles to a shared table the
 static checker and the runtime evaluator both read, so the two can never
 diverge. When a contract writes no requirements block, the grammar's defaults are
-synthesized into the same table form. A remedy is never an atom, and a contract
-holds at most sixteen.
+synthesized into the same table form. A remedy is never an atom. A written block
+names at most 64 distinct atoms across its three lines. That cap belongs to
+written blocks; synthesized defaults work through 255 items. When their
+fulfilled and broken atom rows would exceed the byte sized descriptor index,
+the runtime reads the same default directly from the subcontract and pledge
+tables, with the same fulfillment, partial fulfillment, and break rules.
 
 ---
 
@@ -547,12 +590,56 @@ resume runs it.
 | `Byte` | one byte |
 | `Char` | a 32 bit Unicode scalar value |
 | `String` | UTF-8 bytes, a pointer and a byte length, no terminator |
+| `Bytes` | arbitrary bytes, a pointer and a byte length, no terminator |
 | `Duration` | a span of time, 64 bit signed milliseconds |
 | `Time` | a point in time, 64 bit signed milliseconds since the Unix epoch |
 
 Numeric widths are fixed and never convert implicitly. A widening or narrowing
 is a type error unless written explicitly, and there is no implicit conversion
 anywhere in the language, widths included.
+
+### Byte buffers
+
+`Bytes` is a raw buffer, so a host can hand a record across a pledge without
+building a `List<Byte>` with one tagged value per byte. Zeros and invalid UTF-8
+are ordinary contents. It fits in parameters, returns, vows, records, sum
+payloads, and containers; a map value may be Bytes, a map key and a schema
+column may not. A declaration named `Bytes` takes precedence over the builtin.
+
+`len(b)` counts bytes as an `Int`, `b[i]` takes an Int and returns a Byte,
+with the same bounds fault as List indexing, and `+` joins two buffers into a
+new one. Equality compares length and contents. Bytes has no ordering,
+index assignment, or direct iteration.
+
+`bytes(s)` copies a String's UTF-8 bytes and `bytes(xs)` packs a List<Byte>.
+`byte_list(b)` expands the buffer back to that list. `text(b)` returns
+`Option<String>`, None for invalid UTF-8, including overlong encodings and
+surrogates, and Some for valid text including embedded zeros. These names
+are builtins in callee position, the same rule as `len`. There is no byte
+string literal and a Bytes vow has no default, so signing supplies it.
+
+The ABI appends tag 17 and uses the existing string arm without changing a
+struct layout. Buffers are instance owned, deep copied at the boundary,
+and carried by the value wire codec through park and resume. Their canonical
+type code is `X`, so String and Bytes have distinct hashes and a contract
+without Bytes keeps its hash and mangled names. Proto uses `bytes`, Go uses
+`[]byte`, and the TypeScript session wrapper uses `Uint8Array`.
+
+### Size literals
+
+A size literal is an integer followed immediately by `K`, `M`, `G`, or `T`,
+so `64M` is 67108864 bytes and `512K` is 524288 bytes. The multiples are binary,
+1024, 1024 squared, 1024 cubed, and 1024 to the fourth power. It types as `Int`,
+or as `UInt` or `Byte` when that type is expected and the byte count fits,
+the same rule an ordinary integer literal follows. Attributes, vow defaults,
+patterns, and unary minus accept it too, and emitted C holds the plain integer.
+
+The suffix is uppercase: `5M` counts five mebibytes, while `5m` remains five
+minutes. A size that exceeds the signed 64 bit maximum is a lex error, as is a
+suffix followed by more identifier characters, `64Mb` or `1Gx`. Hexadecimal,
+binary, and floating point literals take no size suffix. Lowercase `k`, `g`,
+and `t` stay invalid numeric suffixes. The lex and parse dumps show `Size(bytes)`
+so you can still see which spelling the source used.
 
 ### Durations and times
 
@@ -686,7 +773,7 @@ or an `if` branch can produce a value directly.
 ### Operators
 
 The language has an eight level precedence ladder. `String + String`
-concatenates. The comparison and equality operators work over the primitive
+and `Bytes + Bytes` concatenate. The comparison and equality operators work over the primitive
 types. The logical operators `&&` and `||` short circuit: the right operand is
 evaluated only when the left does not already decide the result, so a bounds
 check like `i < n && xs[i] == 0` never touches `xs[i]` when `i < n` is false.

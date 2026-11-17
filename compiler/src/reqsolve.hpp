@@ -1,11 +1,6 @@
-// Requirements satisfiability. The resolver capped a contract at 16 atoms,
-// so the policy lines are small boolean formulas and satisfiability is a
-// plain enumeration of every atom assignment. A fulfill line and a break
-// line that can hold at once is the contradiction the grammar names,
-// reported with the witness assignment that makes both true. A fulfill or
-// break line no assignment satisfies is a dead policy, a line that can
-// never fire. A contract with no requirements block keeps the synthesized
-// defaults, which are sound by construction
+// Requirements satisfiability uses unit propagation and atom branching.
+// An overlapping fulfill and break line reports the first witness in atom
+// assignment order. An unsatisfiable line reports a dead policy
 #pragma once
 
 #include <vector>
@@ -17,7 +12,8 @@ namespace geas {
 
 /**
  * Checks the first requirements block of every contract.
- * @params ast - the tree of a program the resolver accepted, diagnostics - where faults land
+ * @params ast - the program tree, diagnostics - where faults land
+ * @returns {void} - diagnostics receive overlap and dead policy faults
  */
 void solveRequirements(const Ast& ast, std::vector<Diagnostic>& diagnostics);
 

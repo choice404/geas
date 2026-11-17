@@ -57,6 +57,10 @@ void Parser::parseDecl() {
         ast_.decls.emplace_back(parseContract(false));
         return;
     }
+    if (atIdentText("attribute") && nextIs(TokenKind::Ident)) {
+        ast_.decls.emplace_back(parseAttribute(false));
+        return;
+    }
     if (at(TokenKind::Ident) && nextIs(TokenKind::KwIs)) {
         ast_.decls.emplace_back(parseSum());
         return;
@@ -75,7 +79,36 @@ void Parser::parseInternalDecl() {
         ast_.decls.emplace_back(parseContract(true));
         return;
     }
-    error("'internal' applies to a contract or a provisional clause");
+    if (atIdentText("attribute") && nextIs(TokenKind::Ident)) {
+        ast_.decls.emplace_back(parseAttribute(true));
+        return;
+    }
+    error("'internal' applies to a contract, a provisional clause, or an attribute");
+}
+
+// attribute IDENT ":" Type on TARGET
+AttributeDecl Parser::parseAttribute(bool isInternal) {
+    const std::int64_t lo = current().lo;
+    bump();
+    std::string name = ident();
+    expect(TokenKind::Colon, "':' between the attribute name and its type");
+    const TypeId type = parseType();
+    if (!atIdentText("on")) {
+        error("expected 'on' after the attribute type");
+    } else {
+        bump();
+    }
+    AttrTarget target = AttrTarget::Contract;
+    switch (current().kind) {
+        case TokenKind::KwContract: break;
+        case TokenKind::KwSubcontract: target = AttrTarget::Subcontract; break;
+        case TokenKind::KwPledge: target = AttrTarget::Pledge; break;
+        case TokenKind::KwSignal: target = AttrTarget::Signal; break;
+        case TokenKind::KwRemedy: target = AttrTarget::Remedy; break;
+        default: error("an attribute target is contract, subcontract, pledge, signal, or remedy");
+    }
+    bump();
+    return AttributeDecl{isInternal, std::move(name), lo, previousHi(), type, target};
 }
 
 // record IDENT "{" { FieldDecl NL } "}"

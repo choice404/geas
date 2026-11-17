@@ -1,0 +1,2 @@
+attribute program: String on pledge
+contract Job [program: "copy"] {}

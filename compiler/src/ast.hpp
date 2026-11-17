@@ -27,6 +27,17 @@ struct Attr {
     ExprId value;
 };
 
+enum class AttrTarget { Contract, Subcontract, Pledge, Signal, Remedy };
+
+struct AttributeDecl {
+    bool isInternal;
+    std::string name;
+    std::int64_t lo;
+    std::int64_t hi;
+    TypeId type;
+    AttrTarget target;
+};
+
 // Terms trailing a signature
 
 struct WithinTerm {
@@ -45,6 +56,7 @@ struct RetryTerm {
     std::optional<std::string> backoff;
     std::optional<std::int64_t> capMilliseconds;
     std::vector<std::string> on;
+    bool isSizeCount = false;
 };
 
 struct Term {
@@ -135,6 +147,7 @@ struct SignalDecl {
     std::int64_t hi;
     std::vector<Field> params;
     std::vector<Term> terms;
+    std::vector<Attr> attrs;
 };
 
 using SubMember = std::variant<PledgeDecl, SignalDecl>;
@@ -146,6 +159,7 @@ struct SubcontractDecl {
     bool isTransactional;
     std::vector<Term> terms;
     std::vector<SubMember> members;
+    std::vector<Attr> attrs;
 };
 
 struct SchemaDecl {
@@ -212,6 +226,7 @@ struct AmendsDecl {
     std::int64_t hi;
     std::int64_t version;
     std::vector<AmendItem> items;
+    bool isSizeVersion = false;
 };
 
 using Member = std::variant<IncorporateDecl, VowDecl, PledgeDecl, ClauseDecl, SubcontractDecl,
@@ -227,7 +242,7 @@ struct ContractDecl {
     std::vector<Member> members;
 };
 
-using Decl = std::variant<RecordDecl, SumDecl, ProvisionalDecl, ContractDecl>;
+using Decl = std::variant<RecordDecl, SumDecl, ProvisionalDecl, ContractDecl, AttributeDecl>;
 
 // A parsed file and the arenas its ids point into
 struct Ast {

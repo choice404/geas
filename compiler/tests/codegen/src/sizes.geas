@@ -1,0 +1,9 @@
+contract Sized {
+    vow capacity: Int = 64M
+    vow debt: Int = -512K
+
+    pledge allocate() -> Result<Int, String> {
+        let requested = 1G
+        return Ok(capacity + debt + requested - 1K)
+    }
+}

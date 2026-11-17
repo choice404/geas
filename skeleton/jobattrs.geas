@@ -1,0 +1,13 @@
+// Settings a job runner reads before sign
+attribute queue: String on contract
+attribute priority: Int on contract
+attribute weight: Float on contract
+attribute enabled: Bool on contract
+attribute delay: Duration on contract
+attribute program: String on pledge
+attribute region: Int on pledge
+attribute region_max: Int on pledge
+internal attribute threads: Int on pledge
+attribute pool: String on subcontract
+attribute channel: String on signal
+attribute program: String on remedy

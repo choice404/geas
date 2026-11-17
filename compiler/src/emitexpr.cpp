@@ -154,14 +154,16 @@ CValue CEmitter::genUnary(const Expr& expr, const UnaryExpr& unary) {
     return CValue{std::move(value), operand.type};
 }
 
-// String concatenation through the runtime helper, which allocates the
+// String and Bytes concatenation through the runtime helper, which allocates the
 // result on the instance the thunk runs against
 CValue CEmitter::genConcat(const CValue& lhs, const CValue& rhs) {
     std::string value = newValue();
-    setTag(value, "GEAS_TY_STRING");
-    line(joined("if (geas_string_concat(cc, &", lhs.name, ", &", rhs.name, ", &", value,
+    setTag(value, lookup_.tagOf(lhs.type));
+    const std::string_view helper = kindOf(lhs.type) == TyKind::Bytes
+        ? "geas_bytes_concat" : "geas_string_concat";
+    line(joined("if (", helper, "(cc, &", lhs.name, ", &", rhs.name, ", &", value,
                 ") != GEAS_OK) return GEAS_ERR_OOM;"));
-    return CValue{std::move(value), types().scalar(TyKind::String)};
+    return CValue{std::move(value), lhs.type};
 }
 
 // Short circuit: the left operand lowers, then the right lowers inside a
@@ -193,7 +195,8 @@ CValue CEmitter::genBinary(const Expr& expr, const BinaryExpr& binary, TyId want
     const CValue lhs = genExpr(binary.lhs, takesWant ? want : TyId{});
     const CValue rhs = genExpr(binary.rhs, lhs.type);
     const TyId operand = kindOf(lhs.type) == TyKind::Unknown ? rhs.type : lhs.type;
-    if (op == BinaryOp::Add && kindOf(operand) == TyKind::String) {
+    if (op == BinaryOp::Add &&
+        (kindOf(operand) == TyKind::String || kindOf(operand) == TyKind::Bytes)) {
         return genConcat(lhs, rhs);
     }
     if (isEquality(op)) {
@@ -232,7 +235,8 @@ CValue CEmitter::genEquality(const Expr& expr, const BinaryExpr& binary, const C
     const TyId boolean = types().scalar(TyKind::Bool);
     const std::string_view field = lookup_.unionFieldOf(operand);
     const bool isString = kindOf(operand) == TyKind::String;
-    const bool isDeep = kindOf(operand) == TyKind::Contract || isComposite(operand);
+    const bool isDeep = kindOf(operand) == TyKind::Contract ||
+                        kindOf(operand) == TyKind::Bytes || isComposite(operand);
     if (isString || (field.empty() && isDeep)) {
         const std::string_view helper = isString ? "geas_string_eq(&" : "geas_value_eq(&";
         line(joined(value, ".as.b = ", bang, helper, lhs.name, ", &", rhs.name, ");"));

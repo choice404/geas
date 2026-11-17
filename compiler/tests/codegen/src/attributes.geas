@@ -1,0 +1,29 @@
+// Settings a job runner reads before sign
+attribute queue: String on contract
+attribute priority: Int on contract
+attribute weight: Float on contract
+attribute enabled: Bool on contract
+attribute delay: Duration on contract
+attribute program: String on pledge
+attribute region: Int on pledge
+attribute region_max: Int on pledge
+attribute threads: Int on pledge
+attribute pool: String on subcontract
+attribute channel: String on signal
+attribute program: String on remedy
+
+CopyError is either CopyFailed
+
+contract Job [queue: "batch", priority: -2, weight: -1.5, enabled: true, delay: -250ms] {
+    clause complete() -> Unit { return }
+    pledge copy(target: String) -> Result<Unit, CopyError> [program: "/bin/copy", region: 64M, region_max: 512M, threads: 1] {
+        return Ok(complete())
+    }
+    subcontract Finish [pool: "local"] {
+        pledge flush() -> Option<Int> { return Some(1) }
+        signal ready() [channel: "job.ready"]
+    }
+    remedy undo for copy() -> Unit [program: "/bin/remove"] { return }
+}
+
+contract Standalone [enabled: false, priority: -512K] {}

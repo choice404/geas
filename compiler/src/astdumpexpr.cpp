@@ -91,7 +91,9 @@ bool AstDumper::renderLeafExpr(const ExprKind& kind) {
     };
     return std::visit(
         Overloaded{
-            [&](const IntLiteral& e) { return leaf("Int", std::to_string(e.value)); },
+            [&](const IntLiteral& literal) {
+                return leaf(literal.isSize ? "Size" : "Int", std::to_string(literal.value));
+            },
             [&](const FloatLiteral& e) { return leaf("Float", "\"" + e.spelling + "\""); },
             [&](const StringLiteral& e) { return leaf("Str", "\"" + e.body + "\""); },
             [&](const CharLiteral& e) {

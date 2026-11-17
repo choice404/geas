@@ -10,6 +10,7 @@
 
 #include "duration.hpp"
 #include "lexdump.hpp"
+#include "size.hpp"
 
 namespace geas {
 
@@ -195,6 +196,8 @@ std::optional<ExprId> Parser::parseLiteralExpr() {
     };
     switch (token.kind) {
         case TokenKind::Int: return make(IntLiteral{intValue(text_, token.lo, token.hi)});
+        case TokenKind::Size:
+            return make(IntLiteral{parseSize(tokenText(token)).value_or(0), true});
         case TokenKind::Float: return make(FloatLiteral{std::string{tokenText(token)}});
         case TokenKind::String: return make(StringLiteral{stringLiteralBody(text_, token)});
         case TokenKind::Char: return make(CharLiteral{charLiteralScalar(text_, token.lo + 1)});

@@ -317,6 +317,8 @@ GEAS_INTERNAL void    geas_rt_sleep(GeasRuntime* rt, uint64_t ms);
 /* Checks the workflow tables of a descriptor at sign: every index in range,
  * no retry where the runtime does not run one. GEAS_ERR_TYPE on a table the
  * runtime will not sign. */
+GEAS_INTERNAL GeasStatus geas_rt_validate_attrs(const GeasContractDesc* desc);
+
 GEAS_INTERNAL GeasStatus geas_rt_validate_desc(const GeasContractDesc* d);
 
 /* The workflow arrays of a fresh instance, allocated zeroed; flow_start

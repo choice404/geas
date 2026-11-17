@@ -49,6 +49,9 @@ std::optional<CValue> CEmitter::genNamedCall(const Expr& expr, const CallExpr& c
     if (callee.name == "len") {
         return genLen(call);
     }
+    if (callee.name == "bytes" || callee.name == "text" || callee.name == "byte_list") {
+        return genBytesConversion(call, callee.name);
+    }
     const MemberEntry* member = lookup_.resolved().member(shape_->decl, callee.name);
     if (member != nullptr && member->kind() == MemberKind::Clause) {
         return genClauseCall(*member->clause(), call);
@@ -135,7 +138,7 @@ std::string CEmitter::genValueArray(const std::vector<CValue>& values) {
     return array;
 }
 
-// len(x): the length of a List or a Map read out as an Int. A List answers
+// len(x): the length of a List, Map, or Bytes as an Int. A List answers
 // its element count straight off the header; a Map answers half the slot
 // count of the flat [k0,v0,...] store the runtime keeps
 CValue CEmitter::genLen(const CallExpr& call) {
@@ -143,9 +146,26 @@ CValue CEmitter::genLen(const CallExpr& call) {
     const bool isMap = kindOf(subject.type) == TyKind::Map;
     std::string value = newValue();
     setTag(value, "GEAS_TY_INT");
+    const std::string_view length = kindOf(subject.type) == TyKind::Bytes
+        ? ".as.s.len;" : ".as.list.len;";
     line(isMap ? joined(value, ".as.i = (int64_t)(", subject.name, ".as.list.len / 2);")
-               : joined(value, ".as.i = (int64_t)", subject.name, ".as.list.len;"));
+               : joined(value, ".as.i = (int64_t)", subject.name, length));
     return CValue{std::move(value), types().scalar(TyKind::Int)};
+}
+
+// Each conversion copies its result onto the current instance
+CValue CEmitter::genBytesConversion(const CallExpr& call, std::string_view name) {
+    const TyId byteList = types().list(types().scalar(TyKind::Byte));
+    const CValue subject = genExpr(call.args.front().value, name == "bytes" ? byteList : TyId{});
+    const TyId result = name == "bytes" ? types().scalar(TyKind::Bytes)
+        : name == "text" ? types().option(types().scalar(TyKind::String)) : byteList;
+    const std::string_view helper = name == "bytes" ? "geas_bytes_from"
+        : name == "text" ? "geas_bytes_text" : "geas_bytes_list";
+    std::string value = newValue();
+    const std::string status = freshName();
+    line(joined("GeasStatus ", status, " = ", helper, "(cc, &", subject.name, ", &", value, ");"));
+    returnUnlessOk(status);
+    return CValue{std::move(value), result};
 }
 
 // A bare clause call. The arguments land in one stack array and the static

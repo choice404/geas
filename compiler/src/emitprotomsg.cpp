@@ -118,6 +118,15 @@ void ProtoEmitter::emitSessionMessages(std::string_view prefix) {
 // its wrapper directly. Anything else is a named build error
 std::string ProtoEmitter::ensureReturn(const PledgeDecl& pledge, TyId ret) {
     const TyNode node = lookup_.types().node(ret);
+    if (node.kind == TyKind::Bytes) {
+        const std::string name = returnName(ret);
+        if (!isSeen(name)) {
+            seen_.push_back(name);
+            top("message BytesValue { bytes value = 1; }");
+            top("");
+        }
+        return name;
+    }
     if (node.kind == TyKind::Option) {
         return ensureType(ret, pledge.lo, pledge.hi);
     }

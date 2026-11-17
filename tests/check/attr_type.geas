@@ -1,0 +1,2 @@
+attribute threads: Int on pledge
+contract Job { pledge run() -> Unit [threads: "one"] }

@@ -20,6 +20,7 @@ constexpr auto scalarNames = std::to_array<std::pair<std::string_view, TyKind>>(
     {"Byte", TyKind::Byte},
     {"Char", TyKind::Char},
     {"String", TyKind::String},
+    {"Bytes", TyKind::Bytes},
     {"Unit", TyKind::Unit},
     {"Duration", TyKind::Duration},
     {"Time", TyKind::Time},
@@ -35,10 +36,9 @@ std::optional<TyKind> scalarKind(std::string_view name) {
     return std::nullopt;
 }
 
-// Duration and Time joined the builtins after programs could already
-// declare those names, so a declaration of one still wins over the builtin
+// Duration, Time, and Bytes allow declarations to take precedence over the builtin
 bool isShadowableScalar(TyKind kind) {
-    return kind == TyKind::Duration || kind == TyKind::Time;
+    return kind == TyKind::Duration || kind == TyKind::Time || kind == TyKind::Bytes;
 }
 
 // Whether a lowered type may key a Map, the unknown recovery type passing

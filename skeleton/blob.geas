@@ -1,0 +1,64 @@
+// Raw records cross the host boundary in one byte buffer
+record BlobRecord {
+    data: Bytes
+}
+
+BlobPayload is either EmptyBlob or FullBlob(data: Bytes)
+
+contract Blob {
+    vow seed: Bytes
+
+    pledge raw(data: Bytes) -> Bytes {
+        return data
+    }
+
+    pledge echo(data: Bytes) -> Result<Bytes, Bytes> {
+        return Ok(data)
+    }
+
+    pledge host(data: Bytes) -> Result<Bytes, Bytes>
+
+    pledge join(left: Bytes, right: Bytes) -> Result<Bytes, Int> {
+        return Ok(left + right)
+    }
+
+    pledge equal(left: Bytes, right: Bytes) -> Result<Bool, Int> {
+        return Ok(left == right && !(left != right))
+    }
+
+    pledge count(data: Bytes) -> Result<Int, Int> {
+        return Ok(len(data))
+    }
+
+    pledge at(data: Bytes, index: Int) -> Result<Byte, Int> {
+        return Ok(data[index])
+    }
+
+    pledge encode(value: String) -> Result<Bytes, Int> {
+        return Ok(bytes(value))
+    }
+
+    pledge decode(data: Bytes) -> Option<String> {
+        return text(data)
+    }
+
+    pledge list(data: Bytes) -> Result<List<Byte>, Int> {
+        return Ok(byte_list(data))
+    }
+
+    pledge pack(data: List<Byte>) -> Result<Bytes, Int> {
+        return Ok(bytes(data))
+    }
+
+    pledge echo_record(value: BlobRecord) -> Result<BlobRecord, Int> {
+        return Ok(value)
+    }
+
+    pledge failure(data: Bytes) -> Result<Unit, Bytes> {
+        return Err(data)
+    }
+
+    signal received(data: Bytes)
+
+    remedy undo for echo(data: Bytes) -> Unit
+}

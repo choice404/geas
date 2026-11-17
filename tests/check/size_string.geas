@@ -1,0 +1,3 @@
+contract Sized {
+    vow label: String = 64M
+}

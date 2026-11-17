@@ -25,6 +25,11 @@ void AstDumper::renderSubcontract(const SubcontractDecl& subcontract, int level)
         renderTerms(subcontract.terms, level + 1);
         endField();
     }
+    if (!subcontract.attrs.empty()) {
+        key(level + 1, "attrs");
+        renderAttrs(subcontract.attrs, level + 1);
+        endField();
+    }
     renderSubMembers(subcontract.members, level);
     closeStruct(level);
 }

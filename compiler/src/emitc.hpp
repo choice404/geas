@@ -164,6 +164,10 @@ private:
     std::string vowDefaultText(const VowDecl& vow, TyId type) const;
     void emitPledgeTable(const ContractShape& shape);
     std::string emitSubFlags(const ContractShape& shape);
+    void emitAttrTail(const ContractShape& shape, std::vector<std::string>& tail);
+    std::string attrValueText(ExprId value) const;
+    void appendAttrEntries(const std::vector<Attr>& attrs, AttrTarget target, std::size_t index,
+                           std::vector<std::string>& entries) const;
     void emitDescriptor(const ContractShape& shape, const RequirementCounts& counts,
                         std::string_view subFlagsRef, const std::vector<std::string>& tail);
 
@@ -266,6 +270,8 @@ private:
     std::vector<CValue> genArgs(const std::vector<TyId>& params, const std::vector<Argument>& args);
     std::string genValueArray(const std::vector<CValue>& values);
     CValue genLen(const CallExpr& call);
+    CValue genBytesConversion(const CallExpr& call, std::string_view name);
+    CValue genBytesIndex(const CValue& base, const CValue& position);
     CValue genClauseCall(const ClauseDecl& clause, const CallExpr& call);
     CValue genSign(const Expr& expr, const CallExpr& call, const ContractDecl& contract);
     std::string genVowBindings(const CallExpr& call, const ContractDecl& contract);

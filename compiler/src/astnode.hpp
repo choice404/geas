@@ -53,6 +53,7 @@ enum class WrapKind { Some, Ok, Err, Mut };
 
 struct IntLiteral {
     std::int64_t value;
+    bool isSize = false;
 };
 
 // A float keeps its spelling so the dump never depends on float formatting

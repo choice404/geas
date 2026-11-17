@@ -1,0 +1,6 @@
+contract Bad {
+    pledge read() -> Result<Bytes, Int> {
+        let value: Bytes = "raw"
+        return Ok(value)
+    }
+}

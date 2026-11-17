@@ -1,0 +1,47 @@
+contract Overlap {
+    pledge p01() -> Unit
+    pledge p02() -> Unit
+    pledge p03() -> Unit
+    pledge p04() -> Unit
+    pledge p05() -> Unit
+    pledge p06() -> Unit
+    pledge p07() -> Unit
+    pledge p08() -> Unit
+    pledge p09() -> Unit
+    pledge p10() -> Unit
+    pledge p11() -> Unit
+    pledge p12() -> Unit
+    pledge p13() -> Unit
+    pledge p14() -> Unit
+    pledge p15() -> Unit
+    pledge p16() -> Unit
+    pledge p17() -> Unit
+    pledge p18() -> Unit
+    pledge p19() -> Unit
+    pledge p20() -> Unit
+    pledge p21() -> Unit
+    pledge p22() -> Unit
+    pledge p23() -> Unit
+    pledge p24() -> Unit
+    pledge p25() -> Unit
+    pledge p26() -> Unit
+    pledge p27() -> Unit
+    pledge p28() -> Unit
+    pledge p29() -> Unit
+    pledge p30() -> Unit
+    pledge p31() -> Unit
+    pledge p32() -> Unit
+    pledge p33() -> Unit
+    pledge p34() -> Unit
+    pledge p35() -> Unit
+    pledge p36() -> Unit
+    pledge p37() -> Unit
+    pledge p38() -> Unit
+    pledge p39() -> Unit
+    pledge p40() -> Unit
+
+    requirements {
+        fulfill: p01 && p02 && p03 && p04 && p05 && p06 && p07 && p08 && p09 && p10 && p11 && p12 && p13 && p14 && p15 && p16 && p17 && p18 && p19 && p20 && p21 && p22 && p23 && p24 && p25 && p26 && p27 && p28 && p29 && p30 && p31 && p32 && p33 && p34 && p35 && p36 && p37 && p38 && p39 && p40
+        break: p40
+    }
+}

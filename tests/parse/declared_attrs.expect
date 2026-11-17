@@ -1,0 +1,237 @@
+File {
+    imports: [],
+    decls: [
+        Attribute {
+            internal: false,
+            name: "queue",
+            ty: Named("String"),
+            target: "contract",
+        },
+        Attribute {
+            internal: false,
+            name: "priority",
+            ty: Named("Int"),
+            target: "contract",
+        },
+        Attribute {
+            internal: false,
+            name: "weight",
+            ty: Named("Float"),
+            target: "contract",
+        },
+        Attribute {
+            internal: false,
+            name: "enabled",
+            ty: Named("Bool"),
+            target: "contract",
+        },
+        Attribute {
+            internal: false,
+            name: "delay",
+            ty: Named("Duration"),
+            target: "contract",
+        },
+        Attribute {
+            internal: false,
+            name: "program",
+            ty: Named("String"),
+            target: "pledge",
+        },
+        Attribute {
+            internal: false,
+            name: "region",
+            ty: Named("Int"),
+            target: "pledge",
+        },
+        Attribute {
+            internal: false,
+            name: "region_max",
+            ty: Named("Int"),
+            target: "pledge",
+        },
+        Attribute {
+            internal: false,
+            name: "threads",
+            ty: Named("Int"),
+            target: "pledge",
+        },
+        Attribute {
+            internal: false,
+            name: "pool",
+            ty: Named("String"),
+            target: "subcontract",
+        },
+        Attribute {
+            internal: false,
+            name: "channel",
+            ty: Named("String"),
+            target: "signal",
+        },
+        Attribute {
+            internal: false,
+            name: "program",
+            ty: Named("String"),
+            target: "remedy",
+        },
+        Sum {
+            name: "CopyError",
+            variants: [
+                Variant {
+                    name: "CopyFailed",
+                    fields: [],
+                },
+            ],
+        },
+        Contract {
+            internal: false,
+            name: "Job",
+            attrs: [
+                Attr {
+                    key: "queue",
+                    value: Str("batch"),
+                },
+                Attr {
+                    key: "priority",
+                    value: Unary(
+                        Neg,
+                        Int(2),
+                    ),
+                },
+                Attr {
+                    key: "weight",
+                    value: Unary(
+                        Neg,
+                        Float("1.5"),
+                    ),
+                },
+                Attr {
+                    key: "enabled",
+                    value: Bool(true),
+                },
+                Attr {
+                    key: "delay",
+                    value: Unary(
+                        Neg,
+                        Duration(250),
+                    ),
+                },
+            ],
+            members: [
+                Clause {
+                    name: "complete",
+                    params: [],
+                    ret: Named("Unit"),
+                    body: Block {
+                        stmts: [
+                            Return(None),
+                        ],
+                    },
+                },
+                Pledge {
+                    name: "copy",
+                    params: [
+                        Field {
+                            name: "target",
+                            ty: Named("String"),
+                        },
+                    ],
+                    ret: Named("Result", [
+                        Named("Unit"),
+                        Named("CopyError"),
+                    ]),
+                    attrs: [
+                        Attr {
+                            key: "program",
+                            value: Str("/bin/copy"),
+                        },
+                        Attr {
+                            key: "region",
+                            value: Size(67108864),
+                        },
+                        Attr {
+                            key: "region_max",
+                            value: Size(536870912),
+                        },
+                        Attr {
+                            key: "threads",
+                            value: Int(1),
+                        },
+                    ],
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Ok(
+                                    Call {
+                                        callee: Ident("complete"),
+                                        args: [],
+                                    },
+                                ),
+                            ),
+                        ],
+                    },
+                },
+                Subcontract {
+                    name: "Finish",
+                    terms: [
+                        Within(Duration(3600000)),
+                    ],
+                    attrs: [
+                        Attr {
+                            key: "pool",
+                            value: Str("local"),
+                        },
+                    ],
+                    pledges: [
+                        Pledge {
+                            name: "flush",
+                            params: [],
+                            ret: Named("Unit"),
+                            attrs: [],
+                            body: Block {
+                                stmts: [
+                                    Return(None),
+                                ],
+                            },
+                        },
+                    ],
+                    signals: [
+                        Signal {
+                            name: "ready",
+                            params: [],
+                            terms: [
+                                After([
+                                    "flush",
+                                ]),
+                                Within(Duration(60000)),
+                            ],
+                            attrs: [
+                                Attr {
+                                    key: "channel",
+                                    value: Str("job.ready"),
+                                },
+                            ],
+                        },
+                    ],
+                },
+                Remedy {
+                    name: "undo",
+                    target: "copy",
+                    param: None,
+                    ret: Named("Unit"),
+                    terms: [],
+                    attrs: [
+                        Attr {
+                            key: "program",
+                            value: Str("/bin/remove"),
+                        },
+                    ],
+                    body: Block {
+                        stmts: [
+                            Return(None),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

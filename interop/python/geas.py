@@ -47,6 +47,7 @@ GEAS_TY_RESULT = 12
 GEAS_TY_RECORD = 13
 GEAS_TY_PLEDGE_REF = 14
 GEAS_TY_SUM = 15
+GEAS_TY_BYTES = 17
 
 GEAS_OK = 0
 GEAS_ERR_STATE = 1
@@ -151,6 +152,13 @@ class GeasValue(C.Structure):
     """The one value shape: a type tag, a variant tag, and the union arm."""
 
     _fields_ = [("ty", C.c_uint32), ("tag", C.c_uint32), ("as_", _AshValueArm)]
+
+
+class GeasAttrInfo(C.Structure):
+    """One borrowed host setting, copied into Python at the boundary."""
+
+    _fields_ = [("owner", C.c_uint32), ("owner_name", C.c_char_p),
+                ("key", C.c_char_p), ("value", C.POINTER(GeasValue))]
 
 
 class GeasVowBinding(C.Structure):
@@ -339,6 +347,8 @@ def decode(v):
         return v.as_.b
     if ty == GEAS_TY_CHAR:
         return chr(v.as_.ch)
+    if ty == GEAS_TY_BYTES:
+        return C.string_at(v.as_.s.ptr, v.as_.s.len) if v.as_.s.len else b""
     if ty == GEAS_TY_STRING:
         if not v.as_.s.ptr or v.as_.s.len == 0:
             return ""
@@ -507,6 +517,20 @@ class Runtime:
         lib.geas_partial_nerrors.restype = z
         lib.geas_partial_error.argtypes = [v, z, C.POINTER(s), C.POINTER(VP)]
         lib.geas_partial_error.restype = i
+        lib.geas_attr_count.argtypes = [v, s, C.POINTER(z)]
+        lib.geas_attr_count.restype = i
+        lib.geas_attr_at.argtypes = [v, s, z, C.POINTER(GeasAttrInfo)]
+        lib.geas_attr_at.restype = i
+        lib.geas_contract_attr.argtypes = [v, s, s, C.POINTER(VP)]
+        lib.geas_contract_attr.restype = i
+        lib.geas_item_attr.argtypes = [v, s, s, s, C.POINTER(VP)]
+        lib.geas_item_attr.restype = i
+        lib.geas_instance_attr_count.argtypes = [v, C.POINTER(z)]
+        lib.geas_instance_attr_count.restype = i
+        lib.geas_instance_attr_at.argtypes = [v, z, C.POINTER(GeasAttrInfo)]
+        lib.geas_instance_attr_at.restype = i
+        lib.geas_instance_attr.argtypes = [v, s, s, C.POINTER(VP)]
+        lib.geas_instance_attr.restype = i
         lib.geas_iname_lookup.argtypes = [v, s, C.POINTER(GeasInameEntry)]
         lib.geas_iname_lookup.restype = i
         lib.geas_iname_count.argtypes = [v]
@@ -519,6 +543,8 @@ class Runtime:
         lib.geas_box.restype = VP
         lib.geas_string_copy.argtypes = [v, s, C.c_uint64]
         lib.geas_string_copy.restype = GeasValue
+        lib.geas_bytes_copy_into.argtypes = [v, s, C.c_uint64, VP]
+        lib.geas_bytes_copy_into.restype = i
         lib.geas_list_new.argtypes = [v, C.c_uint32, C.c_uint64, VP]
         lib.geas_list_new.restype = i
         lib.geas_list_push.argtypes = [v, VP, VP]
@@ -676,6 +702,38 @@ class Runtime:
             f"geas_instance_resume {key}")
         return Contract(self, c)
 
+    def attrs(self, contract):
+        """Declared host settings, available before sign."""
+        count = C.c_size_t()
+        _check(self._lib.geas_attr_count(self._rt, contract.encode(), C.byref(count)),
+               f"geas_attr_count {contract}")
+        rows = []
+        for index in range(count.value):
+            row = GeasAttrInfo()
+            _check(self._lib.geas_attr_at(self._rt, contract.encode(), index, C.byref(row)),
+                   f"geas_attr_at {contract} {index}")
+            rows.append(self._attr_py(row))
+        return rows
+
+    def attr(self, contract, key, item=None):
+        """A setting's decoded value, or None when the key is absent."""
+        value = C.POINTER(GeasValue)()
+        if item is None:
+            status = self._lib.geas_contract_attr(self._rt, contract.encode(),
+                                                  key.encode(), C.byref(value))
+        else:
+            status = self._lib.geas_item_attr(self._rt, contract.encode(), item.encode(),
+                                              key.encode(), C.byref(value))
+        _check(status, f"attribute {contract} {key}")
+        return decode(value.contents) if value else None
+
+    @staticmethod
+    def _attr_py(row):
+        kinds = ("contract", "subcontract", "pledge", "signal", "remedy")
+        return {"owner": kinds[row.owner],
+                "owner_name": row.owner_name.decode() if row.owner_name else None,
+                "key": row.key.decode(), "value": decode(row.value.contents)}
+
     # ---- the iname table ----
 
     def iname_count(self):
@@ -738,11 +796,11 @@ class Runtime:
         elif isinstance(py, float):
             target.ty = GEAS_TY_FLOAT
             target.as_.f = py
-        elif isinstance(py, str):
-            raw = py.encode("utf-8")
+        elif isinstance(py, (str, bytes, bytearray)):
+            raw = py.encode("utf-8") if isinstance(py, str) else bytes(py)
             buf = C.create_string_buffer(raw, max(len(raw), 1))
             keep.append(buf)
-            target.ty = GEAS_TY_STRING
+            target.ty = GEAS_TY_STRING if isinstance(py, str) else GEAS_TY_BYTES
             target.as_.s.ptr = C.cast(buf, C.c_void_p)
             target.as_.s.len = len(raw)
         else:
@@ -769,6 +827,10 @@ class Runtime:
             raw = py.encode("utf-8")
             sv = self._lib.geas_string_copy(ctx, raw, len(raw))
             C.memmove(C.byref(target), C.byref(sv), C.sizeof(GeasValue))
+        elif isinstance(py, (bytes, bytearray)):
+            raw = bytes(py)
+            _check(self._lib.geas_bytes_copy_into(ctx, raw, len(raw), C.byref(target)),
+                   "geas_bytes_copy_into")
         elif isinstance(py, (Ok, Err)):
             box = self._lib.geas_box(ctx)
             if not box:
@@ -799,6 +861,8 @@ class Runtime:
                                 else type(py[0]))
             if isinstance(py[0], str):
                 elem_ty = GEAS_TY_STRING
+            if isinstance(py[0], (bytes, bytearray)):
+                elem_ty = GEAS_TY_BYTES
             if elem_ty is None:
                 raise GeasError(GEAS_ERR_TYPE,
                                f"unsupported list element {type(py[0])}")
@@ -890,6 +954,25 @@ class Contract:
     def __init__(self, rt, ptr):
         self._rt = rt
         self._ptr = ptr
+
+    def attrs(self):
+        count = C.c_size_t()
+        _check(self._rt._lib.geas_instance_attr_count(self._ptr, C.byref(count)),
+               "geas_instance_attr_count")
+        rows = []
+        for index in range(count.value):
+            row = GeasAttrInfo()
+            _check(self._rt._lib.geas_instance_attr_at(self._ptr, index, C.byref(row)),
+                   f"geas_instance_attr_at {index}")
+            rows.append(self._rt._attr_py(row))
+        return rows
+
+    def attr(self, key, item=None):
+        value = C.POINTER(GeasValue)()
+        _check(self._rt._lib.geas_instance_attr(
+            self._ptr, item.encode() if item is not None else None,
+            key.encode(), C.byref(value)), f"geas_instance_attr {key}")
+        return decode(value.contents) if value else None
 
     # ---- state and signature ----
 

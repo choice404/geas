@@ -1,0 +1,5 @@
+contract Bad {
+    pledge read() -> Option<String> {
+        return text()
+    }
+}

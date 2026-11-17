@@ -18,6 +18,7 @@ enum class TokenKind {
     // Names and literals
     Ident,
     Int,
+    Size,
     Float,
     Duration,
     String,

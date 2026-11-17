@@ -173,6 +173,14 @@ run_bin_suite() {
     done
 }
 
+# Cross check every small requirements tree, including rejected programs
+if "$GEAS" test-requirements tests/check/*.geas tests/typeck/*.geas tests/parse/*.geas \
+    tests/shape/*.geas compiler/tests/codegen/src/*.geas skeleton/*.geas; then
+    pass=$((pass + 1))
+else
+    fail_case requirements/self-test "solver cross check failed"
+fi
+
 run_suite lex lex
 run_suite parse parse
 run_suite check check

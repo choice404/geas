@@ -1,0 +1,5 @@
+import attrs.helper
+contract Job [queue: "batch"] {
+    pledge copy() -> Unit [program: "copy", term: 2]
+    signal ready() [program: true]
+}

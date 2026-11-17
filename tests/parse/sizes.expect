@@ -1,0 +1,173 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Sizes",
+            attrs: [
+                Attr {
+                    key: "version",
+                    value: Size(1024),
+                },
+            ],
+            members: [
+                Vow {
+                    name: "capacity",
+                    ty: Named("Int"),
+                    init: Size(67108864),
+                },
+                Vow {
+                    name: "debt",
+                    ty: Named("Int"),
+                    init: Unary(
+                        Neg,
+                        Size(524288),
+                    ),
+                },
+                Vow {
+                    name: "wide",
+                    ty: Named("UInt"),
+                    init: Size(1099511627776),
+                },
+                Vow {
+                    name: "empty",
+                    ty: Named("Byte"),
+                    init: Size(0),
+                },
+                Clause {
+                    name: "classify",
+                    params: [
+                        Field {
+                            name: "bytes",
+                            ty: Named("Int"),
+                        },
+                    ],
+                    ret: Named("Int"),
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Match {
+                                    scrutinee: Ident("bytes"),
+                                    arms: [
+                                        Arm {
+                                            pat: Lit(Size(1073741824)),
+                                            body: Size(524288),
+                                        },
+                                        Arm {
+                                            pat: Lit(Unary(
+                                                Neg,
+                                                Size(1024),
+                                            )),
+                                            body: Unary(
+                                                Neg,
+                                                Size(2097152),
+                                            ),
+                                        },
+                                        Arm {
+                                            pat: Wildcard,
+                                            body: Size(0),
+                                        },
+                                    ],
+                                },
+                            ),
+                        ],
+                    },
+                },
+                Pledge {
+                    name: "allocate",
+                    params: [],
+                    ret: Named("Result", [
+                        Named("Int"),
+                        Named("String"),
+                    ]),
+                    attrs: [],
+                    body: Block {
+                        stmts: [
+                            Let {
+                                mutable: false,
+                                name: "unsignedSize",
+                                ty: Named("UInt"),
+                                value: Size(1073741824),
+                            },
+                            Let {
+                                mutable: false,
+                                name: "emptySize",
+                                ty: Named("Byte"),
+                                value: Size(0),
+                            },
+                            Let {
+                                mutable: false,
+                                name: "sizes",
+                                ty: Named("List", [
+                                    Named("Int"),
+                                ]),
+                                value: List([
+                                    Size(1024),
+                                    Size(2097152),
+                                    Unary(
+                                        Neg,
+                                        Size(3221225472),
+                                    ),
+                                ]),
+                            },
+                            Return(
+                                Ok(
+                                    Binary(
+                                        Add,
+                                        Call {
+                                            callee: Ident("classify"),
+                                            args: [
+                                                Arg {
+                                                    label: None,
+                                                    expr: Ident("capacity"),
+                                                },
+                                            ],
+                                        },
+                                        Size(1024),
+                                    ),
+                                ),
+                            ),
+                        ],
+                    },
+                },
+            ],
+        },
+        Contract {
+            internal: false,
+            name: "SizedWorkflow",
+            attrs: [
+                Attr {
+                    key: "version",
+                    value: Size(2048),
+                },
+            ],
+            members: [
+                Pledge {
+                    name: "run",
+                    params: [],
+                    ret: Named("Unit"),
+                    terms: [
+                        Retry {
+                            count: Size(1024),
+                            every: None,
+                            backoff: None,
+                            cap: None,
+                            on: [],
+                        },
+                    ],
+                    attrs: [],
+                    body: None,
+                },
+                Amends {
+                    version: Size(1024),
+                    items: [
+                        Latch {
+                            name: "run",
+                            state: Fulfilled,
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

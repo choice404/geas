@@ -26,7 +26,7 @@ OUT     := target/geas-out
 # of the park row, all over the structs runtime_internal.h shares out.
 RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
     runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
-    runtime/src/flowpark.c
+    runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -63,6 +63,7 @@ HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
 .PHONY: test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-requirements
 .PHONY: test-soname test-future test-cancel
 .PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
 
@@ -72,7 +73,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan tsan-workflow
+all: test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan tsan-workflow
 
 runtime: $(RT_SO)
 
@@ -584,6 +585,42 @@ test-header: $(GEAS) $(MODULE) $(RT_SO)
 	    -I runtime/include -I $(OUT) \
 	    tests/runtime/test_header.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_header
 	./$(OUT)/test_header
+
+# Byte buffers through compiled pledges, references, wire values, and parking
+.PHONY: test-bytes test-bytes-python
+$(OUT)/libblob.geas.so: skeleton/blob.geas $(GEAS) $(RT_SO)
+	$(GEAS) build skeleton/blob.geas
+
+test-bytes: $(OUT)/libblob.geas.so $(SQLITE_OBJ)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_bytes.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_bytes
+	./$(OUT)/test_bytes
+
+test-bytes-python: $(OUT)/libblob.geas.so
+	python3 interop/python/test_bytes.py
+
+# Declared settings before and after sign, with a second build of the same shape
+.PHONY: test-attrs
+test-attrs: $(GEAS) $(RT_SO) $(SQLITE_OBJ)
+	$(GEAS) build skeleton/jobstep.geas
+	@mkdir -p $(OUT)/attrs
+	cp skeleton/jobattrs.geas $(OUT)/attrs/jobattrs.geas
+	sed 's/priority: -2/priority: -3/' skeleton/jobstep.geas > $(OUT)/attrs/jobstep_changed.geas
+	$(GEAS) build $(OUT)/attrs/jobstep_changed.geas
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_attrs.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_attrs
+	./$(OUT)/test_attrs
+	python3 interop/python/test_attrs.py
+
+# Written policies, a full byte index table, and the structural default
+# through 255 items, compiled and driven by a C host under ASan
+test-requirements: $(GEAS) $(RT_SO)
+	$(GEAS) build tests/runtime/requirements.geas
+	$(GEAS) emit-header tests/runtime/requirements.geas
+	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic \
+	    $(RT_INC) -I $(OUT) tests/runtime/test_requirements.c \
+	    $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_requirements
+	./$(OUT)/test_requirements
 
 # The proto gate: emit-proto must reproduce every pinned golden byte for
 # byte, the .proto a stock protoc consumes and the Go session wrapper that

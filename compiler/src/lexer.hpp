@@ -58,6 +58,7 @@ private:
     void scanExponent();
     void scanNumberJunk(std::int64_t start);
     void scanDuration(std::int64_t start);
+    void scanSize(std::int64_t start);
     void checkIntOverflow(std::int64_t start, std::int64_t lo, std::int64_t hi, int base);
 
     std::string_view text_;

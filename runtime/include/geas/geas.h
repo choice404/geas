@@ -26,6 +26,31 @@ typedef struct GeasRuntime  GeasRuntime;
 typedef struct GeasContract GeasContract;
 typedef struct GeasFuture   GeasFuture;
 
+/* A borrowed attribute row, valid until runtime shutdown */
+typedef struct GeasAttrInfo {
+    uint32_t owner;
+    const char* owner_name;
+    const char* key;
+    const GeasValue* value;
+} GeasAttrInfo;
+
+/* Host settings are readable before sign and on every instance state
+ * Unknown names return GEAS_ERR_NAME, absent keys return GEAS_OK and NULL
+ * A NULL argument returns GEAS_ERR_TYPE, an index past the end GEAS_ERR_NAME
+ * Anonymous subcontract rows have a NULL owner_name */
+GeasStatus geas_attr_count(GeasRuntime* rt, const char* contract, size_t* count);
+GeasStatus geas_attr_at(GeasRuntime* rt, const char* contract, size_t index,
+                        GeasAttrInfo* out);
+GeasStatus geas_contract_attr(GeasRuntime* rt, const char* contract, const char* key,
+                              const GeasValue** out);
+GeasStatus geas_item_attr(GeasRuntime* rt, const char* contract, const char* item,
+                          const char* key, const GeasValue** out);
+GeasStatus geas_instance_attr_count(const GeasContract* c, size_t* count);
+GeasStatus geas_instance_attr_at(const GeasContract* c, size_t index, GeasAttrInfo* out);
+/* A NULL item selects the contract itself */
+GeasStatus geas_instance_attr(const GeasContract* c, const char* item, const char* key,
+                              const GeasValue** out);
+
 /* ---- runtime lifecycle ---- */
 
 /* Pool sizing. max_threads of 0 selects the default of 4 workers; a value
@@ -551,6 +576,20 @@ GeasStatus geas_string_concat(GeasContract* c, const GeasValue* a,
 
 /* Whether two string values hold the same bytes; 1 or 0. */
 int geas_string_eq(const GeasValue* a, const GeasValue* b);
+
+/* Raw Bytes use as.s with no terminator and copy onto the instance heap */
+GeasValue geas_bytes_copy(GeasContract* c, const uint8_t* ptr, uint64_t len);
+GeasStatus geas_bytes_copy_into(GeasContract* c, const uint8_t* ptr,
+                                uint64_t len, GeasValue* out);
+GeasStatus geas_bytes_concat(GeasContract* c, const GeasValue* a,
+                             const GeasValue* b, GeasValue* out);
+
+/* Conversions: String or List<Byte> to Bytes, Bytes to Option<String>,
+ * and Bytes to List<Byte>. Invalid UTF-8 answers None, allocation failure
+ * answers GEAS_ERR_OOM, and a wrong input type answers GEAS_ERR_TYPE */
+GeasStatus geas_bytes_from(GeasContract* c, const GeasValue* value, GeasValue* out);
+GeasStatus geas_bytes_text(GeasContract* c, const GeasValue* value, GeasValue* out);
+GeasStatus geas_bytes_list(GeasContract* c, const GeasValue* value, GeasValue* out);
 
 /* ---- deep values ---- */
 

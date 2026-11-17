@@ -1,0 +1,3 @@
+contract Bad {
+    vow value: Bytes = bytes("raw")
+}

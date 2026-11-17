@@ -1,15 +1,15 @@
 // Name resolution, see resolve.hpp
 #include "resolve.hpp"
+#include "attributes.hpp"
 
 #include <utility>
 
 #include "quote.hpp"
+#include "reqsat.hpp"
 
 namespace geas {
 
 namespace {
-
-constexpr std::size_t requirementsAtomLimit = 16;
 
 std::string_view globalKindWord(GlobalKind kind) {
     switch (kind) {
@@ -320,7 +320,7 @@ void Resolver::resolveReqAtom(const ContractDecl& contract, const ReqNode& node,
 }
 
 // Every named atom counts toward the contract limit whether it resolved or
-// not, since the limit bounds the enumeration over the names as written
+// not, since the limit covers the names as written
 void Resolver::resolveReqExpr(const ContractDecl& contract, ReqId id,
                               std::unordered_set<std::string>& seen) {
     const ReqNode& node = ast_.req(id);
@@ -358,7 +358,7 @@ void Resolver::resolveRequirements(const ContractDecl& contract) {
         if (seen.size() > requirementsAtomLimit) {
             emit(block->lo, block->hi,
                  "too many requirements atoms in contract " + quoted(contract.name) +
-                     "; the limit is 16");
+                     "; the limit is " + std::to_string(requirementsAtomLimit));
         }
         return;
     }
@@ -369,6 +369,7 @@ void Resolver::resolveRequirements(const ContractDecl& contract) {
 // later resolves the same as one declared earlier
 Resolved Resolver::run() && {
     collectGlobals();
+    resolveAttributes(program_, resolved_);
     for (std::size_t i = 0; i < ast_.decls.size(); ++i) {
         if (const auto* contract = std::get_if<ContractDecl>(&ast_.decls[i])) {
             collectMembers(static_cast<int>(i), *contract);

@@ -5,6 +5,7 @@
 // binds by "Contract.remedy" or its mangled name, the way an abstract pledge
 // does. The descriptor's workflow tail closes the file's view of a contract
 #include "emitc.hpp"
+#include "attributes.hpp"
 #include "emittext.hpp"
 
 namespace geas {
@@ -37,7 +38,11 @@ void CEmitter::emitRemedyThunk(const RemedyShape& remedy) {
     const RemedyDecl& decl = *remedy.decl;
     const CallableSig sig = lookup_.remedySig(decl);
     beginBody(sig.ret, decl.lo, decl.hi);
-    if (!decl.attrs.empty()) {
+    bool hasBindingAttrs = false;
+    for (const Attr& attr : decl.attrs) {
+        hasBindingAttrs = hasBindingAttrs || isBuiltinAttr(attr.key, AttrTarget::Remedy);
+    }
+    if (hasBindingAttrs) {
         lookup_.unsupported(decl.lo, decl.hi, "remedy attributes in a compiled module");
     }
     std::vector<Field> params;

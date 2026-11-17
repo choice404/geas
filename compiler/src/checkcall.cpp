@@ -94,7 +94,7 @@ TyId Checker::callPledgeValue(const Expr& expr, const CallExpr& call, TyId calle
     return node.ret;
 }
 
-// The builtin len(x), the length of a List or a Map as an Int. It is reserved in callee
+// The builtin len(x), the length of a List, Map, or Bytes as an Int. It is reserved in callee
 // position only, so a binding may still be named len
 TyId Checker::checkLen(const Expr& expr, const CallExpr& call) {
     const TyId intType = scalar(TyKind::Int);
@@ -112,10 +112,42 @@ TyId Checker::checkLen(const Expr& expr, const CallExpr& call) {
     }
     const TyId actual = inferExpr(arg.value, TyId{});
     const TyKind kind = kindOf(actual);
-    if (kind != TyKind::List && kind != TyKind::Map && kind != TyKind::Unknown) {
-        emitAt(value, "len takes a List or a Map, got " + quoted(types_.render(actual)));
+    if (kind != TyKind::List && kind != TyKind::Map && kind != TyKind::Bytes &&
+        kind != TyKind::Unknown) {
+        emitAt(value, "len takes a List, Map, or Bytes, got " + quoted(types_.render(actual)));
     }
     return intType;
+}
+
+// Bytes conversions reserve a bare callee name and leave ordinary bindings alone
+TyId Checker::checkBytesConversion(const Expr& expr, const CallExpr& call,
+                                    std::string_view name) {
+    const TyId bytesType = scalar(TyKind::Bytes);
+    const TyId byteList = types_.list(scalar(TyKind::Byte));
+    const TyId result = name == "bytes" ? bytesType
+        : name == "text" ? types_.option(scalar(TyKind::String)) : byteList;
+    if (call.args.size() != 1) {
+        walkArgs(call.args);
+        emitAt(expr, std::string{name} + " takes one value, got " +
+                         countText(static_cast<std::int64_t>(call.args.size())));
+        return result;
+    }
+    const Argument& arg = call.args.front();
+    const Expr& value = ast_.expr(arg.value);
+    if (arg.label) {
+        emitAt(value, std::string{labelFault});
+    }
+    const TyId expected = name == "bytes" ? byteList : bytesType;
+    const TyId actual = inferExpr(arg.value, expected);
+    const bool isAccepted = name == "bytes"
+        ? isCompatible(actual, byteList) || kindOf(actual) == TyKind::String
+        : isCompatible(actual, bytesType);
+    if (!isAccepted) {
+        const std::string wanted = name == "bytes" ? "String or List<Byte>" : "Bytes";
+        emitAt(value, std::string{name} + " takes " + wanted + ", got " +
+                          quoted(types_.render(actual)));
+    }
+    return result;
 }
 
 // A sum variant constructed with its payload
@@ -194,6 +226,9 @@ TyId Checker::callIdent(const Expr& expr, const CallExpr& call, const Identifier
     }
     if (name == "len") {
         return checkLen(expr, call);
+    }
+    if (name == "bytes" || name == "text" || name == "byte_list") {
+        return checkBytesConversion(expr, call, name);
     }
     if (contract_ != nullptr) {
         if (const std::optional<TyId> answer = callMemberName(expr, call, name)) {

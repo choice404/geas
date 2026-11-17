@@ -33,6 +33,7 @@ enum class TyKind {
     Named,
     Contract,
     Unknown,
+    Bytes,
 };
 
 // The id of a checked type, unset when a position expects nothing

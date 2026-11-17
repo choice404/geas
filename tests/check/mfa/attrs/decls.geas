@@ -1,0 +1,5 @@
+attribute queue: String on contract
+attribute program: String on pledge
+attribute program: Bool on signal
+internal attribute secret: Int on contract
+attribute term: Int on pledge

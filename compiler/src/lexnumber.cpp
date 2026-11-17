@@ -4,6 +4,7 @@
 
 #include "duration.hpp"
 #include "lexer.hpp"
+#include "size.hpp"
 #include "utf8.hpp"
 
 namespace geas {
@@ -131,6 +132,20 @@ void Lexer::scanDuration(std::int64_t start) {
     push(TokenKind::Duration, start);
 }
 
+// A size consumes the whole identifier run so a trailing name is one fault
+void Lexer::scanSize(std::int64_t start) {
+    while (isIdentContinue(peek())) {
+        advance();
+    }
+    const std::string_view literal = text_.substr(static_cast<std::size_t>(start),
+                                                  static_cast<std::size_t>(pos_ - start));
+    const auto bytes = parseSize(literal);
+    if (!bytes) {
+        report(start, sizeErrorMessage(bytes.error()));
+    }
+    push(TokenKind::Size, start);
+}
+
 // A numeric literal. A 0x or 0b prefix routes to the radix scan, otherwise
 // decimal digits, then a fraction that makes it a float, then an exponent on
 // the float form only. A dot with no digit after it is left alone so member
@@ -157,6 +172,10 @@ void Lexer::scanNumber(std::int64_t start) {
         }
         scanNumberJunk(start);
         push(TokenKind::Float, start);
+        return;
+    }
+    if (isSizeSuffix(peek())) {
+        scanSize(start);
         return;
     }
     if (isDurationUnitLead(peek())) {

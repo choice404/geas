@@ -46,7 +46,8 @@ void AstDumper::renderTerm(const Term& term, int level) {
 void AstDumper::renderRetry(const RetryTerm& retry, int level) {
     openStruct("Retry");
     key(level + 1, "count");
-    write(std::to_string(retry.count));
+    write(retry.isSizeCount ? "Size(" + std::to_string(retry.count) + ")"
+                            : std::to_string(retry.count));
     endField();
     key(level + 1, "every");
     renderOptionalDuration(retry.everyMilliseconds);
@@ -128,6 +129,11 @@ void AstDumper::renderSignal(const SignalDecl& signal, int level) {
     key(level + 1, "terms");
     renderTerms(signal.terms, level + 1);
     endField();
+    if (!signal.attrs.empty()) {
+        key(level + 1, "attrs");
+        renderAttrs(signal.attrs, level + 1);
+        endField();
+    }
     closeStruct(level);
 }
 
@@ -142,7 +148,8 @@ void AstDumper::renderCourse(const CourseDecl& course, int level) {
 void AstDumper::renderAmends(const AmendsDecl& amends, int level) {
     openStruct("Amends");
     key(level + 1, "version");
-    write(std::to_string(amends.version));
+    write(amends.isSizeVersion ? "Size(" + std::to_string(amends.version) + ")"
+                              : std::to_string(amends.version));
     endField();
     key(level + 1, "items");
     list(amends.items, level + 1,

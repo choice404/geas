@@ -1,0 +1,6 @@
+contract Bad {
+    vow dsn: String = "file:blob.db"
+    schema Row {
+        data: Bytes
+    }
+}

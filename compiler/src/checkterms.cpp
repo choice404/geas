@@ -353,7 +353,6 @@ void Checker::checkSubTerms(const ContractDecl& contract, const SubcontractDecl&
             checkTermList(pledge->terms,
                           TermOwner{"pledge", name, true, true, true, pledgeSig(*pledge).ret});
             resolveAfter(contract, &sub, pledge->terms, OrderTarget{pledge}, name);
-            refuseTermAttr(pledge->attrs, name);
             refuseInTransaction(sub, member, name);
         } else if (const auto* signal = std::get_if<SignalDecl>(&member)) {
             const std::string name = "signal " + quoted(signal->name);
@@ -367,13 +366,13 @@ void Checker::checkSubTerms(const ContractDecl& contract, const SubcontractDecl&
 // The declaration level workflow rules of one contract, run before any body
 void Checker::checkWorkflowRules(const ContractDecl& contract) {
     checkContractAttrs(contract);
+    checkDeclaredAttrs(contract);
     for (const Member& member : contract.members) {
         if (const auto* pledge = std::get_if<PledgeDecl>(&member)) {
             const std::string name = "pledge " + quoted(pledge->name);
             checkTermList(pledge->terms,
                           TermOwner{"pledge", name, true, true, true, pledgeSig(*pledge).ret});
             resolveAfter(contract, nullptr, pledge->terms, OrderTarget{pledge}, name);
-            refuseTermAttr(pledge->attrs, name);
         } else if (const auto* signal = std::get_if<SignalDecl>(&member)) {
             const std::string name = "signal " + quoted(signal->name);
             checkTermList(signal->terms, TermOwner{"signal", name, true, true, false, unknown()});
@@ -384,7 +383,6 @@ void Checker::checkWorkflowRules(const ContractDecl& contract) {
             const std::string name = "remedy " + quoted(remedy->name);
             checkTermList(remedy->terms,
                           TermOwner{"remedy", name, true, false, true, remedySig(*remedy).ret});
-            refuseTermAttr(remedy->attrs, name);
         }
     }
     checkOrdering(contract);

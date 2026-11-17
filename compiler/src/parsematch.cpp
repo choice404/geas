@@ -116,12 +116,12 @@ PatternId Parser::parsePatternInner() {
     return ast_.addPattern(WildcardPattern{});
 }
 
-// "-" ( INT | FLOAT | DURATION ), kept as a negated literal
+// "-" ( INT | SIZE | FLOAT | DURATION ), kept as a negated literal
 PatternId Parser::parseNegativePattern() {
     const std::int64_t lo = current().lo;
     bump();
     const bool isNumber =
-        at(TokenKind::Int) || at(TokenKind::Float) || at(TokenKind::Duration);
+        at(TokenKind::Int) || at(TokenKind::Size) || at(TokenKind::Float) || at(TokenKind::Duration);
     if (!isNumber) {
         error(expectedFound("a number or a duration after '-' in a pattern"));
         return ast_.addPattern(WildcardPattern{});

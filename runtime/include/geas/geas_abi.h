@@ -43,10 +43,14 @@ typedef enum GeasTypeTag {
      * ever carries this tag; it exists so a pledge body can hold the instance
      * a cross-contract sign returned. Deep copy is the handle copy, equality
      * is handle identity. */
-    GEAS_TY_INSTANCE
+    GEAS_TY_INSTANCE,
+
+    /* Raw bytes on as.s, instance owned with no terminator */
+    GEAS_TY_BYTES
 } GeasTypeTag;
 
-/* UTF-8 bytes, length counted in bytes, no NUL terminator. When the runtime
+/* String holds UTF-8 and Bytes holds arbitrary bytes in this same arm.
+ * Length is counted in bytes with no NUL terminator. When the runtime
  * owns the bytes they live on a contract instance and die at break(). */
 typedef struct GeasString {
     uint8_t* ptr;
@@ -204,7 +208,7 @@ typedef struct GeasVowDesc {
 
 /* A by-reference argument a host passes to a fulfillment. host_ptr addresses
  * the host's storage for a value of type ty: the raw scalar for the numeric
- * and character types, or a GeasString struct for strings. Only those types
+ * and character types, or a GeasString struct for String or Bytes. Only those types
  * cross by reference in v1; anything else is refused with GEAS_ERR_TYPE.
  *
  * The runtime never holds host_ptr across a call boundary the host is not
@@ -217,7 +221,7 @@ typedef struct GeasVowDesc {
  * default otherwise. cap declares the byte capacity at host_ptr; the default
  * write back does not use it, a callback that honors a capacity reaches its
  * own bookkeeping through user. The default writes scalars in place and
- * writes a whole GeasString struct for strings, whose bytes are instance
+ * writes a whole GeasString struct for String or Bytes, whose bytes are instance
  * owned and die at break; a host that wants the bytes to outlive the
  * instance supplies a write_back that copies them out. */
 typedef void (*GeasWriteBackFn)(void* host_ptr, const GeasValue* v, void* user);
@@ -332,6 +336,22 @@ typedef struct GeasRemedyDesc {
     GeasTermDesc terms;      /* within and retry only */
 } GeasRemedyDesc;
 
+/* Declared host settings, indexed by their owner's descriptor table */
+typedef enum GeasAttrOwner {
+    GEAS_ATTR_CONTRACT = 0,
+    GEAS_ATTR_SUBCONTRACT = 1,
+    GEAS_ATTR_PLEDGE = 2,
+    GEAS_ATTR_SIGNAL = 3,
+    GEAS_ATTR_REMEDY = 4
+} GeasAttrOwner;
+
+typedef struct GeasAttrDesc {
+    uint32_t owner;
+    uint32_t owner_index;
+    const char* name;
+    GeasValue value;
+} GeasAttrDesc;
+
 /* The requirements surface rides at the tail of the contract descriptor so a
  * zero-filled handwritten descriptor stays valid: no atoms and no lines means
  * the runtime applies the structural default policy over subs and loose
@@ -393,6 +413,9 @@ typedef struct GeasContractDesc {
     uint32_t              nremedies;
     const GeasRemedyDesc* remedies;
     uint64_t              term_ms;
+    /* Declared attributes only, absent when nattrs is zero */
+    uint32_t              nattrs;
+    const GeasAttrDesc*    attrs;
 } GeasContractDesc;
 
 /* The byte size of the descriptor every module built before the workflow
@@ -400,6 +423,10 @@ typedef struct GeasContractDesc {
  * geas_register_contract symbol reads exactly this much. */
 #define GEAS_CONTRACT_DESC_V1_SIZE \
     (offsetof(GeasContractDesc, sub_flags) + sizeof(const uint8_t*))
+
+/* The complete workflow descriptor before declared attributes */
+#define GEAS_CONTRACT_DESC_V2_SIZE \
+    (offsetof(GeasContractDesc, term_ms) + sizeof(uint64_t))
 
 /* A vow override a host supplies at sign. The value is copied onto the
  * instance, string bytes included; the runtime keeps nothing the host owns. */

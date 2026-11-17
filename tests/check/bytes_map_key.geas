@@ -1,0 +1,3 @@
+contract Bad {
+    pledge read(data: Map<Bytes, Int>) -> Unit
+}

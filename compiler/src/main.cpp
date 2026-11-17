@@ -15,11 +15,12 @@
 #include "lexdump.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
+#include "reqselftest.hpp"
 #include "source.hpp"
 
 namespace {
 
-constexpr std::string_view versionString = "geas 0.8.1";
+constexpr std::string_view versionString = "geas 0.8.2";
 constexpr int exitSuccess = 0;
 constexpr int exitFailure = 1;
 
@@ -184,6 +185,9 @@ int main(int argc, char** argv) {
     if (command == "version") {
         printLine(stdout, versionString);
         return exitSuccess;
+    }
+    if (command == "test-requirements") {
+        return geas::runRequirementsSelfTest(args.subspan(2));
     }
     const bool isFrontEnd =
         command == "lex" || command == "parse" || command == "check" || command == "dump-shape";

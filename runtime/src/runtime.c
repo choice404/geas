@@ -544,6 +544,16 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
     size_t take = desc_size < sizeof(GeasContractDesc) ? desc_size
                                                       : sizeof(GeasContractDesc);
     memcpy(own, desc, take);
+    /* A partial attribute tail carries no settings */
+    if (desc_size < offsetof(GeasContractDesc, attrs) + sizeof(own->attrs)) {
+        own->nattrs = 0;
+        own->attrs = NULL;
+    }
+    GeasStatus attr_status = geas_rt_validate_attrs(own);
+    if (attr_status != GEAS_OK) {
+        free(own);
+        return attr_status;
+    }
     pthread_mutex_lock(&rt->lock);
     GeasStatus st = GEAS_OK;
     if (rt->frozen) st = GEAS_ERR_STATE;
@@ -2443,6 +2453,10 @@ static GeasStatus ref_copy_in(GeasContract* c, const GeasRef* r, GeasValue* slot
     case GEAS_TY_BOOL:
     case GEAS_TY_BYTE:  slot->as.b  = *(const uint8_t*)r->host_ptr;  return GEAS_OK;
     case GEAS_TY_CHAR:  slot->as.ch = *(const uint32_t*)r->host_ptr; return GEAS_OK;
+    case GEAS_TY_BYTES: {
+        const GeasString* bytes = (const GeasString*)r->host_ptr;
+        return geas_bytes_copy_into(c, bytes->ptr, bytes->len, slot);
+    }
     case GEAS_TY_STRING: {
         const GeasString* hs = (const GeasString*)r->host_ptr;
         *slot = geas_string_copy(c, hs->ptr, hs->len);
@@ -2471,6 +2485,7 @@ static GeasStatus ref_write_back(const GeasRef* r, const GeasValue* slot) {
     case GEAS_TY_BOOL:
     case GEAS_TY_BYTE:  *(uint8_t*)r->host_ptr   = slot->as.b;  return GEAS_OK;
     case GEAS_TY_CHAR:  *(uint32_t*)r->host_ptr  = slot->as.ch; return GEAS_OK;
+    case GEAS_TY_BYTES:
     case GEAS_TY_STRING: *(GeasString*)r->host_ptr = slot->as.s; return GEAS_OK;
     default:
         return GEAS_ERR_TYPE;
@@ -2557,10 +2572,12 @@ static int atom_true(const GeasContract* c, const GeasReqAtom* a) {
 }
 
 /* Evaluates one postfix policy line. An empty line is a line the source did
- * not write and never fires. The stack bound is generous, the source caps a
- * contract at 16 distinct atoms; a malformed program that would overflow or
- * underflow reads false rather than anything worse. */
-#define REQ_STACK_MAX 128
+ * not write and never fires. Each of the parser's 500 nesting levels can
+ * leave an AND and an OR operand on the stack, including repeated atoms
+ * within a written block's 64 distinct names. Default chains need two slots
+ * A malformed program that overflows or underflows reads false
+ */
+#define REQ_STACK_MAX 1024
 
 static int eval_line(const GeasContract* c, const GeasReqOp* ops, uint32_t n) {
     uint8_t st[REQ_STACK_MAX];
@@ -2597,10 +2614,10 @@ static int eval_line(const GeasContract* c, const GeasReqOp* ops, uint32_t n) {
 /* The structural default policy for a descriptor that carries no
  * requirements data at all, the handwritten descriptor case: fulfill when
  * every subcontract and every loose pledge is fulfilled, partial when at
- * least one subcontract is, break when everything is broken. geas compiled
- * modules never land here, the compiler serializes the source block or
- * synthesizes these same defaults as trees. Called under the instance
- * lock. */
+ * least one subcontract is, break when everything is broken. The compiler
+ * uses this policy when the default's fulfilled and broken atom rows would
+ * exceed the byte sized index in GeasReqOp. Called under the instance lock
+ */
 static int default_line(const GeasContract* c, uint8_t want) {
     const GeasContractDesc* d = c->desc;
     int seen = 0;
@@ -3854,6 +3871,10 @@ int geas_value_eq(const GeasValue* a, const GeasValue* b) {
     case GEAS_TY_CHAR:  return a->as.ch == b->as.ch;
     case GEAS_TY_STRING:
         return geas_string_eq(a, b);
+    case GEAS_TY_BYTES:
+        if (a->as.s.len != b->as.s.len) return 0;
+        return a->as.s.len == 0 ||
+            memcmp(a->as.s.ptr, b->as.s.ptr, a->as.s.len) == 0;
     case GEAS_TY_LIST:
     case GEAS_TY_MAP:
     case GEAS_TY_TUPLE:
@@ -3922,6 +3943,8 @@ GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
          * the ABI never carries this tag across the boundary. */
         *dst = *src;
         return GEAS_OK;
+    case GEAS_TY_BYTES:
+        return geas_bytes_copy_into(c, src->as.s.ptr, src->as.s.len, dst);
     case GEAS_TY_STRING:
         *dst = geas_string_copy(c, src->as.s.ptr, src->as.s.len);
         if (src->as.s.len && !dst->as.s.ptr) return GEAS_ERR_OOM;
@@ -4020,6 +4043,19 @@ static void render_string(RenderSink* s, const GeasString* str) {
     sink_put(s, "\"", 1);
 }
 
+#define GEAS_RENDER_BYTES 32
+
+/* Bytes render as hex with a bounded prefix and the full byte count */
+static void render_bytes(RenderSink* s, const GeasString* bytes) {
+    sink_str(s, "Bytes(");
+    uint64_t count = bytes->len < GEAS_RENDER_BYTES ? bytes->len : GEAS_RENDER_BYTES;
+    for (uint64_t i = 0; i < count; i++) {
+        sink_fmt(s, "%02x", (unsigned)bytes->ptr[i]);
+    }
+    if (count < bytes->len) sink_str(s, "...");
+    sink_fmt(s, "; %llu bytes)", (unsigned long long)bytes->len);
+}
+
 #define GEAS_RENDER_DEPTH 8
 
 static void render_value(RenderSink* s, const GeasValue* v, unsigned depth);
@@ -4074,6 +4110,7 @@ static void render_value(RenderSink* s, const GeasValue* v, unsigned depth) {
     case GEAS_TY_BOOL:   sink_str(s, v->as.b ? "true" : "false"); return;
     case GEAS_TY_BYTE:   sink_fmt(s, "%u", (unsigned)v->as.b); return;
     case GEAS_TY_CHAR:   sink_fmt(s, "U+%04X", (unsigned)v->as.ch); return;
+    case GEAS_TY_BYTES: render_bytes(s, &v->as.s); return;
     case GEAS_TY_STRING: render_string(s, &v->as.s); return;
     case GEAS_TY_LIST:   render_elems(s, v, depth, "[", "]"); return;
     case GEAS_TY_TUPLE:  render_elems(s, v, depth, "(", ")"); return;

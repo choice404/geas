@@ -1,0 +1,6 @@
+attribute duration: Duration on contract
+attribute integer: Int on contract
+attribute float: Float on contract
+attribute boolean: Bool on contract
+attribute string: String on contract
+contract Job [duration: 1, integer: 1s, float: 1, boolean: 1, string: 'a'] {}

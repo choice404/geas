@@ -5,6 +5,7 @@
 
 #include "duration.hpp"
 #include "escape.hpp"
+#include "size.hpp"
 #include "utf8.hpp"
 
 namespace geas {
@@ -56,6 +57,8 @@ std::string renderKind(std::string_view text, const Token& token) {
     switch (token.kind) {
         case TokenKind::Ident: return "Ident(\"" + std::string{spanText(text, token)} + "\")";
         case TokenKind::Int: return "Int(" + std::to_string(intValue(text, token.lo, token.hi)) + ")";
+        case TokenKind::Size:
+            return "Size(" + std::to_string(parseSize(spanText(text, token)).value_or(0)) + ")";
         case TokenKind::Float: return "Float(\"" + std::string{spanText(text, token)} + "\")";
         case TokenKind::Duration:
             return "Duration(" + std::to_string(parseDuration(spanText(text, token)).value_or(0)) + ")";

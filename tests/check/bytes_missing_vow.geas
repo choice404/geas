@@ -1,0 +1,8 @@
+contract Required {
+    vow seed: Bytes
+}
+contract Bad {
+    pledge read() -> Unit {
+        let instance = Required.sign()
+    }
+}

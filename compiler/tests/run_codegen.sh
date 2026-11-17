@@ -45,7 +45,7 @@ REFUSED_SOURCES="amends_ok course_ok order_saga time_ok"
 # The accepted programs of tests/check with no workflow construct in them,
 # which pin nothing the goldens above do not
 PLAIN_SOURCES="abi_clause_ok incorporate misc payment requirements std_user
-store_ledger sub_transactional_ok"
+store_ledger sub_transactional_ok attribute_name sizes req_forty req_worst_case bytes bytes_shadow"
 
 if [ ! -x "$GEAS" ]; then
     echo "[codegen] no geas binary at $GEAS, run make compiler first" >&2

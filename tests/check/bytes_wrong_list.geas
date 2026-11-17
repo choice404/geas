@@ -1,0 +1,5 @@
+contract Bad {
+    pledge read() -> Result<List<Byte>, Int> {
+        return Ok(byte_list("hello"))
+    }
+}

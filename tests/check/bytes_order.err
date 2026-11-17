@@ -1,0 +1,4 @@
+operator '<' needs matching numeric operands; got 'Bytes' and 'Bytes'
+operator '<=' needs matching numeric operands; got 'Bytes' and 'Bytes'
+operator '>' needs matching numeric operands; got 'Bytes' and 'Bytes'
+operator '>=' needs matching numeric operands; got 'Bytes' and 'Bytes'

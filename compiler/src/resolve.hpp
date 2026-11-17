@@ -78,8 +78,14 @@ struct ContractScope {
     std::unordered_set<const ProvisionalDecl*> incorporated;
 };
 
+struct AttributeEntry {
+    const AttributeDecl* decl;
+    int package;
+};
+
 // The resolved tables handed to the type checker
 struct Resolved {
+    std::vector<AttributeEntry> attributes;
     std::unordered_map<std::string, GlobalEntry> globals;
     std::unordered_map<const ContractDecl*, ContractScope> contracts;
     std::vector<Diagnostic> diagnostics;

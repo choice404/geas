@@ -1,0 +1,5 @@
+attribute 'duration' expects Duration, found Int
+attribute 'integer' expects Int, found Duration
+attribute 'float' expects Float, found Int
+attribute 'boolean' expects Bool, found Int
+attribute 'string' expects String, found Char

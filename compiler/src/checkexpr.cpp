@@ -287,24 +287,26 @@ TyId Checker::inferTemporal(const Expr& expr, const BinaryExpr& binary, TyId lef
     return unknown();
 }
 
-// '+' doubles as String concatenation: a String left operand asks for a
-// String right operand. Every other pairing takes the numeric rule
+// '+' concatenates String or Bytes operands of the same type
 TyId Checker::inferArithmetic(const Expr& expr, const BinaryExpr& binary, TyId want) {
     TyId operandWant;
     if (want.isSet()) {
-        const bool isConcatenation = binary.op == BinaryOp::Add && kindOf(want) == TyKind::String;
+        const bool isConcatenation = binary.op == BinaryOp::Add &&
+            (kindOf(want) == TyKind::String || kindOf(want) == TyKind::Bytes);
         if (isNumeric(want) || isConcatenation) {
             operandWant = want;
         }
     }
     const TyId left = inferExpr(binary.lhs, operandWant);
-    if (binary.op == BinaryOp::Add && kindOf(left) == TyKind::String) {
+    if (binary.op == BinaryOp::Add &&
+        (kindOf(left) == TyKind::String || kindOf(left) == TyKind::Bytes)) {
         const TyId right = inferExpr(binary.rhs, left);
         if (!isCompatible(left, right)) {
-            emitAt(expr, typesMessage("operator '+' concatenates two String values; got ", left,
+            emitAt(expr, typesMessage("operator '+' concatenates two " + types_.render(left) +
+                                      " values; got ", left,
                                       " and ", right));
         }
-        return scalar(TyKind::String);
+        return left;
     }
     if (isTemporal(left)) {
         return inferTemporal(expr, binary, left);
@@ -385,6 +387,12 @@ TyId Checker::inferIndex(const Expr& expr, const IndexExpr& index) {
     }
     const TyId intType = scalar(TyKind::Int);
     const TyId position = inferExpr(index.index, intType);
+    if (node.kind == TyKind::Bytes) {
+        if (!isCompatible(position, intType)) {
+            emitAt(expr, typesMessage("a Bytes index must be ", intType, ", got ", position));
+        }
+        return scalar(TyKind::Byte);
+    }
     if (node.kind == TyKind::List) {
         if (!isCompatible(position, intType)) {
             emitAt(expr, typesMessage("a list index must be ", intType, ", got ", position));
@@ -395,7 +403,7 @@ TyId Checker::inferIndex(const Expr& expr, const IndexExpr& index) {
         return unknown();
     }
     emitAt(expr, "cannot index a value of type " + quoted(types_.render(base)) +
-                     "; only a List or a Map is indexed");
+                     "; only a List, Map, or Bytes is indexed");
     return unknown();
 }
 

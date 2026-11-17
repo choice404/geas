@@ -1,0 +1,12 @@
+attribute is either On or Off
+record Setting {
+    attribute: Int
+    on: String
+}
+contract attribute {
+    vow on: Int = 1
+    pledge attribute(on: String) -> Unit {
+        let attribute = on
+        return
+    }
+}

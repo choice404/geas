@@ -9,6 +9,7 @@
 // everything is broken. A line the source did not write emits no array;
 // length zero is the runtime's constant false
 #include <algorithm>
+#include <limits>
 
 #include "emitc.hpp"
 #include "emittext.hpp"
@@ -24,6 +25,8 @@ constexpr int opOr = 3;
 constexpr int atomFulfilled = 0;
 constexpr int atomBroken = 1;
 constexpr std::int64_t noIndex = -1;
+constexpr std::int64_t maxAtomIndex = std::numeric_limits<std::uint8_t>::max();
+constexpr std::int64_t defaultAtomKinds = 2;
 
 std::string_view opName(int op) {
     switch (op) {
@@ -113,7 +116,7 @@ void CEmitter::emitOps(std::string_view tag, const std::vector<RequirementOp>& o
 
 // The postfix program of one source line, a post order walk of the tree.
 // Atom indices come from the shape's first appearance order, the same
-// enumeration the satisfiability check saw
+// order the satisfiability check saw
 void CEmitter::buildPostfix(ReqId id, const ContractShape& shape,
                             std::vector<RequirementOp>& ops) const {
     const ReqNode& node = ast().req(id);
@@ -247,7 +250,8 @@ RequirementCounts CEmitter::emitDefaultBlock(const ContractShape& shape) {
         }
     }
     const std::int64_t items = subs + static_cast<std::int64_t>(loose.size());
-    if (items == 0) {
+    // Larger defaults use the runtime's structural policy over the item tables
+    if (items == 0 || items * defaultAtomKinds > maxAtomIndex + 1) {
         return RequirementCounts{subs, 0, false, 0, 0, 0};
     }
     emitDefaultAtoms(shape, loose);
@@ -269,7 +273,7 @@ RequirementCounts CEmitter::emitDefaultBlock(const ContractShape& shape) {
     emitOps("rp", partial);
     emitOps("rb", breakLine);
     return RequirementCounts{
-        subs, items * 2, false, sizeOf(fulfill), sizeOf(partial), sizeOf(breakLine)};
+        subs, items * defaultAtomKinds, false, sizeOf(fulfill), sizeOf(partial), sizeOf(breakLine)};
 }
 
 }  // namespace geas

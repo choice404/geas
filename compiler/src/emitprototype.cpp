@@ -48,6 +48,7 @@ std::string_view scalarWord(TyKind kind) {
         case TyKind::Float: return "Float";
         case TyKind::Bool: return "Bool";
         case TyKind::String: return "String";
+        case TyKind::Bytes: return "Bytes";
         case TyKind::Unit: return "Unit";
         default: return "";
     }
@@ -67,6 +68,7 @@ std::string_view ProtoEmitter::scalarOf(TyId type) const {
         case TyKind::Float: return "double";
         case TyKind::Bool: return "bool";
         case TyKind::String: return "string";
+        case TyKind::Bytes: return "bytes";
         default: return "";
     }
 }
@@ -114,6 +116,9 @@ std::string ProtoEmitter::wordOf(TyId type) const {
 // Option names its wrapper. Empty for a return outside the bridged set
 std::string ProtoEmitter::returnName(TyId ret) const {
     const TyNode node = lookup_.types().node(ret);
+    if (node.kind == TyKind::Bytes) {
+        return "BytesValue";
+    }
     if (node.kind == TyKind::Option) {
         return wordOf(ret);
     }

@@ -1,0 +1,9 @@
+record Bytes {
+    number: Int
+}
+
+contract ShadowBytes {
+    pledge read(data: Bytes) -> Result<Int, Int> {
+        return Ok(data.number)
+    }
+}

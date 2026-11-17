@@ -128,6 +128,7 @@ std::string_view EmitLookup::tagOf(TyId type) const {
         case TyKind::Byte: return "GEAS_TY_BYTE";
         case TyKind::Char: return "GEAS_TY_CHAR";
         case TyKind::String: return "GEAS_TY_STRING";
+        case TyKind::Bytes: return "GEAS_TY_BYTES";
         case TyKind::Unit: return "GEAS_TY_UNIT";
         case TyKind::List: return "GEAS_TY_LIST";
         case TyKind::Map: return "GEAS_TY_MAP";

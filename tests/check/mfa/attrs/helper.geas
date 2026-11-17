@@ -1,0 +1,2 @@
+import attrs.decls
+contract PackageJob [queue: "same package", secret: 7] {}

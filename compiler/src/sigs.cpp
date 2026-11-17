@@ -132,16 +132,16 @@ void SigBuilder::collectSchema(const SchemaDecl& schema) {
     sigs_.records.emplace(schema.name, RecordSig{std::move(columns)});
 }
 
-// The pledge return rule: Result, Option, or Unit, unknown passing after an
+// The pledge return rule: Result, Option, Unit, or Bytes, unknown passing after an
 // earlier fault in the annotation
 void SigBuilder::collectPledge(const PledgeDecl& pledge) {
     CallableSig sig = lowerBoundary(pledge.params, pledge.ret, pledge.lo, pledge.hi);
     const TyKind kind = types_.kindOf(sig.ret);
     const bool isAllowed = kind == TyKind::Result || kind == TyKind::Option ||
-                           kind == TyKind::Unit || kind == TyKind::Unknown;
+                           kind == TyKind::Unit || kind == TyKind::Bytes || kind == TyKind::Unknown;
     if (!isAllowed) {
         emit(pledge.lo, pledge.hi,
-             "pledge " + quoted(pledge.name) + " must return Result, Option, or Unit");
+             "pledge " + quoted(pledge.name) + " must return Result, Option, or Unit, or a Bytes value");
     }
     sigs_.pledges.emplace(&pledge, std::move(sig));
 }

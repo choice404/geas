@@ -1,0 +1,28 @@
+contract Sizes [version: 1K] {
+    vow capacity: Int = 64M
+    vow debt: Int = -512K
+    vow wide: UInt = 1T
+    vow empty: Byte = 0K
+
+    clause classify(bytes: Int) -> Int {
+        return match bytes {
+            1G -> 512K
+            -1K -> -2M
+            _ -> 0T
+        }
+    }
+
+    pledge allocate() -> Result<Int, String> {
+        let unsignedSize: UInt = 1G
+        let emptySize: Byte = 0M
+        let sizes: List<Int> = [1K, 2M, -3G]
+        return Ok(classify(capacity) + 1K)
+    }
+}
+
+contract SizedWorkflow [version: 2K] {
+    pledge run() -> Unit retry 1K
+    amends 1K {
+        latch run as fulfilled
+    }
+}

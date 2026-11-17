@@ -3,30 +3,9 @@
 // list and body must open on the line of whatever came right before them
 #include "parser.hpp"
 
-#include <array>
 #include <utility>
 
 namespace geas {
-
-namespace {
-
-constexpr std::array knownAttrKeys{
-    std::string_view{"version"},
-    std::string_view{"term"},
-    std::string_view{"abi"},
-    std::string_view{"symbol"},
-};
-
-bool isKnownAttrKey(std::string_view key) {
-    for (const std::string_view known : knownAttrKeys) {
-        if (key == known) {
-            return true;
-        }
-    }
-    return false;
-}
-
-}  // namespace
 
 // pledge IDENT "(" [ Params ] ")" "->" Type Terms [ Attrs ] [ Block ]. A
 // missing arrow is reported once and the pledge keeps a placeholder return
@@ -71,6 +50,7 @@ SubcontractDecl Parser::parseSubcontract() {
     const bool isTransactional = eat(TokenKind::KwTransactional);
     const std::int64_t hi = previousHi();
     std::vector<Term> terms = parseTerms();
+    std::vector<Attr> attrs = parseAttrsOnLine();
     std::vector<SubMember> members;
     expect(TokenKind::LBrace, "'{' to open the subcontract body");
     while (!at(TokenKind::RBrace) && !atEnd()) {
@@ -80,7 +60,7 @@ SubcontractDecl Parser::parseSubcontract() {
     }
     expectClose("the subcontract body is not closed; expected '}' before end of input");
     return SubcontractDecl{std::move(name),  lo, hi, isTransactional, std::move(terms),
-                           std::move(members)};
+                           std::move(members), std::move(attrs)};
 }
 
 // A pledge or a signal. A nested subcontract is reported, then parsed and
@@ -161,19 +141,20 @@ std::vector<Attr> Parser::parseAttrs() {
     return attrs;
 }
 
-// One key and literal. The known keys are fixed by the grammar, so an
-// unknown one is refused here rather than left to confuse the checker
+// One key and literal, resolved after every imported declaration is loaded
 void Parser::parseAttr(std::vector<Attr>& attrs) {
     std::string key = ident();
-    if (!isKnownAttrKey(key)) {
-        error("unknown attribute key; the known keys are version, term, abi, and symbol");
-    }
     expect(TokenKind::Colon, "':' between the attribute key and its value");
-    const std::optional<ExprId> value = parseLiteralExpr();
+    const std::int64_t lo = current().lo;
+    const bool isNegative = eat(TokenKind::Minus);
+    std::optional<ExprId> value = parseLiteralExpr();
     if (!value) {
         error("an attribute value must be a literal");
         bump();
         return;
+    }
+    if (isNegative) {
+        *value = spanExpr(lo, ast_.expr(*value).hi, UnaryExpr{UnaryOp::Neg, *value});
     }
     attrs.push_back(Attr{std::move(key), *value});
 }

@@ -1,0 +1,5 @@
+contract Bad {
+    pledge read(data: Bytes, index: UInt) -> Result<Byte, Int> {
+        return Ok(data[index])
+    }
+}

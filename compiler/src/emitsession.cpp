@@ -14,7 +14,6 @@
 #include "hash.hpp"
 
 namespace geas {
-
 namespace {
 
 // The Go file head, @STEM@ the root file's stem
@@ -275,6 +274,7 @@ std::string_view tsScalar(TyKind kind) {
     switch (kind) {
         case TyKind::Float: return "number";
         case TyKind::Bool: return "boolean";
+        case TyKind::Bytes: return "Uint8Array";
         default: return "string";
     }
 }
@@ -300,7 +300,7 @@ std::string goSignalMethods(const ContractShape& shape, std::string_view prefix)
 std::string_view tsFieldType(const EmitLookup& lookup, TyId type) {
     const TyKind kind = lookup.kindOf(type);
     const bool isScalar = kind == TyKind::Int || kind == TyKind::UInt || kind == TyKind::Float ||
-                          kind == TyKind::Bool || kind == TyKind::String ||
+                          kind == TyKind::Bool || kind == TyKind::String || kind == TyKind::Bytes ||
                           kind == TyKind::Duration || kind == TyKind::Time;
     return isScalar ? tsScalar(kind) : "unknown";
 }

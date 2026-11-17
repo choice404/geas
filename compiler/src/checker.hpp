@@ -180,6 +180,7 @@ private:
     void checkTwoStrings(const Expr& expr, const CallExpr& call, std::string_view name);
     TyId callPledgeValue(const Expr& expr, const CallExpr& call, TyId callee);
     TyId checkLen(const Expr& expr, const CallExpr& call);
+    TyId checkBytesConversion(const Expr& expr, const CallExpr& call, std::string_view name);
     TyId callVariant(const Expr& expr, const CallExpr& call, const std::string& name);
     std::optional<TyId> callMemberName(const Expr& expr, const CallExpr& call,
                                        const std::string& name);
@@ -274,8 +275,15 @@ private:
     void checkOrdering(const ContractDecl& contract);
 
     // Attributes, remedies, and amends, checkworkflow.cpp
+    void checkDeclaredAttrs(const ContractDecl& contract);
+    void checkSubAttrs(const ContractDecl& contract, const SubcontractDecl& sub);
+    void checkAttrList(const ContractDecl& contract, const std::vector<Attr>& attrs,
+                      AttrTarget target, const std::string& label);
+    void checkAttribute(const ContractDecl& contract, const Attr& attr,
+                        AttrTarget target, const std::string& label);
+    void unknownAttribute(const Attr& attr, AttrTarget target, const std::string& label,
+                          bool hasOtherTarget, bool isInternal);
     void checkContractAttrs(const ContractDecl& contract);
-    void refuseTermAttr(const std::vector<Attr>& attrs, const std::string& label);
     void checkRemedies(const ContractDecl& contract);
     void checkRemedy(const ContractDecl& contract, const RemedyDecl& remedy,
                      std::unordered_map<const PledgeDecl*, const RemedyDecl*>& taken);

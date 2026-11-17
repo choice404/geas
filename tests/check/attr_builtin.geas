@@ -1,0 +1,3 @@
+attribute version: Int on contract
+attribute abi: String on pledge
+attribute symbol: String on remedy

@@ -7,8 +7,8 @@ namespace geas {
 
 namespace {
 
-// The one letter canonical code of a leaf type. Duration and Time take D and
-// W, letters no earlier spelling used, so every older canon stays as it was
+// Each leaf has its own canonical code. Bytes takes X, distinct from String
+// and every earlier spelling, so types without Bytes keep their canonical text
 std::string_view leafCode(TyKind kind) {
     switch (kind) {
         case TyKind::Int: return "I";
@@ -18,6 +18,7 @@ std::string_view leafCode(TyKind kind) {
         case TyKind::Byte: return "Y";
         case TyKind::Char: return "C";
         case TyKind::String: return "S";
+        case TyKind::Bytes: return "X";
         case TyKind::Unit: return "V";
         case TyKind::Duration: return "D";
         case TyKind::Time: return "W";
@@ -35,6 +36,7 @@ std::string_view leafName(TyKind kind) {
         case TyKind::Byte: return "Byte";
         case TyKind::Char: return "Char";
         case TyKind::String: return "String";
+        case TyKind::Bytes: return "Bytes";
         case TyKind::Unit: return "Unit";
         case TyKind::Duration: return "Duration";
         case TyKind::Time: return "Time";

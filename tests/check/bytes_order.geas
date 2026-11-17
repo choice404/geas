@@ -1,0 +1,9 @@
+contract Bad {
+    pledge compare(left: Bytes, right: Bytes) -> Result<Bool, Int> {
+        let less = left < right
+        let lessEqual = left <= right
+        let greater = left > right
+        let greaterEqual = left >= right
+        return Ok(false)
+    }
+}

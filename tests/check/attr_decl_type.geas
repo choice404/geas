@@ -1,0 +1,2 @@
+attribute bad: UInt on contract
+attribute list: List<Int> on pledge

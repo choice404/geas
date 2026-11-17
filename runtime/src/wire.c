@@ -79,7 +79,7 @@ GeasStatus geas_wire_frame_read(const uint8_t in[GEAS_WIRE_HEADER_LEN],
 /* A tag a value on the wire may carry. INSTANCE and PLEDGE_REF never cross;
  * anything past the enum is garbage. */
 static int tag_crosses(uint32_t ty) {
-    return ty <= GEAS_TY_SUM && ty != GEAS_TY_PLEDGE_REF;
+    return (ty <= GEAS_TY_SUM && ty != GEAS_TY_PLEDGE_REF) || ty == GEAS_TY_BYTES;
 }
 
 /* The keyable scalars a map's elem_ty may name. */
@@ -131,6 +131,7 @@ static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
             (v->as.ch >= 0xD800 && v->as.ch <= 0xDFFF))
             return GEAS_ERR_TYPE;
         return size_add(total, 4);
+    case GEAS_TY_BYTES:
     case GEAS_TY_STRING:
         if (v->tag != 0) return GEAS_ERR_TYPE;
         if (v->as.s.len && !v->as.s.ptr) return GEAS_ERR_TYPE;
@@ -227,6 +228,7 @@ static void encode_write(const GeasValue* v, uint8_t** p) {
         put_u32(*p, v->as.ch);
         *p += 4;
         return;
+    case GEAS_TY_BYTES:
     case GEAS_TY_STRING:
         put_u64(*p, v->as.s.len);
         *p += 8;
@@ -345,12 +347,16 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
         out->as.ch = ch;
         return GEAS_OK;
     }
+    case GEAS_TY_BYTES:
     case GEAS_TY_STRING: {
         if (tag != 0 || !take(c, 8, &h)) return GEAS_ERR_TYPE;
         uint64_t len = get_u64(h);
         if (len > c->left) return GEAS_ERR_TYPE;
         const uint8_t* bytes;
         take(c, (size_t)len, &bytes);
+        if (ty == GEAS_TY_BYTES) {
+            return geas_bytes_copy_into(owner, bytes, len, out);
+        }
         *out = geas_string_copy(owner, bytes, len);
         if (len && !out->as.s.ptr) return GEAS_ERR_OOM;
         return GEAS_OK;

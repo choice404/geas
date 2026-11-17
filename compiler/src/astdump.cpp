@@ -4,6 +4,7 @@
 // only when it has some, so a file without workflow syntax dumps exactly as
 // it always did
 #include "astdumper.hpp"
+#include "attributes.hpp"
 
 #include <variant>
 
@@ -19,6 +20,22 @@ void AstDumper::renderImports() {
 
 void AstDumper::renderDecl(const Decl& decl, int level) {
     std::visit(Overloaded{
+                   [&](const AttributeDecl& attribute) {
+                       openStruct("Attribute");
+                       key(level + 1, "internal");
+                       boolean(attribute.isInternal);
+                       endField();
+                       key(level + 1, "name");
+                       quoted(attribute.name);
+                       endField();
+                       key(level + 1, "ty");
+                       renderType(attribute.type, level + 1);
+                       endField();
+                       key(level + 1, "target");
+                       quoted(attrTargetWord(attribute.target));
+                       endField();
+                       closeStruct(level);
+                   },
                    [&](const RecordDecl& record) { renderRecord(record, level); },
                    [&](const SumDecl& sum) { renderSum(sum, level); },
                    [&](const ProvisionalDecl& decl) { renderProvisional(decl, level); },

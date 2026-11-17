@@ -25,6 +25,7 @@ add_executable(geas
     src/diagnostics.cpp
     src/token.cpp
     src/duration.cpp
+    src/size.cpp
     src/lexer.cpp
     src/lexnumber.cpp
     src/lexdump.cpp
@@ -47,6 +48,7 @@ add_executable(geas
     src/astdumpstmt.cpp
     src/loader.cpp
     src/types.cpp
+    src/checkattrs.cpp
     src/resolve.cpp
     src/resolved.cpp
     src/lower.cpp
@@ -64,6 +66,8 @@ add_executable(geas
     src/checkterms.cpp
     src/checkworkflow.cpp
     src/reqsolve.cpp
+    src/reqsat.cpp
+    src/reqselftest.cpp
     src/hash.cpp
     src/shape.cpp
     src/check.cpp

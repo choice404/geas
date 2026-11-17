@@ -279,6 +279,9 @@ CValue CEmitter::genIndex(const Expr& expr, const IndexExpr& index) {
         return genMapIndex(base, index);
     }
     const CValue position = genExpr(index.index, types().scalar(TyKind::Int));
+    if (node.kind == TyKind::Bytes) {
+        return genBytesIndex(base, position);
+    }
     if (node.kind != TyKind::List) {
         unsupportedAt(expr, "indexing this type in a pledge body");
         return badValue();
@@ -290,6 +293,16 @@ CValue CEmitter::genIndex(const Expr& expr, const IndexExpr& index) {
     std::string value = freshName();
     line(joined("GeasValue ", value, " = *", slot, ";"));
     return copyOut(CValue{std::move(value), node.args[0]});
+}
+
+// Bytes use the List index rule, including the unsigned rejection of negatives
+CValue CEmitter::genBytesIndex(const CValue& base, const CValue& position) {
+    line(joined("if ((uint64_t)", position.name, ".as.i >= ", base.name,
+                ".as.s.len) return GEAS_ERR_TYPE;"));
+    std::string value = newValue();
+    setTag(value, "GEAS_TY_BYTE");
+    line(joined(value, ".as.b = ", base.name, ".as.s.ptr[(uint64_t)", position.name, ".as.i];"));
+    return CValue{std::move(value), types().scalar(TyKind::Byte)};
 }
 
 // The propagation operator. On the failure tag, None or Err, the whole value
