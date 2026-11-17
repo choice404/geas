@@ -631,6 +631,20 @@ differs refuses the row with `GEAS_ERR_VERSION`, since a frame laid out for
 one course cannot drive another. A course that changes ships under a new
 contract version, the job amendment takes on.
 
+*Handing off.* So a park is a checkpoint and the instance stays live where
+it is, however moving an obligation to another process wants the opposite,
+the old process letting go and the new one taking up, with no remedy run in
+between for work the new one is about to finish. The host parks the
+instance, or lets autopark write its row, then releases it, which waits out
+a running body, cuts the course, rolls back an open episode, and frees the
+instance without running a remedy or moving its state, and the other process
+claims the row, which resumes it and deletes it in one move so that of two
+claimers exactly one gets the instance. A claimed course goes on from the
+step its row names. A cancel request on its own raises the flag a body polls
+and cuts the course while the instance stays live, which is how a host asks
+its bodies to wind down before it releases or breaks. The calls are in
+`docs/abi.md` under Handing an instance off.
+
 The full runtime contract, the descriptor fields, the frame, the operations
 the emitted function calls, and the host calls that read and wait on a course,
 is in `docs/abi.md` under The course.
@@ -1202,7 +1216,7 @@ a compiled body, and satisfies the abstract pledge so the contract can sign.
 ### Two languages, one contract
 
 The repository proves the claim with C and with Python. `skeleton/host.c` links
-`libgeasrt` and speaks the ABI header. `interop/python/geas.py` is a ctypes
+`libgeasrt` and speaks the ABI header. `interop/python/geas/` is a ctypes
 binding written against the ABI reference alone, no header parsed and no stubs
 generated. Both hosts sign the same contracts, override the same vows, bind the
 same abstract pledges, and read the same partial surface, and both walk the

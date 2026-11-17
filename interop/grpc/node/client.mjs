@@ -5,82 +5,45 @@
 // node runs directly under type stripping. This is the editor extension's
 // exact diet: two npm packages, no native code, one emitted file per role.
 //
-// The walk asserts what the Go client asserts: the vow override and the
-// pinned shape hash at sign, the pending order, the value Err as err=41 on
-// an OK rpc, the automatic break keeping its payload and the explicit break
-// zeroing it, a lying hash refused as ABORTED, a killed client's instance
-// collected in milliseconds, and a session quiet for three times the old
-// timer resuming on latches set before the silence.
+// --walk picks the contract. The payment walk, the default, asserts what
+// the Go client asserts: the vow override and the pinned shape hash at
+// sign, the pending order, the value Err as err=41 on an OK rpc, the
+// automatic break keeping its payload and the explicit break zeroing it,
+// a lying hash refused as ABORTED, a killed client's instance collected in
+// milliseconds, and a session quiet for three times the old timer resuming
+// on latches set before the silence. The saga and course walks live in
+// saga.mjs and course.mjs.
 
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import grpc from "@grpc/grpc-js";
-import protoLoader from "@grpc/proto-loader";
 
 import {
   PaymentServiceShapeHash,
   openPaymentServiceSession,
 } from "./gen/payment_session.ts";
+import {
+  call,
+  check,
+  expectCode,
+  makeClient,
+  sliceEq,
+  tally,
+  waitReady,
+} from "./kit.mjs";
 
-const addr = process.argv.includes("--addr")
-  ? process.argv[process.argv.indexOf("--addr") + 1]
-  : "127.0.0.1:50254";
+function argValue(name, fallback) {
+  const at = process.argv.indexOf(name);
+  return at >= 0 ? process.argv[at + 1] : fallback;
+}
+
+const addr = argValue("--addr", "127.0.0.1:50254");
 const legacyTtlMs = 2000;
-
-let failures = 0;
-
-function check(cond, what) {
-  if (!cond) {
-    console.error(`[bridge_client_node] FAIL: ${what}`);
-    failures = 1;
-  }
-}
-
-function makeClient() {
-  const def = protoLoader.loadSync(
-    fileURLToPath(new URL("./gen/payment.proto", import.meta.url)),
-    { keepCase: true, longs: String, enums: String, oneofs: true, defaults: false },
-  );
-  const pkg = grpc.loadPackageDefinition(def);
-  return new pkg.geas.payment.PaymentService(
-    addr,
-    grpc.credentials.createInsecure(),
-  );
-}
-
-// The unary surface as promises. A pledge's Err never rejects: only a
-// fulfillment that did not run does.
-function call(client, method, req) {
-  return new Promise((resolve, reject) => {
-    client[method](req, (err, reply) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(reply);
-      }
-    });
-  });
-}
-
-async function expectCode(promise, code, name, what) {
-  try {
-    await promise;
-    check(false, `${what} did not fail`);
-  } catch (err) {
-    check(err.code === code, `${what} is ${name}, got code ${err.code}`);
-  }
-}
 
 function checkOk(reply, what) {
   check(reply.result === "ok" && reply.ok === true, what);
-}
-
-function sliceEq(got, want) {
-  return (
-    got.length === want.length && got.every((v, i) => v === want[i])
-  );
 }
 
 // Polls an instance id until it answers NOT_FOUND, and answers how long
@@ -333,19 +296,23 @@ async function holdSession(client) {
   await new Promise(() => {});
 }
 
+// -walk picks the contract: payment, the default, or the host driven saga
+// and the engine driven course, each in its own file
 async function main() {
-  const client = makeClient();
-  if (process.argv.includes("--hold-session")) {
-    await holdSession(client);
-    return;
+  const which = argValue("--walk", "payment");
+  if (which === "saga" || which === "course") {
+    const mod = await import(which === "saga" ? "./saga.mjs" : "./course.mjs");
+    await mod.walk(addr);
+  } else {
+    const client = makeClient("payment", "payment", "PaymentService", addr);
+    if (process.argv.includes("--hold-session")) {
+      await holdSession(client);
+      return;
+    }
+    await waitReady(client);
+    await walk(client);
   }
-  await new Promise((resolve, reject) => {
-    client.waitForReady(Date.now() + 10000, (err) =>
-      err ? reject(err) : resolve(),
-    );
-  });
-  await walk(client);
-  if (failures) {
+  if (tally.failures) {
     process.exit(1);
   }
   console.log("[bridge_client_node] ok");

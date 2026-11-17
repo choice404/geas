@@ -512,9 +512,13 @@ generated names instead of string literals.
 
 The claim Geas makes is that any language which can load a C library can
 speak a contract, with no code generated for the binding. The repository proves
-it with Python and nothing but `ctypes`. `interop/python/geas.py` is written
+it with Python and nothing but `ctypes`. `interop/python/geas/` is written
 against [docs/abi.md](abi.md) alone, no header parsed and no stubs generated, and
 `interop/python/demo_payment.py` drives the payment contract with it.
+
+Put `interop/python` on `sys.path` or `PYTHONPATH` to import `geas`. To carry
+the binding into another project, copy the whole `geas/` directory and put
+its parent on the import path.
 
 The same five moves, now in Python:
 

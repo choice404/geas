@@ -1,0 +1,28 @@
+// An Option of an Option on the gRPC surface. A declared parameter or field
+// of Option<Option<T>> is spelled as the Option<T> wrapper, whose presence is
+// the outer Some, so None, Some(None), and Some(Some(x)) are three different
+// messages on the wire. maybe and note answer what they were handed, and
+// depth tells the three apart in Geas, so a walk sees each one land as
+// itself and come back as sent.
+
+record Note {
+    text: String
+}
+
+contract NestedOption [version: 1] {
+    pledge maybe(x: Option<Option<Int>>) -> Option<Option<Int>> {
+        return x
+    }
+    pledge note(n: Option<Option<Note>>) -> Result<Option<Option<Note>>, Int> {
+        return Ok(n)
+    }
+    pledge depth(x: Option<Option<Int>>) -> Result<Int, Int> {
+        return Ok(match x {
+            None -> 0
+            Some(inner) -> match inner {
+                None -> 1
+                Some(v) -> 2 + v
+            }
+        })
+    }
+}

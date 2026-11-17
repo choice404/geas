@@ -2102,7 +2102,7 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
         geas_rt_flow_start(c, now);
         geas_rt_lock(c);
         pthread_mutex_lock(&rt->lock);
-        if (rt->ninstances == GEAS_MAX_INSTANCES) {
+        if (rt->ninstances + rt->nreserved >= GEAS_MAX_INSTANCES) {
             st = GEAS_ERR_OOM;
         } else {
             rt->instances[rt->ninstances++] = c;
@@ -2160,12 +2160,15 @@ GeasStatus geas_contract_break(GeasContract* c) {
     if (!c) return GEAS_ERR_TYPE;
     if (geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
     __atomic_add_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
-    geas_rt_request_cancel(c);
+    geas_rt_publish_cancel(c, CANCEL_BREAK);
     geas_rt_lock(c);
     GeasStatus st = GEAS_OK;
     if (geas_rt_events_blocked(c)) {
         /* Delivery carries a request accepted before its reservation */
     } else if (c->state == GEAS_UNSIGNED) {
+        st = GEAS_ERR_STATE;
+    } else if (c->flow.released || c->flow.release_pending) {
+        /* A released instance was handed off; there is nothing here to break */
         st = GEAS_ERR_STATE;
     } else {
         st = geas_rt_break_explicit(c);
@@ -2180,24 +2183,38 @@ GeasStatus geas_contract_break(GeasContract* c) {
 }
 
 /* Polls only atomic flags, including while the caller holds the instance
- * lock and the breaker is waiting for that same lock */
+ * lock and the breaker is waiting for that same lock. A request, a break,
+ * and a release all read 1 */
 int geas_cancel_requested(void* ctx) {
     GeasContract* c = ctx;
     if (!c) return 0;
-    return __atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE) ||
+    return (geas_rt_cancel_bits(c) & CANCEL_ANY) != 0 ||
            __atomic_load_n(&c->rt->shutting_down, __ATOMIC_ACQUIRE);
 }
 
-void geas_rt_request_cancel(GeasContract* c) {
+/* cancel_mu is a leaf, so this may run with or without the instance lock */
+void geas_rt_publish_cancel(GeasContract* c, uint32_t bits) {
     pthread_mutex_lock(&c->cancel_mu);
-    __atomic_store_n(&c->cancel_requested, 1, __ATOMIC_RELEASE);
+    __atomic_fetch_or(&c->cancel_requested, bits, __ATOMIC_ACQ_REL);
     pthread_cond_broadcast(&c->cancel_cv);
     pthread_mutex_unlock(&c->cancel_mu);
 }
 
+void geas_rt_request_cancel(GeasContract* c) {
+    geas_rt_publish_cancel(c, CANCEL_BREAK);
+}
+
+void geas_rt_withdraw_cancel(GeasContract* c, uint32_t bits) {
+    pthread_mutex_lock(&c->cancel_mu);
+    __atomic_fetch_and(&c->cancel_requested, ~bits, __ATOMIC_ACQ_REL);
+    pthread_mutex_unlock(&c->cancel_mu);
+}
+
+/* Only a published break enters the lifecycle here. A request leaves the
+ * body's outcome to latch like any other, and a release never breaks */
 void geas_rt_note_cancel(GeasContract* c) {
-    if (!__atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE)) return;
-    if (c->flow.reclaimed) return;
+    if (!(geas_rt_cancel_bits(c) & CANCEL_BREAK)) return;
+    if (c->flow.reclaimed || c->flow.release_pending) return;
     geas_rt_event_cancel(c);
     c->flow.break_pending = 1;
     if (c->state == GEAS_SIGNED || c->state == GEAS_PARTIAL) {
@@ -2205,10 +2222,7 @@ void geas_rt_note_cancel(GeasContract* c) {
     }
 }
 
-/* The reclaim itself, what an explicit break has always done once nothing is
- * left to run. Under the instance lock. */
-void geas_rt_reclaim(GeasContract* c) {
-    int is_reclaimed = c->flow.reclaimed;
+void geas_rt_reclaim_heap(GeasContract* c) {
     for (struct GeasFuture* f = c->futures; f; f = f->next) {
         future_forfeit(f);
     }
@@ -2237,9 +2251,21 @@ void geas_rt_reclaim(GeasContract* c) {
     }
     contract_free_owned(c);
     if (c->course) geas_rt_course_reclaimed(c);
-    geas_rt_set_state(c, GEAS_BROKEN);
     c->flow.reclaimed = 1;
     c->flow.break_pending = 0;
+    pthread_mutex_lock(&c->cancel_mu);
+    __atomic_fetch_or(&c->cancel_requested, CANCEL_GONE, __ATOMIC_ACQ_REL);
+    pthread_mutex_unlock(&c->cancel_mu);
+}
+
+/* The reclaim itself, what an explicit break has always done once nothing is
+ * left to run. Under the instance lock. */
+void geas_rt_reclaim(GeasContract* c) {
+    int is_reclaimed = c->flow.reclaimed;
+    geas_rt_reclaim_heap(c);
+    /* The state lands after the heap is marked gone, the order a course
+     * cut by it and an autopark refusing it both read */
+    geas_rt_set_state(c, GEAS_BROKEN);
     if (!is_reclaimed) geas_rt_event(c, GEAS_EVENT_RECLAIMED, NULL, c->state);
 }
 
@@ -3579,11 +3605,12 @@ static GeasStatus resume_amended(GeasContract* c, const GeasAmendDesc* amend,
     return st;
 }
 
-GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
-                              uint64_t expected_hash, GeasContract** out) {
-    if (!rt || !dsn || !key || !out) return GEAS_ERR_TYPE;
-    *out = NULL;
-
+/* The read half: the row under key, every column copied into an arena the
+ * struct keeps, so the build and a claim's compare read the same bytes. A
+ * key with no row is GEAS_ERR_NAME and a state outside the parkable ones is
+ * GEAS_ERR_TYPE */
+GeasStatus geas_rt_resume_read(const char* dsn, const char* key, GeasResumed* r) {
+    memset(r, 0, sizeof(*r));
     GeasStore* s = NULL;
     GeasStatus st = geas_store_open(dsn, &s);
     if (st != GEAS_OK) return st;
@@ -3605,42 +3632,40 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
             &kv, 1, cols, NULL, 10, &alloc, &rows);
     }
     geas_store_close(s);
-    if (st != GEAS_OK) {
-        park_arena_free(arena);
-        return st;
-    }
-    if (rows.as.list.len == 0) {
-        park_arena_free(arena);
-        return GEAS_ERR_NAME;
-    }
+    r->arena = arena;
+    if (st != GEAS_OK) return st;
+    if (rows.as.list.len == 0) return GEAS_ERR_NAME;
     const GeasValue* f = (const GeasValue*)((const GeasValue*)rows.as.list.data)[0]
                             .as.list.data;
-    const GeasString rname = f[0].as.s;
-    const GeasParkRow row = {
+    r->contract = f[0].as.s;
+    r->row = (GeasParkRow){
         .version = f[1].as.i, .shape_hash = f[2].as.u, .state = f[3].as.i,
         .signed_at = f[4].as.i, .vows = f[5].as.s, .latches = f[6].as.s,
         .errs = f[7].as.s, .subtxn = f[8].as.s, .flow = f[9].as.s,
     };
-    const int64_t rstate = row.state;
-
-    if (rstate < (int64_t)GEAS_SIGNED || rstate > (int64_t)GEAS_REMEDYING) {
-        park_arena_free(arena);
+    if (r->row.state < (int64_t)GEAS_SIGNED || r->row.state > (int64_t)GEAS_REMEDYING) {
         return GEAS_ERR_TYPE;
     }
-    char* name = malloc(rname.len + 1);
-    if (!name) {
-        park_arena_free(arena);
-        return GEAS_ERR_OOM;
-    }
-    memcpy(name, rname.ptr, rname.len);
-    name[rname.len] = 0;
+    return GEAS_OK;
+}
 
+/* The registered descriptor the row names, checked for skew, with its
+ * dispatch, remedies, and binding snapshot resolved, all under the runtime
+ * lock. *amend_out is the amends block a row of an earlier version resumes
+ * through, NULL for a row of the registered version */
+static GeasStatus resume_resolve(GeasRuntime* rt, uint64_t expected_hash,
+                                 const GeasResumed* r, const GeasContractDesc** desc_out,
+                                 const GeasAmendDesc** amend_out, GeasPledgeFn** fns,
+                                 GeasPledgeFn** remedy_fns, GeasBinding** bindings) {
+    char* name = malloc(r->contract.len + 1);
+    if (!name) return GEAS_ERR_OOM;
+    memcpy(name, r->contract.ptr, r->contract.len);
+    name[r->contract.len] = 0;
     pthread_mutex_lock(&rt->lock);
     const GeasContractDesc* desc = find_desc(rt, name);
     free(name);
     if (!desc) {
         pthread_mutex_unlock(&rt->lock);
-        park_arena_free(arena);
         return GEAS_ERR_NAME;
     }
     /* The row must describe the module this runtime registered, or a version
@@ -3648,91 +3673,123 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
      * pinning a hash must agree with the registered one, the same skew rule
      * sign runs. */
     const GeasAmendDesc* amend = NULL;
-    int is_current = (int64_t)desc->version == row.version &&
-                     desc->shape_hash == row.shape_hash;
-    if (!is_current) amend = geas_rt_amend_find(desc, row.version, row.shape_hash);
+    int is_current = (int64_t)desc->version == r->row.version &&
+                     desc->shape_hash == r->row.shape_hash;
+    if (!is_current) amend = geas_rt_amend_find(desc, r->row.version, r->row.shape_hash);
     if ((!is_current && !amend) ||
         (expected_hash != 0 && expected_hash != desc->shape_hash)) {
         pthread_mutex_unlock(&rt->lock);
-        park_arena_free(arena);
         return GEAS_ERR_VERSION;
     }
+    GeasStatus st = geas_rt_validate_desc(desc);
+    if (st == GEAS_OK) st = resolve_dispatch(rt, desc, fns);
+    if (st == GEAS_OK) st = geas_rt_resolve_remedies(rt, desc, remedy_fns);
+    if (st == GEAS_OK) st = snapshot_bindings(rt, bindings);
+    pthread_mutex_unlock(&rt->lock);
+    *desc_out = desc;
+    *amend_out = amend;
+    return st;
+}
+
+/* The build half: a fresh instance decoded from the row read, unpublished,
+ * so nothing but the caller can reach it and every failure is a discard */
+GeasStatus geas_rt_resume_build(GeasRuntime* rt, uint64_t expected_hash, GeasResumed* r) {
+    const GeasContractDesc* desc = NULL;
+    const GeasAmendDesc* amend = NULL;
     GeasPledgeFn* fns = NULL;
     GeasPledgeFn* remedy_fns = NULL;
     GeasBinding* bindings = NULL;
-    st = geas_rt_validate_desc(desc);
-    if (st == GEAS_OK) st = resolve_dispatch(rt, desc, &fns);
-    if (st == GEAS_OK) st = geas_rt_resolve_remedies(rt, desc, &remedy_fns);
-    if (st == GEAS_OK) st = snapshot_bindings(rt, &bindings);
-    pthread_mutex_unlock(&rt->lock);
-    if (st != GEAS_OK) {
-        free(remedy_fns);
-        free(bindings);
-        free(fns);
-        park_arena_free(arena);
-        return st;
-    }
-
-    GeasContract* c = calloc(1, sizeof(GeasContract));
-    if (!c) {
-        free(fns);
-        free(remedy_fns);
-        free(bindings);
-        park_arena_free(arena);
-        return GEAS_ERR_OOM;
-    }
-    if (mutex_init_recursive(&c->mu) != 0) {
+    GeasStatus st = resume_resolve(rt, expected_hash, r, &desc, &amend, &fns,
+                                   &remedy_fns, &bindings);
+    GeasContract* c = st == GEAS_OK ? calloc(1, sizeof(GeasContract)) : NULL;
+    if (st == GEAS_OK && !c) st = GEAS_ERR_OOM;
+    if (st == GEAS_OK && mutex_init_recursive(&c->mu) != 0) {
         free(c);
+        c = NULL;
+        st = GEAS_ERR_OOM;
+    }
+    if (st != GEAS_OK) {
         free(fns);
         free(remedy_fns);
         free(bindings);
-        park_arena_free(arena);
-        return GEAS_ERR_OOM;
+        return st;
     }
     c->rt = rt;
     c->desc = desc;
     c->flow.remedy_fns = remedy_fns;
     c->bindings = bindings;
+    r->c = c;
+    r->is_amended = amend != NULL;
     if (desc->npledges > 0) {
         c->fns = (GeasPledgeFn*)geas_bytes(c, desc->npledges * sizeof(GeasPledgeFn));
         if (!c->fns) st = GEAS_ERR_OOM;
         else memcpy(c->fns, fns, desc->npledges * sizeof(GeasPledgeFn));
     }
     free(fns);
+    if (st == GEAS_OK) st = amend ? resume_amended(c, amend, &r->row) : resume_plain(c, &r->row);
+    if (st != GEAS_OK) return st;
+    c->state = (GeasContractState)r->row.state;
+    c->shape_hash = desc->shape_hash;
+    return GEAS_OK;
+}
 
-    if (st == GEAS_OK) st = amend ? resume_amended(c, amend, &row) : resume_plain(c, &row);
+/* The publish half. The table slot is taken under the runtime lock while
+ * the instance lock is held, so a runtime tick that finds the instance in
+ * the table waits on that lock and ticks it only after the resume events
+ * and the course start went out */
+GeasStatus geas_rt_resume_publish(GeasResumed* r, int is_reserved) {
+    GeasContract* c = r->c;
+    GeasRuntime* rt = c->rt;
+    const GeasContractDesc* desc = c->desc;
+    GeasStatus st = GEAS_OK;
+    geas_rt_lock(c);
+    pthread_mutex_lock(&rt->lock);
+    if (is_reserved) {
+        rt->nreserved--;
+        rt->instances[rt->ninstances++] = c;
+    } else if (rt->ninstances + rt->nreserved >= GEAS_MAX_INSTANCES) {
+        st = GEAS_ERR_OOM;
+    } else {
+        rt->instances[rt->ninstances++] = c;
+    }
+    pthread_mutex_unlock(&rt->lock);
     if (st == GEAS_OK) {
-        c->state = (GeasContractState)rstate;
-        c->shape_hash = desc->shape_hash;
-        geas_rt_lock(c);
-        pthread_mutex_lock(&rt->lock);
-        if (rt->ninstances == GEAS_MAX_INSTANCES) {
-            st = GEAS_ERR_OOM;
-        } else {
-            rt->instances[rt->ninstances++] = c;
+        /* The instance belongs to the table now and discard leaves it be */
+        r->c = NULL;
+        /* An amended instance announces the two versions first, then the
+         * resume, then whatever the policy of the version it now stands
+         * as makes of its latches; a break decided there runs its
+         * remedies at the first tick, as a row resumed Remedying does */
+        if (r->is_amended) {
+            geas_rt_event_pair(c, GEAS_EVENT_AMENDED, NULL, (uint32_t)r->row.version,
+                               desc->version);
         }
-        pthread_mutex_unlock(&rt->lock);
-        if (st == GEAS_OK) {
-            *out = c;
-            /* An amended instance announces the two versions first, then the
-             * resume, then whatever the policy of the version it now stands
-             * as makes of its latches; a break decided there runs its
-             * remedies at the first tick, as a row resumed Remedying does */
-            if (amend) {
-                geas_rt_event_pair(c, GEAS_EVENT_AMENDED, NULL, (uint32_t)row.version,
-                                   desc->version);
-            }
-            geas_rt_event(c, GEAS_EVENT_RESUMED, NULL, c->state);
-            if (amend) geas_rt_eval_policy(c);
-            geas_rt_course_start(c);
-        }
-        geas_rt_unlock(c);
+        geas_rt_event(c, GEAS_EVENT_RESUMED, NULL, c->state);
+        if (r->is_amended) geas_rt_eval_policy(c);
+        geas_rt_course_start(c);
     }
-    park_arena_free(arena);
-    if (st != GEAS_OK) {
-        instance_discard(c);
-        return st;
-    }
+    geas_rt_unlock(c);
+    return st;
+}
+
+void geas_rt_resume_discard(GeasResumed* r) {
+    if (r->c) instance_discard(r->c);
+    r->c = NULL;
+    park_arena_free((ParkChunk*)r->arena);
+    r->arena = NULL;
+}
+
+GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
+                              uint64_t expected_hash, GeasContract** out) {
+    if (!rt || !dsn || !key || !out) return GEAS_ERR_TYPE;
+    *out = NULL;
+    GeasResumed r;
+    GeasStatus st = geas_rt_resume_read(dsn, key, &r);
+    if (st == GEAS_OK) st = geas_rt_resume_build(rt, expected_hash, &r);
+    GeasContract* c = r.c;
+    if (st == GEAS_OK) st = geas_rt_resume_publish(&r, 0);
+    geas_rt_resume_discard(&r);
+    if (st != GEAS_OK) return st;
     *out = c;
     return GEAS_OK;
 }

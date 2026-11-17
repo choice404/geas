@@ -17,6 +17,10 @@
  * the course waiting halts it there instead. A host driven instance reports
  * a failed write on stderr and writes again at its next change.
  *
+ * A published release holds every write back. The release writes the last
+ * row itself, with a course its cancel cut recorded as still running, so the
+ * instance that claims the row enters that course where it stood.
+ *
  * Locks. Everything runs under the instance lock. The write opens, fills,
  * and closes the store while holding it, the same hold a host park takes,
  * and flushing keeps the releases inside that write from writing again. */
@@ -66,7 +70,10 @@ GeasStatus geas_contract_set_autopark(GeasContract* c, const char* dsn, const ch
 GeasStatus geas_rt_autopark_flush(GeasContract* c, int* is_deferred) {
     if (is_deferred) *is_deferred = 0;
     if (!c->autopark_dsn || !c->autopark_dirty || c->autopark_flushing) return GEAS_OK;
-    if (geas_rt_park_ready(c) != GEAS_OK) {
+    /* Once a release is published the row is the release's to write: a
+     * course its cancel cut must not reach the row as cancelled, and the
+     * release writes the last row itself before the heap goes */
+    if (geas_rt_release_published(c) || geas_rt_park_ready(c) != GEAS_OK) {
         if (is_deferred) *is_deferred = 1;
         return GEAS_OK;
     }

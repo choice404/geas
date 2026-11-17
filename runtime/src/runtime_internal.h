@@ -10,6 +10,9 @@
  * structs, coursejoin.c runs a together's calls on the pool at once, and
  * coursepark.c writes the autopark row. amendrow.c reads a row written
  * under an earlier version and amend.c resumes it as the registered one.
+ * handoff.c carries the hand off: a cancel a body reads without the instance
+ * ending, a release that lets an instance go without its remedies, and a
+ * claim that resumes a row and takes it out of the store in one move.
  *
  * The lock order is the one runtime.c audits and nothing here adds to it:
  * instance above runtime above future, with the pool's queue lock, a course's
@@ -57,6 +60,22 @@ enum {
     PLEDGE_FULFILLED = 1,
     PLEDGE_BROKEN    = 2
 };
+
+/* The bits of an instance's cancel word. ASK is geas_contract_request_cancel,
+ * a request a body reads and nothing more: the instance stays live and takes
+ * fulfillments. BREAK is an explicit break and RELEASE a release, each of
+ * which ends the instance and refuses new fulfillments the moment it is
+ * published. GONE marks a heap a break or a release reclaimed, so a request
+ * that takes no lock can still refuse an instance that is over. Any of the
+ * first three reads as a cancel to a body, a retry wait, and a course */
+enum {
+    CANCEL_ASK     = 1u << 0,
+    CANCEL_BREAK   = 1u << 1,
+    CANCEL_RELEASE = 1u << 2,
+    CANCEL_GONE    = 1u << 3
+};
+
+#define CANCEL_ANY (CANCEL_ASK | CANCEL_BREAK | CANCEL_RELEASE)
 
 /* The per-subcontract transaction state, one slot per descriptor sub for a
  * store-backed contract. A transactional subcontract opens its episode lazily
@@ -107,7 +126,13 @@ typedef struct GeasFlow {
     GeasPledgeFn*  remedy_fns;         /* dispatch resolved at sign */
     uint8_t        term_lapsed;        /* the contract term ran out */
     uint8_t        break_pending;      /* an explicit break waits on the pass */
-    uint8_t        reclaimed;          /* an explicit break freed the heap */
+    uint8_t        reclaimed;          /* an explicit break or a release
+                                        * freed the heap */
+    uint8_t        released;           /* the heap went with a release, the
+                                        * life of the obligation goes on in
+                                        * its park row */
+    uint8_t        release_pending;    /* a release waits on a body, a
+                                        * delivery, or a pass to end */
     uint8_t        remedy_active;      /* a thread is running the pass */
     pthread_t      remedy_owner;       /* that thread, valid while active */
     uint32_t       in_thunk;           /* depth of pledge and remedy bodies
@@ -160,7 +185,8 @@ struct GeasContract {
 
     /* Cancellation is published before taking mu, so a body can poll it
      * while a breaker waits. cancel_mu and cancel_cv only guard retry waits
-     * and are released before taking any instance or runtime lock */
+     * and are released before taking any instance or runtime lock. The word
+     * is a set of CANCEL_* bits: who asked, and whether the heap is gone */
     uint32_t               cancel_requested; /* atomic */
     pthread_mutex_t        cancel_mu;
     pthread_cond_t         cancel_cv;
@@ -315,6 +341,9 @@ typedef struct GeasCourse {
     uint8_t           deferred;
     uint8_t           refused;
     uint8_t           restored;
+    uint8_t           release_cut; /* cancelled only because a release was
+                                    * published; the release's row records
+                                    * the course as still running */
     GeasStatus        held;
     struct GeasFuture task;
 
@@ -356,6 +385,8 @@ struct GeasRuntime {
     size_t                 nmodules;
     GeasContract*           instances[GEAS_MAX_INSTANCES];
     size_t                 ninstances;
+    size_t                 nreserved; /* slots a claim holds for an instance
+                                       * it has built but not yet published */
     GeasBinding             bindings[GEAS_MAX_BINDINGS];
     size_t                 nbindings;
 
@@ -426,6 +457,11 @@ GEAS_INTERNAL void geas_rt_course_reclaimed(GeasContract* c);
 GEAS_INTERNAL void geas_rt_course_redrive(GeasContract* c);
 GEAS_INTERNAL void geas_rt_course_task(struct GeasFuture* node);
 GEAS_INTERNAL void geas_rt_course_free(GeasContract* c);
+
+/* A release that failed to write its last row is withdrawn, and a course it
+ * cut is entered again at the step it stood at, as if never cut. Under the
+ * instance lock */
+GEAS_INTERNAL void geas_rt_course_unrelease(GeasContract* c);
 
 /* Whether the course has to end now: the heap is gone, the contract left the
  * live states, or a break or shutdown was requested. Under the instance lock */
@@ -564,10 +600,22 @@ static inline void geas_rt_set_state(GeasContract* c, GeasContractState state) {
 }
 
 /* Whether the contract still takes fulfillments and signals: Signed, Partial,
- * or Fulfilled. Remedying and Broken are past that. */
+ * or Fulfilled, with its heap in place. Remedying and Broken are past that,
+ * and so is a released instance, which keeps the state it was released in */
 static inline int geas_rt_live(const GeasContract* c) {
+    if (c->flow.reclaimed) return 0;
     return c->state == GEAS_SIGNED || c->state == GEAS_PARTIAL ||
            c->state == GEAS_FULFILLED;
+}
+
+/* The bits of the cancel word, an atomic read with no lock */
+static inline uint32_t geas_rt_cancel_bits(const GeasContract* c) {
+    return __atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE);
+}
+
+/* Whether a release was published and has not been withdrawn */
+static inline int geas_rt_release_published(const GeasContract* c) {
+    return (geas_rt_cancel_bits(c) & CANCEL_RELEASE) != 0;
 }
 
 /* The terms of one pledge or one subcontract, NULL when the descriptor
@@ -614,10 +662,20 @@ GEAS_INTERNAL const GeasBinding* geas_rt_instance_binding(const GeasContract* c,
  * and latch Broken. Under the instance lock. */
 GEAS_INTERNAL void geas_rt_reclaim(GeasContract* c);
 
+/* The half of the reclaim a break and a release share: the forfeits, the
+ * zeroing, the rollback, the store, the heap, and the course slots, with no
+ * state change and no event. Marks the heap gone. Under the instance lock */
+GEAS_INTERNAL void geas_rt_reclaim_heap(GeasContract* c);
+
 /* Rolls back every open episode before a break runs remedies, under mu */
 GEAS_INTERNAL void geas_rt_rollback_open(GeasContract* c);
 
-/* Publishes a break and wakes retry waits without taking the instance lock */
+/* Publishes the given CANCEL_* bits and wakes retry waits without taking the
+ * instance lock; withdraw clears bits a refused or failed request set */
+GEAS_INTERNAL void geas_rt_publish_cancel(GeasContract* c, uint32_t bits);
+GEAS_INTERNAL void geas_rt_withdraw_cancel(GeasContract* c, uint32_t bits);
+
+/* Publishes a break the way geas_contract_break does before its lock */
 GEAS_INTERNAL void geas_rt_request_cancel(GeasContract* c);
 
 /* Carries a published break into the lifecycle before policy evaluation,
@@ -829,5 +887,45 @@ GEAS_INTERNAL const GeasAmendDesc* geas_rt_amend_find(const GeasContractDesc* d,
  * unpublished */
 GEAS_INTERNAL GeasStatus geas_rt_amend_apply(GeasContract* c, const GeasAmendDesc* a,
                                            const GeasParkRow* row, int64_t now);
+
+/* ---- resume ---- */
+
+/* Resume in its three phases, so a claim can take the row between building
+ * the instance and publishing it. read fetches the row under key into an
+ * arena the struct owns; build stands a fresh, unpublished instance up from
+ * it, with no lock held over the instance and nothing reachable from another
+ * thread; publish puts it in the instance table, emits the resume events,
+ * and starts the course. is_reserved says a claim already holds the table
+ * slot. discard tears down whatever read and build left, and is safe on a
+ * struct publish consumed */
+typedef struct GeasResumed {
+    void*         arena;     /* the read's chunk list */
+    GeasString    contract;  /* the row's contract column, in the arena */
+    GeasParkRow   row;       /* the other columns, in the arena */
+    GeasContract* c;         /* the built instance, NULL until build */
+    uint8_t       is_amended;
+} GeasResumed;
+
+GEAS_INTERNAL GeasStatus geas_rt_resume_read(const char* dsn, const char* key,
+                                           GeasResumed* r);
+GEAS_INTERNAL GeasStatus geas_rt_resume_build(GeasRuntime* rt, uint64_t expected_hash,
+                                            GeasResumed* r);
+GEAS_INTERNAL GeasStatus geas_rt_resume_publish(GeasResumed* r, int is_reserved);
+GEAS_INTERNAL void geas_rt_resume_discard(GeasResumed* r);
+
+/* ---- handoff.c ---- */
+
+/* The release itself, under the instance lock held once, outside every body
+ * and every delivery: waits out another thread's remedy pass, writes an
+ * armed autopark's last row, and reclaims the heap with no remedy and no
+ * state change. On a failed write the release is withdrawn and the
+ * instance goes on as it was */
+GEAS_INTERNAL GeasStatus geas_rt_release_locked(GeasContract* c);
+
+/* Carries out a release left pending, from the end of a body's fulfillment,
+ * a remedy pass, or an event delivery. A failure is answered to a release
+ * caller still inside its call and reported on stderr otherwise. Under the
+ * instance lock */
+GEAS_INTERNAL void geas_rt_release_carry(GeasContract* c);
 
 #endif /* GEAS_RUNTIME_INTERNAL_H */

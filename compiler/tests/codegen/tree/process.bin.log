@@ -1,0 +1,4 @@
+exit 1
+lib/std/process.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Process.run runs on the caller's instance, so its wait observes that
+  ^

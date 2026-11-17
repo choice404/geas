@@ -54,7 +54,11 @@ typedef enum GeasEventKind {
     /* A resume through an amends block, before RESUMED, item NULL, old_state
      * the version the row was written under and new_state the version it
      * resumed as */
-    GEAS_EVENT_AMENDED = 21
+    GEAS_EVENT_AMENDED = 21,
+    /* A release let the instance go without its remedies, item NULL, both
+     * states the one it was released in. It stands where an explicit break's
+     * RECLAIMED would */
+    GEAS_EVENT_RELEASED = 22
 } GeasEventKind;
 
 /* The prefix through seq is permanent, later fields append after it
@@ -454,9 +458,47 @@ GeasRuntime* geas_instance_runtime(const GeasContract* c);
 GeasStatus geas_contract_break(GeasContract* c);
 
 /* A body polls with its ctx, without taking the instance lock. Answers 1
- * once a break is requested on this instance or shutdown starts, 0 otherwise.
- * Break waits for a running body to return and latch before undoing it */
+ * once a cancel is requested, a break or a release is called on this
+ * instance, or shutdown starts, 0 otherwise. Break waits for a running body
+ * to return and latch before undoing it */
 int geas_cancel_requested(void* ctx);
+
+/* Publishes a cancel request and returns at once: no lock is waited on, no
+ * remedy runs, nothing breaks. Every body on the instance reads
+ * geas_cancel_requested as 1 from then on, a default retry wait wakes and the
+ * fulfillment ends with GEAS_ERR_STATE instead of trying again, and a course
+ * is cut at its next operation and ends CANCELLED. The instance stays live:
+ * a body that returns latches its outcome as usual, and later fulfillments
+ * and signals are taken, their bodies reading the flag. The flag stays raised
+ * until the instance ends in a break or a release; nothing lowers it. A host
+ * with calls in flight on several threads requests the cancel, waits for its
+ * own calls to come back, and then breaks, with no thread left waiting on
+ * another. Idempotent; GEAS_ERR_STATE once a break or a release reclaimed the
+ * instance, GEAS_ERR_TYPE for NULL. See docs/abi.md Cancel */
+GeasStatus geas_contract_request_cancel(GeasContract* c);
+
+/* Lets the instance go from this process without running its remedies: the
+ * obligation lives on in its park row and another process takes it up with
+ * geas_instance_claim. The call publishes a cancel the way break does and
+ * waits out a body running on the instance, so a body that polls returns; a
+ * running course is cut, an open transactional episode rolls back and frees
+ * the store's locks, every unwaited future is forfeited, and the heap is
+ * reclaimed as an explicit break reclaims it. The state is left as it was,
+ * never Remedying or Broken, no remedy runs, and the call emits RELEASED.
+ * Every later call on the handle answers as on a broken one, GEAS_ERR_STATE,
+ * a second release and a break included.
+ *
+ * An instance armed with autopark that has changes not yet written writes
+ * its last row first, with a course the release cut recorded as still
+ * running at its step, so the row is never older than what this process
+ * finished; a write that fails is the call's status and the instance goes on
+ * as it was. An instance with no autopark writes nothing: a latch that moved
+ * after the host's last park is the host's to have parked. Another thread's
+ * remedy pass is waited out first. Called from inside a body on its own
+ * instance, or while another thread delivers its events, the release is
+ * noted, answers GEAS_OK, and happens when that body's fulfillment or that
+ * delivery ends, as a break does. See docs/abi.md Handing an instance off */
+GeasStatus geas_contract_release(GeasContract* c);
 
 /* Runs one std.process Command in the caller's thunk frame */
 GeasStatus geas_process_run(void* ctx, const GeasValue* args, size_t nargs,
@@ -630,6 +672,25 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
  * GEAS_ERR_TYPE; a backend failure is GEAS_ERR_STORE. */
 GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
                               uint64_t expected_hash, GeasContract** out);
+
+/* Resumes the row under key and takes it out of the store in the same move,
+ * the one shot hand off. The row is read and the instance built from it,
+ * unpublished, exactly as geas_instance_resume builds one, amends blocks and
+ * a course frame included; then one DELETE that matches the row on every
+ * column it was built from takes it, its own transaction. Only when that
+ * delete took the row does the instance publish, emit its events, and start
+ * its course, so no tick and no course step runs before the row is gone.
+ *
+ * Two claimers of one key, in one process or in two, both build; exactly one
+ * delete takes the row and that claimer gets the instance, the other's built
+ * instance is discarded and the call answers GEAS_ERR_NAME, the row being
+ * gone. A row rewritten between the read and the delete is read again. A
+ * build that fails, GEAS_ERR_VERSION, GEAS_ERR_TYPE, GEAS_ERR_UNBOUND, an
+ * amends block's own status, or a full instance table, leaves the row where
+ * it was and answers that status: all or nothing. Every other status follows
+ * geas_instance_resume. geas_instance_resume itself never deletes a row */
+GeasStatus geas_instance_claim(GeasRuntime* rt, const char* dsn, const char* key,
+                             uint64_t expected_hash, GeasContract** out);
 
 /* The value argument spellings of park and resume, for a caller whose dsn
  * and key are already String values, which is what a compiled pledge body

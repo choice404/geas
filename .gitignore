@@ -1,5 +1,7 @@
 target/
 interop/grpc/go/paymentpb/
+interop/grpc/go/sagapb/
+interop/grpc/go/order_coursepb/
 interop/grpc/node/node_modules/
 interop/grpc/node/gen/
 __pycache__/

@@ -4,6 +4,47 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.9.2] the bridge
+
+Geas now carries a contract across the process boundary on the surface the
+contract itself declares, the compiler emits that surface, and the reference
+bridge serves any compiled module without knowing its names or types ahead of
+time. A session holds the obligation while typed calls, signals, partial state,
+and courses cross by reflection, a parked row can move it safely between
+processes, and Python, Go, and Node clients walk the same payment and order
+contracts, so the bridge is ordinary generated gRPC around the same lifecycle.
+
+- replace the handwritten payment proto with each contract's emitted surface,
+  and load compiled modules and their `.proto` descriptors when the reference
+  server starts
+- serve `Session`, typed pledge RPCs, signal RPCs, `GetPartial` with
+  `REMEDYING`, `Break`, `Resume`, and `GetCourse`, with abstract bodies supplied
+  by a handlers file
+- convert messages and values both ways by reflection over the descriptors,
+  including nested options, while keeping business errors in typed results and
+  lifecycle errors in gRPC statuses
+- ask running bodies to stop when a session ends, wait out admitted calls off
+  the gRPC completion threads, then park and release the instance or break it,
+  without running remedies when a parked copy is released
+- bound session admission below the worker count, answer `RESOURCE_EXHAUSTED`
+  beyond it, and make `Resume` one claim so exactly one server wins a parked row
+- add `geas_contract_request_cancel`, which publishes a cancel request without
+  breaking, `geas_contract_release`, which writes the last autopark row and
+  lets go without remedies, and `geas_instance_claim`, which resumes and
+  removes one row atomically
+- add the `released` event and carry cancellation, release, claim, and that
+  event through the Python package and dusk bindings
+- make `geas_store_query` keep one consistent set of rows when a row is deleted
+  between its passes, and move the Python binding to `interop/python/geas/`
+  without changing its import surface
+- walk payment, the order saga and its signal, and the order course over the
+  bridge from Python, Go, and Node, all against the emitted contract surface
+- pin emitted output for every program under `skeleton/`, `lib/std/`, and
+  `examples/`, refuse a program with no golden, and add the `test-handoff`,
+  `test-handoff-python`, `test-grpc-saga`, `test-grpc-course`,
+  `test-grpc-saga-go`, `test-grpc-saga-node`, `test-grpc-edge`, and
+  `test-grpc-handoff` gates
+
 ## [v0.9.1] the amendment
 
 Geas now carries a parked obligation across the versions that have to finish

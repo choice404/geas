@@ -1,0 +1,48 @@
+// The engine driven contract the bridge's hand off walk parks. The course
+// takes a hold and waits for go, and the Geas written remedy for take writes
+// one row to the store the dsn vow names each time it runs, so a walk counts
+// remedy runs by counting rows. A real break runs the remedy once; a session
+// that parks and is released runs it never, the row the park wrote still
+// owing it to whichever replica resumes.
+
+import std.store
+
+record Hold {
+    id: String
+}
+
+HoldError is either Gone
+
+contract Handoff [version: 1] {
+    vow dsn: String = "file:target/handoff_undo.db"
+
+    schema Undo {
+        id: String,
+        what: String
+    }
+
+    pledge take(sku: String) -> Result<Hold, HoldError> {
+        return Ok(Hold { id: sku })
+    }
+
+    signal go(note: String)
+
+    remedy undo for take(hold: Hold) -> Result<Unit, HoldError> {
+        let row = Undo { id: hold.id, what: "undo" }
+        return match Store.insert(Undo, row) {
+            Ok(u) -> Ok(u)
+            Err(_) -> Err(Gone)
+        }
+    }
+
+    requirements {
+        fulfill: take && go
+        partial: take
+        break: !take
+    }
+
+    course {
+        let hold = take("sku-1")?
+        await go
+    }
+}

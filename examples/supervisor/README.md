@@ -3,7 +3,8 @@
 A small process supervisor, written to show one thing: a contract's lifecycle
 read as the lifecycle of a real process. `service.geas` declares a `Service`
 contract whose four states are the four states of a service, and one contract
-instance is one run of that service. The Python in `supervisor.py` is the host.
+instance is one run of that service. The Python in `supervisor.py` is the host,
+using the binding package in `interop/python/geas/`.
 It spawns processes, watches them, and drives each instance through its states
 with the same five calls every Geas host uses.
 

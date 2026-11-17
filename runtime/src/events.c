@@ -188,9 +188,13 @@ static void deliver_events(void) {
         }
         geas_rt_lock(c);
         c->event_delivering = 0;
-        /* A cancel accepted before reservation finishes after the callbacks */
-        if (!c->event_cancelled &&
-            __atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE)) {
+        /* A cancel accepted before reservation finishes after the callbacks,
+         * a release left pending first and a break otherwise. A plain request
+         * ends nothing */
+        if (c->flow.release_pending) {
+            geas_rt_release_carry(c);
+        } else if (!c->event_cancelled && !c->flow.reclaimed &&
+                   (geas_rt_cancel_bits(c) & CANCEL_BREAK)) {
             GeasStatus status = geas_rt_break_explicit(c);
             if (status != GEAS_OK) {
                 __atomic_store_n(&c->event_cancel_status, status, __ATOMIC_SEQ_CST);

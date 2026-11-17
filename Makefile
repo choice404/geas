@@ -28,7 +28,7 @@ RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
     runtime/src/events.c runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
     runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c \
     runtime/src/course.c runtime/src/coursejoin.c runtime/src/coursepark.c \
-    runtime/src/amendrow.c runtime/src/amend.c
+    runtime/src/amendrow.c runtime/src/amend.c runtime/src/handoff.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -64,10 +64,10 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
-.PHONY: test-amend test-amend-saga test-amend-python test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-amend test-amend-saga test-amend-python test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python test-handoff-python tsan-workflow
 .PHONY: test-requirements
-.PHONY: test-soname test-future test-cancel test-process test-dusk tsan-process
-.PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
+.PHONY: test-soname test-future test-cancel test-handoff test-process test-dusk tsan-process
+.PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-grpc-saga test-grpc-course test-grpc-saga-go test-grpc-saga-node test-grpc-edge test-grpc-handoff test-supervisor test-supervisor-watch tsan install uninstall clean
 
 # The full suite, one gate per surface the language carries: the walking
 # skeleton, the runtime's own units, the compiled language, and the store, with
@@ -75,7 +75,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: test-course test-course-park test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-course-saga test-course-python test-amend-saga test-amend-python tsan tsan-workflow tsan-process
+all: test-course test-course-park test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-handoff test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-handoff-python test-course-saga test-course-python test-amend-saga test-amend-python tsan tsan-workflow tsan-process
 
 runtime: $(RT_SO)
 
@@ -379,6 +379,16 @@ test-cancel: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_cancel.c
 	    tests/runtime/test_cancel.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_cancel
 	./$(OUT)/test_cancel
 
+# The hand off: a cancel request a body reads while the instance stays
+# live, a release with no remedy and no state change, its last autopark row,
+# its rolled back episode, a course it cuts carried on by the claimer, and a
+# claim that takes the row in one move, with exactly one winner of a race
+test-handoff: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_handoff.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_handoff.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_handoff
+	./$(OUT)/test_handoff
+
 # Shared host bodies keep the user pointer fixed at sign and resume
 test-bind-user: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c
 	@mkdir -p $(OUT)
@@ -478,7 +488,7 @@ test-saga: $(GEAS) $(RT_SO) $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_saga.c
 	    tests/runtime/test_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_saga
 	./$(OUT)/test_saga
 
-# The saga from Python: geas.py loads the same saga module, binds
+# The saga from Python: the geas package loads the same saga module, binds
 # Python callables over the abstract steps, points the runtime at a Python
 # clock, and walks the happy path and a break path with its remedies.
 test-saga-python: $(GEAS) $(RT_SO)
@@ -487,6 +497,17 @@ test-saga-python: $(GEAS) $(RT_SO)
 	    python3 interop/python/demo_saga.py; \
 	else \
 	    echo "[test-saga-python] python3 not found, skipping"; \
+	fi
+
+# The hand off from Python: a cancel request a bound body reads, a park and
+# a release with no refund, and a claim in a second runtime that lands the
+# saga Fulfilled while a second claim finds nothing
+test-handoff-python: $(GEAS) $(RT_SO)
+	$(GEAS) build skeleton/saga.geas
+	@if command -v python3 >/dev/null 2>&1; then \
+	    python3 -B interop/python/test_handoff.py; \
+	else \
+	    echo "[test-handoff-python] python3 not found, skipping"; \
 	fi
 
 # The engine driven saga end to end: the compiler builds
@@ -554,7 +575,7 @@ test-amend-saga: amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_
 	    tests/runtime/test_amend_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_amend_saga
 	./$(OUT)/test_amend_saga
 
-# The engine driven saga from Python: geas.py loads the same order_course
+# The engine driven saga from Python: the geas package loads the same order_course
 # module, binds Python callables over the abstract steps, points the
 # runtime at a Python clock with the runtime's own ticker running, and walks
 # the happy path, a break path with its remedies, and a park into a fresh
@@ -568,7 +589,7 @@ test-course-python: $(GEAS) $(RT_SO)
 	    echo "[test-course-python] python3 not found, skipping"; \
 	fi
 
-# Amendment from Python: geas.py parks a version 1 order saga at its select
+# Amendment from Python: the geas package parks a version 1 order saga at its select
 # in one Runtime and resumes it in a fresh one that loaded version 2, which
 # amends the row, restarts the course, and finishes the saga.
 .PHONY: test-amend-python
@@ -582,7 +603,7 @@ test-amend-python: amend-saga-modules
 # The workflow gates under ThreadSanitizer: retries with the instance lock
 # released, remedy passes and signals across threads, user bindings, and
 # the courses, handwritten and compiled
-tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c tests/runtime/test_amend.c tests/runtime/test_amend_saga.c
+tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c tests/runtime/test_amend.c tests/runtime/test_amend_saga.c tests/runtime/test_handoff.c
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
@@ -593,6 +614,9 @@ tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) t
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_cancel.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_cancel_tsan
 	@for round in $$(seq 1 20); do ./$(OUT)/test_cancel_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_handoff.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_handoff_tsan
+	@for round in $$(seq 1 30); do ./$(OUT)/test_handoff_tsan || exit $$?; done
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_bind_user.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_bind_user_tsan
 	./$(OUT)/test_bind_user_tsan
@@ -697,11 +721,11 @@ tsan-process: $(OUT)/libsteps.geas.so $(SQLITE_OBJ)
 	    tests/runtime/test_process.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_process_tsan
 	./$(OUT)/test_process_tsan
 
-# The Python interop gate: the ctypes binding drives the payment walk and
-# the by reference protocol with no C written and no generated code, which
-# is the product claim that the documented ABI alone is enough for a foreign
-# host. Skips cleanly where python3 is not installed. There is no TSan
-# variant on purpose: the TSan runtime cannot be mixed into an
+# The Python interop gate: the ctypes package in interop/python/geas/ drives
+# the payment walk and the by reference protocol with no C written and no
+# generated code, which is the product claim that the documented ABI alone
+# is enough for a foreign host. Skips cleanly where python3 is not installed.
+# There is no TSan variant on purpose: the TSan runtime cannot be mixed into an
 # uninstrumented python3 process, so the concurrency surface stays covered
 # by the C tsan gate.
 $(MODULE_SVC): $(GEAS) $(RT_SO) examples/supervisor/service.geas $(wildcard lib/std/*.geas) runtime/include/geas/geas_abi.h
@@ -902,24 +926,30 @@ tsan: $(MODULE) $(HELLO_HEADER)
 	    skeleton/host.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/host_tsan
 	./$(OUT)/host_tsan
 
-# The gRPC bridge prototype: the payment contract served as a gRPC service,
-# one signed instance per session, driven by a client that holds no runtime
-# handle and knows its instance only by the uint64 the server issued. It
-# proves the walk demo_payment.py runs in process survives a process boundary
-# with the same answers, that a pledge's Err crosses as a value on an OK rpc
-# while a Geas status crosses as a gRPC code, and that an instance lives
-# exactly as long as the Session stream that issued it: a killed client's
-# instance is broken at once, and a client that holds its stream and says
-# nothing keeps its instance however long it stays quiet. Out of the all gate
-# on purpose: this is a prototype answering whether the session model works,
-# not a shipped surface.
+# The gRPC bridge: compiled contracts served over the surface geas emits, by
+# one generic server. bridge_server.py loads each module through the C ABI,
+# binds the abstract bodies a --handlers file supplies, and reads each
+# emitted .proto at startup into descriptors, so the server side carries no
+# generated stub and no line written for one contract. The clients are the
+# other half, built from the same emitted files with stock tooling: Python
+# stubs from grpc_tools, Go stubs from protoc beside the emitted Go session
+# wrapper, and Node over @grpc/proto-loader with the emitted TypeScript
+# wrapper. The stubs are generated, never tracked, so a stale stub cannot
+# outlive a change to a contract's surface. Out of the all gate: every gate
+# needs grpcio, the Go and Node ones their toolchains, and each skips clean
+# where what it needs is absent.
 #
 # grpcio is not in the system python3 here, so grpc-venv builds a venv the
-# gate prefers. The gate takes the venv if it has grpc, else the system
+# gates prefer. A gate takes the venv if it has grpc, else the system
 # python3 if that has grpc, else skips clean the way test-python does.
 GRPCVENV := target/grpcvenv
 GRPC_GEN := target/grpc-gen
-GRPC_PROTO := interop/grpc/payment_bridge.proto
+GRPC_HANDLERS := interop/grpc/handlers
+BRIDGE_SERVER := interop/grpc/bridge_server.py
+BRIDGE_CLIENT := interop/grpc/bridge_client.py
+BRIDGE_PAY := --module $(MODULE_PAY) --handlers $(GRPC_HANDLERS)/payment.py
+BRIDGE_SAGA := --module $(MODULE_SAGA) --handlers $(GRPC_HANDLERS)/saga.py
+BRIDGE_COURSE := --module $(MODULE_COURSE_SAGA) --handlers $(GRPC_HANDLERS)/order_course.py
 
 grpc-venv:
 	@if [ ! -x $(GRPCVENV)/bin/python ]; then \
@@ -931,78 +961,84 @@ grpc-venv:
 	@$(GRPCVENV)/bin/python -c \
 	    "import grpc; print('[grpc-venv] grpcio ' + grpc.__version__)"
 
-# The stubs are generated, never tracked: the .proto is the source and
-# grpc_tools regenerates from it, so a stale stub cannot outlive a change to
-# the contract surface.
-test-grpc-bridge: $(RT_SO) $(MODULE_PAY)
-	@py=""; \
+# The python a gRPC gate runs under, left in py, empty when none has grpc
+GRPC_FIND_PY = py=""; \
 	if $(GRPCVENV)/bin/python -c "import grpc, grpc_tools" 2>/dev/null; then \
 	    py="$(GRPCVENV)/bin/python"; \
 	elif command -v python3 >/dev/null 2>&1 && \
 	     python3 -c "import grpc, grpc_tools" 2>/dev/null; then \
 	    py="python3"; \
-	fi; \
+	fi
+
+# One skeleton's emitted surface and the Python stubs over it
+grpc_py_stub = $(GEAS) emit-proto skeleton/$(1).geas || exit 1; \
+	mkdir -p $(GRPC_GEN); \
+	$$py -m grpc_tools.protoc -I $(OUT) --python_out=$(GRPC_GEN) \
+	    --grpc_python_out=$(GRPC_GEN) $(OUT)/$(1).proto || exit 1
+
+# The payment contract over the generic server, driven from Python: the
+# demo_payment.py walk with the same answers across a process boundary, a
+# pledge's Err as a value on an OK rpc and a Geas status as a gRPC code, an
+# instance that lives exactly as long as its Session stream, a killed
+# client's instance broken at once, and a quiet client keeping its instance
+# however long it says nothing. The same server also serves the language
+# gauntlet, whose lists, maps, tuples, and options cross through nothing but
+# reflection over lang.proto.
+test-grpc-bridge: $(RT_SO) $(MODULE_PAY) $(MODULE_LANG) $(GEAS)
+	@$(GRPC_FIND_PY); \
 	if [ -z "$$py" ]; then \
 	    echo "[test-grpc-bridge] grpcio not found, skipping (make grpc-venv)"; \
 	    exit 0; \
 	fi; \
-	mkdir -p $(GRPC_GEN); \
-	$$py -m grpc_tools.protoc -I interop/grpc \
-	    --python_out=$(GRPC_GEN) --grpc_python_out=$(GRPC_GEN) \
-	    $(GRPC_PROTO) || exit 1; \
-	$(GEAS) emit-proto skeleton/lang.geas || exit 1; \
-	$$py -m grpc_tools.protoc -I $(OUT) --python_out=$(GRPC_GEN) \
-	    $(OUT)/lang.proto || exit 1; \
-	$$py interop/grpc/bridge_server.py --port 50251 & \
+	$(call grpc_py_stub,payment); \
+	$(call grpc_py_stub,lang); \
+	$$py $(BRIDGE_SERVER) --port 50251 $(BRIDGE_PAY) --module $(MODULE_LANG) & \
 	srv=$$!; \
 	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
-	$$py interop/grpc/bridge_client.py --port 50251 --legacy-ttl 2.0; \
+	$$py $(BRIDGE_CLIENT) --port 50251 --legacy-ttl 2.0 && \
+	$$py $(BRIDGE_CLIENT) --port 50251 --lang-walk; \
 	code=$$?; \
 	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
 	exit $$code
 
-# The step 2 gate: the same server, driven by a Go client built from nothing
-# but geas's emitted artifacts. emit-proto writes the .proto and the session
-# wrapper, protoc and its Go plugins turn the .proto into typed stubs, and
-# the client walks the whole payment lifecycle against the Python server,
-# session stream, pinned shape hash, value Err, and the dead client's
-# instance collected in milliseconds. Two languages meet at one emitted
-# surface with no hand written stub between them. Out of the all gate like
-# the bridge gate: it needs protoc, the protoc-gen-go pair, and a Go
-# toolchain, and skips clean where any is absent.
-GO_DIR   := interop/grpc/go
-GOPB_DIR := $(GO_DIR)/paymentpb
+# Whether go, protoc, and protoc's two Go plugins are all at hand
+GRPC_HAS_GO = command -v go >/dev/null 2>&1 && command -v protoc >/dev/null 2>&1 && \
+	PATH="$$PATH:$$HOME/go/bin" command -v protoc-gen-go >/dev/null 2>&1 && \
+	PATH="$$PATH:$$HOME/go/bin" command -v protoc-gen-go-grpc >/dev/null 2>&1
 
+# Every surface the Go client imports: each emitted .proto through protoc and
+# its Go plugins, the emitted session wrapper copied into the same package,
+# then the build. The packages are generated, never tracked.
+GO_DIR := interop/grpc/go
+GO_SURFACES := payment saga order_course
+GRPC_GO_BUILD = for s in $(GO_SURFACES); do \
+	    $(GEAS) emit-proto skeleton/$$s.geas || exit 1; \
+	    mkdir -p $(GO_DIR)/$${s}pb; \
+	    PATH="$$PATH:$$HOME/go/bin" protoc -I $(OUT) \
+	        --go_out=$(GO_DIR) --go_opt=module=geasbridge \
+	        --go-grpc_out=$(GO_DIR) --go-grpc_opt=module=geasbridge \
+	        $(OUT)/$$s.proto || exit 1; \
+	    cp $(OUT)/$${s}_session.go $(GO_DIR)/$${s}pb/ || exit 1; \
+	done; \
+	(cd $(GO_DIR) && go build -o ../../../$(OUT)/bridge_client_go ./client) || exit 1
+
+# The same server, driven by a Go client built from nothing but geas's
+# emitted artifacts: the whole payment lifecycle, session stream, pinned
+# shape hash, value Err, and the dead client's instance collected in
+# milliseconds. Two languages meet at one emitted surface with no hand
+# written stub between them.
 test-grpc-go: $(RT_SO) $(MODULE_PAY) $(GEAS)
-	@py=""; \
-	if $(GRPCVENV)/bin/python -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="$(GRPCVENV)/bin/python"; \
-	elif command -v python3 >/dev/null 2>&1 && \
-	     python3 -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="python3"; \
-	fi; \
+	@$(GRPC_FIND_PY); \
 	if [ -z "$$py" ]; then \
 	    echo "[test-grpc-go] grpcio not found, skipping (make grpc-venv)"; \
 	    exit 0; \
 	fi; \
-	if ! command -v go >/dev/null 2>&1 || ! command -v protoc >/dev/null 2>&1 || \
-	   ! PATH="$$PATH:$$HOME/go/bin" command -v protoc-gen-go >/dev/null 2>&1 || \
-	   ! PATH="$$PATH:$$HOME/go/bin" command -v protoc-gen-go-grpc >/dev/null 2>&1; then \
+	if ! { $(GRPC_HAS_GO); }; then \
 	    echo "[test-grpc-go] go or the protoc toolchain not found, skipping"; \
 	    exit 0; \
 	fi; \
-	$(GEAS) emit-proto skeleton/payment.geas || exit 1; \
-	mkdir -p $(GOPB_DIR) $(GRPC_GEN); \
-	PATH="$$PATH:$$HOME/go/bin" protoc -I $(OUT) \
-	    --go_out=$(GO_DIR) --go_opt=module=geasbridge \
-	    --go-grpc_out=$(GO_DIR) --go-grpc_opt=module=geasbridge \
-	    $(OUT)/payment.proto || exit 1; \
-	cp $(OUT)/payment_session.go $(GOPB_DIR)/ || exit 1; \
-	(cd $(GO_DIR) && go build -o ../../../$(OUT)/bridge_client_go ./client) || exit 1; \
-	$$py -m grpc_tools.protoc -I interop/grpc \
-	    --python_out=$(GRPC_GEN) --grpc_python_out=$(GRPC_GEN) \
-	    $(GRPC_PROTO) || exit 1; \
-	$$py interop/grpc/bridge_server.py --port 50252 & \
+	$(GRPC_GO_BUILD); \
+	$$py $(BRIDGE_SERVER) --port 50252 $(BRIDGE_PAY) & \
 	srv=$$!; \
 	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
 	./$(OUT)/bridge_client_go -addr 127.0.0.1:50252; \
@@ -1010,141 +1046,272 @@ test-grpc-go: $(RT_SO) $(MODULE_PAY) $(GEAS)
 	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
 	exit $$code
 
-# The step 3 gate: the session that survives. A park enabled server signs a
-# session whose stream then drops, the instance parks under its token, the
-# server itself is killed and a fresh one stands up on the same park store,
-# and the client resumes by token: the latch set before the death answers
-# the walk that finishes after it. This is the partition trade the stream
-# took in step 1b paid back, and the affinity answer in one file: any
-# replica holding the park store can resume the session. Out of the all
-# gate beside the other gRPC gates, skipping clean without grpcio.
-test-grpc-resume: $(RT_SO) $(MODULE_PAY)
-	@py=""; \
-	if $(GRPCVENV)/bin/python -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="$(GRPCVENV)/bin/python"; \
-	elif command -v python3 >/dev/null 2>&1 && \
-	     python3 -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="python3"; \
-	fi; \
+# The session that survives. A park enabled server signs a session whose
+# stream then drops, the instance parks under its token, the server itself
+# is killed and a fresh one stands up on the same park store, and the client
+# resumes by token: the latch set before the death answers the walk that
+# finishes after it. Any replica holding the park store can resume the
+# session, which is the whole answer to replica affinity.
+test-grpc-resume: $(RT_SO) $(MODULE_PAY) $(GEAS)
+	@$(GRPC_FIND_PY); \
 	if [ -z "$$py" ]; then \
 	    echo "[test-grpc-resume] grpcio not found, skipping (make grpc-venv)"; \
 	    exit 0; \
 	fi; \
-	mkdir -p $(GRPC_GEN); \
-	$$py -m grpc_tools.protoc -I interop/grpc \
-	    --python_out=$(GRPC_GEN) --grpc_python_out=$(GRPC_GEN) \
-	    $(GRPC_PROTO) || exit 1; \
+	$(call grpc_py_stub,payment); \
 	parkdb=$$(mktemp target/ashparkgrpc_XXXXXX); \
-	$$py interop/grpc/bridge_server.py --port 50256 --park-dsn "$$parkdb" & \
+	$$py $(BRIDGE_SERVER) --port 50256 $(BRIDGE_PAY) --park-dsn "$$parkdb" & \
 	srv=$$!; \
 	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
-	token=$$($$py interop/grpc/bridge_client.py --port 50256 --park-walk | tail -n 1); \
+	token=$$($$py $(BRIDGE_CLIENT) --port 50256 --park-walk | tail -n 1); \
 	if [ -z "$$token" ]; then \
 	    echo "[test-grpc-resume] the park walk failed"; \
 	    kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
 	    rm -f "$$parkdb"; exit 1; \
 	fi; \
 	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
-	$$py interop/grpc/bridge_server.py --port 50256 --park-dsn "$$parkdb" & \
+	$$py $(BRIDGE_SERVER) --port 50256 $(BRIDGE_PAY) --park-dsn "$$parkdb" & \
 	srv=$$!; \
-	$$py interop/grpc/bridge_client.py --port 50256 --resume-walk "$$token"; \
+	$$py $(BRIDGE_CLIENT) --port 50256 --resume-walk "$$token"; \
 	code=$$?; \
 	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
 	rm -f "$$parkdb"; \
 	if [ $$code -eq 0 ]; then echo "[test-grpc-resume] ok"; fi; \
 	exit $$code
 
-# The failover gate: two replicas, one park store, and the claim that makes
-# them honest. Replica A parks a session and dies by SIGKILL, replica B
-# resumes it on nothing but the shared store, which is the affinity answer
-# proven with the failed half actually failed. Then the sharper question: a
-# second session parks, A comes back, and both replicas race one Resume for
-# the same token at the same moment. The DELETE is the claim, so exactly one
-# wins and the loser answers NOT_FOUND, the same answer a spent token earns.
-# Out of the all gate beside the other gRPC gates, skipping clean without
-# grpcio.
-test-grpc-failover: $(RT_SO) $(MODULE_PAY)
-	@py=""; \
-	if $(GRPCVENV)/bin/python -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="$(GRPCVENV)/bin/python"; \
-	elif command -v python3 >/dev/null 2>&1 && \
-	     python3 -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="python3"; \
-	fi; \
+# Two replicas, one park store, and the claim that makes them honest.
+# Replica A parks a session and dies by SIGKILL, replica B resumes it on
+# nothing but the shared store. Then A comes back, the walk parks eight
+# sessions on B, and both replicas race one Resume for each token at the
+# same moment. The runtime's claim resumes and deletes the row in one move,
+# so every round has exactly one winner and a loser answering NOT_FOUND, the
+# same answer a spent token earns.
+test-grpc-failover: $(RT_SO) $(MODULE_PAY) $(GEAS)
+	@$(GRPC_FIND_PY); \
 	if [ -z "$$py" ]; then \
 	    echo "[test-grpc-failover] grpcio not found, skipping (make grpc-venv)"; \
 	    exit 0; \
 	fi; \
-	mkdir -p $(GRPC_GEN); \
-	$$py -m grpc_tools.protoc -I interop/grpc \
-	    --python_out=$(GRPC_GEN) --grpc_python_out=$(GRPC_GEN) \
-	    $(GRPC_PROTO) || exit 1; \
+	$(call grpc_py_stub,payment); \
 	parkdb=$$(mktemp target/ashparkgrpc_XXXXXX); \
-	$$py interop/grpc/bridge_server.py --port 50257 --park-dsn "$$parkdb" & \
+	$$py $(BRIDGE_SERVER) --port 50257 $(BRIDGE_PAY) --park-dsn "$$parkdb" & \
 	srva=$$!; \
-	$$py interop/grpc/bridge_server.py --port 50258 --park-dsn "$$parkdb" & \
+	$$py $(BRIDGE_SERVER) --port 50258 $(BRIDGE_PAY) --park-dsn "$$parkdb" & \
 	srvb=$$!; \
 	trap 'kill -9 $$srva $$srvb 2>/dev/null; wait $$srva $$srvb 2>/dev/null; rm -f "$$parkdb"' EXIT INT TERM; \
-	token=$$($$py interop/grpc/bridge_client.py --port 50257 --park-walk | tail -n 1); \
+	token=$$($$py $(BRIDGE_CLIENT) --port 50257 --park-walk | tail -n 1); \
 	if [ -z "$$token" ]; then \
 	    echo "[test-grpc-failover] the park walk on replica A failed"; \
 	    exit 1; \
 	fi; \
 	kill -9 $$srva 2>/dev/null; wait $$srva 2>/dev/null; \
-	$$py interop/grpc/bridge_client.py --port 50258 --resume-walk "$$token" || exit 1; \
-	token2=$$($$py interop/grpc/bridge_client.py --port 50258 --park-walk | tail -n 1); \
-	if [ -z "$$token2" ]; then \
-	    echo "[test-grpc-failover] the park walk on replica B failed"; \
-	    exit 1; \
-	fi; \
-	$$py interop/grpc/bridge_server.py --port 50257 --park-dsn "$$parkdb" & \
+	$$py $(BRIDGE_CLIENT) --port 50258 --resume-walk "$$token" || exit 1; \
+	$$py $(BRIDGE_SERVER) --port 50257 $(BRIDGE_PAY) --park-dsn "$$parkdb" & \
 	srva=$$!; \
-	$$py interop/grpc/bridge_client.py --port 50257 --peer-port 50258 --race-resume "$$token2"; \
+	$$py $(BRIDGE_CLIENT) --port 50257 --peer-port 50258 --race-resume --rounds 8; \
 	code=$$?; \
 	if [ $$code -eq 0 ]; then echo "[test-grpc-failover] ok"; fi; \
 	exit $$code
 
-# The Node twin of the Go gate: the same server, driven by a client whose
-# whole diet is two npm packages and the emitted artifacts. The .proto rides
-# in through @grpc/proto-loader at runtime, no protoc and no generated stub,
-# and the session rides in through the emitted TypeScript wrapper, which
-# node runs directly under type stripping. This is the editor extension
-# path from the usability notes, proven end to end: no native code crosses
-# the marketplace boundary. Out of the all gate like the other gRPC gates,
-# skipping clean where node, npm, or grpcio is absent.
+# Whether node and npm are at hand, and the emitted surfaces the Node walks
+# load: each .proto rides in through @grpc/proto-loader at runtime, no
+# protoc and no generated stub, and each session through its emitted
+# TypeScript wrapper, which node runs directly under type stripping.
+GRPC_HAS_NODE = command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1
 NODE_DIR := interop/grpc/node
+NODE_SURFACES := payment saga order_course
+GRPC_NODE_GEN = mkdir -p $(NODE_DIR)/gen; \
+	for s in $(NODE_SURFACES); do \
+	    $(GEAS) emit-proto skeleton/$$s.geas || exit 1; \
+	    cp $(OUT)/$$s.proto $(OUT)/$${s}_session.ts $(NODE_DIR)/gen/ || exit 1; \
+	done; \
+	if [ ! -d $(NODE_DIR)/node_modules ]; then \
+	    (cd $(NODE_DIR) && npm install --no-audit --no-fund) || exit 1; \
+	fi
 
+# The Node twin of the Go gate: the same server, driven by a client whose
+# whole diet is two npm packages and the emitted artifacts. This is the
+# editor extension path, proven end to end: no native code crosses the
+# marketplace boundary.
 test-grpc-node: $(RT_SO) $(MODULE_PAY) $(GEAS)
-	@py=""; \
-	if $(GRPCVENV)/bin/python -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="$(GRPCVENV)/bin/python"; \
-	elif command -v python3 >/dev/null 2>&1 && \
-	     python3 -c "import grpc, grpc_tools" 2>/dev/null; then \
-	    py="python3"; \
-	fi; \
+	@$(GRPC_FIND_PY); \
 	if [ -z "$$py" ]; then \
 	    echo "[test-grpc-node] grpcio not found, skipping (make grpc-venv)"; \
 	    exit 0; \
 	fi; \
-	if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then \
+	if ! { $(GRPC_HAS_NODE); }; then \
 	    echo "[test-grpc-node] node or npm not found, skipping"; \
 	    exit 0; \
 	fi; \
-	$(GEAS) emit-proto skeleton/payment.geas || exit 1; \
-	mkdir -p $(NODE_DIR)/gen $(GRPC_GEN); \
-	cp $(OUT)/payment.proto $(OUT)/payment_session.ts $(NODE_DIR)/gen/ || exit 1; \
-	if [ ! -d $(NODE_DIR)/node_modules ]; then \
-	    (cd $(NODE_DIR) && npm install --no-audit --no-fund) || exit 1; \
-	fi; \
-	$$py -m grpc_tools.protoc -I interop/grpc \
-	    --python_out=$(GRPC_GEN) --grpc_python_out=$(GRPC_GEN) \
-	    $(GRPC_PROTO) || exit 1; \
-	$$py interop/grpc/bridge_server.py --port 50254 & \
+	$(GRPC_NODE_GEN); \
+	$$py $(BRIDGE_SERVER) --port 50254 $(BRIDGE_PAY) & \
 	srv=$$!; \
 	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
 	node $(NODE_DIR)/client.mjs --addr 127.0.0.1:50254; \
 	code=$$?; \
 	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
+	exit $$code
+
+# Signals over the bridge. The host driven order saga, skeleton/saga.geas,
+# served by the same generic server with its gateway and carrier bodies from
+# a handlers file, driven from Python: capture refused before authorize, the
+# delivered signal refused before ship and landing after it through its own
+# Signal rpc, the saga Fulfilled, and a refused shipment whose Err arm
+# arrives as a value while the break line fires and the remedies run.
+test-grpc-saga: $(RT_SO) $(GEAS)
+	@$(GRPC_FIND_PY); \
+	if [ -z "$$py" ]; then \
+	    echo "[test-grpc-saga] grpcio not found, skipping (make grpc-venv)"; \
+	    exit 0; \
+	fi; \
+	$(GEAS) build skeleton/saga.geas || exit 1; \
+	$(call grpc_py_stub,saga); \
+	$$py $(BRIDGE_SERVER) --port 50261 $(BRIDGE_SAGA) & \
+	srv=$$!; \
+	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
+	$$py $(BRIDGE_CLIENT) --port 50261 --saga-walk; \
+	code=$$?; \
+	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
+	exit $$code
+
+# The engine driven order saga over the bridge, from Python. The surface
+# carries no pledge rpc: Session signs, the course runs on the server's
+# runtime through the handlers file's bodies, the server's ticker brings its
+# waits due, and the client watches it through GetCourse, hands the
+# delivered signal in, and reads the course finished and the saga
+# Fulfilled. The server runs with a park store, so a saga resting at its
+# select parks when its stream closes and resumes at the same step.
+test-grpc-course: $(RT_SO) $(GEAS)
+	@$(GRPC_FIND_PY); \
+	if [ -z "$$py" ]; then \
+	    echo "[test-grpc-course] grpcio not found, skipping (make grpc-venv)"; \
+	    exit 0; \
+	fi; \
+	$(GEAS) build skeleton/order_course.geas || exit 1; \
+	$(call grpc_py_stub,order_course); \
+	parkdb=$$(mktemp target/ashparkgrpc_XXXXXX); \
+	$$py $(BRIDGE_SERVER) --port 50262 $(BRIDGE_COURSE) --park-dsn "$$parkdb" & \
+	srv=$$!; \
+	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; rm -f "$$parkdb"' EXIT INT TERM; \
+	$$py $(BRIDGE_CLIENT) --port 50262 --course-walk --park; \
+	code=$$?; \
+	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
+	exit $$code
+
+# The saga and the course from Go, through the emitted Go session wrappers
+# and their signal and course helpers, against one server holding both.
+test-grpc-saga-go: $(RT_SO) $(GEAS)
+	@$(GRPC_FIND_PY); \
+	if [ -z "$$py" ]; then \
+	    echo "[test-grpc-saga-go] grpcio not found, skipping (make grpc-venv)"; \
+	    exit 0; \
+	fi; \
+	if ! { $(GRPC_HAS_GO); }; then \
+	    echo "[test-grpc-saga-go] go or the protoc toolchain not found, skipping"; \
+	    exit 0; \
+	fi; \
+	$(GEAS) build skeleton/saga.geas || exit 1; \
+	$(GEAS) build skeleton/order_course.geas || exit 1; \
+	$(GRPC_GO_BUILD); \
+	$$py $(BRIDGE_SERVER) --port 50263 $(BRIDGE_SAGA) $(BRIDGE_COURSE) & \
+	srv=$$!; \
+	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
+	./$(OUT)/bridge_client_go -addr 127.0.0.1:50263 -walk saga && \
+	./$(OUT)/bridge_client_go -addr 127.0.0.1:50263 -walk course; \
+	code=$$?; \
+	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
+	exit $$code
+
+# The saga and the course from Node, through the emitted TypeScript
+# wrappers and their signal and course helpers, against one server holding
+# both.
+test-grpc-saga-node: $(RT_SO) $(GEAS)
+	@$(GRPC_FIND_PY); \
+	if [ -z "$$py" ]; then \
+	    echo "[test-grpc-saga-node] grpcio not found, skipping (make grpc-venv)"; \
+	    exit 0; \
+	fi; \
+	if ! { $(GRPC_HAS_NODE); }; then \
+	    echo "[test-grpc-saga-node] node or npm not found, skipping"; \
+	    exit 0; \
+	fi; \
+	$(GEAS) build skeleton/saga.geas || exit 1; \
+	$(GEAS) build skeleton/order_course.geas || exit 1; \
+	$(GRPC_NODE_GEN); \
+	$$py $(BRIDGE_SERVER) --port 50264 $(BRIDGE_SAGA) $(BRIDGE_COURSE) & \
+	srv=$$!; \
+	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null' EXIT INT TERM; \
+	node $(NODE_DIR)/client.mjs --addr 127.0.0.1:50264 --walk saga && \
+	node $(NODE_DIR)/client.mjs --addr 127.0.0.1:50264 --walk course; \
+	code=$$?; \
+	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
+	exit $$code
+
+# The bridge's endings and limits, each against a small contract under
+# interop/grpc/contracts with protoc stubs over its emitted .proto. Stall's
+# hold body returns only once a cancel request reaches it, so a Break and a
+# dropped stream beside a hold in flight must both ask before they wait,
+# and both return with the server still answering. A server of six workers
+# with two reserved admits four sessions, answers a unary call with all
+# four live, refuses a fifth with RESOURCE_EXHAUSTED, and a pool that
+# leaves no session room refuses to start. NestedOption crosses None,
+# Some(None), and Some(Some(x)) both ways.
+BRIDGE_EDGE := interop/grpc/edge_client.py
+BRIDGE_CONTRACTS := interop/grpc/contracts
+grpc_edge_stub = $(GEAS) build $(BRIDGE_CONTRACTS)/$(1).geas || exit 1; \
+	$(GEAS) emit-proto $(BRIDGE_CONTRACTS)/$(1).geas || exit 1; \
+	mkdir -p $(GRPC_GEN); \
+	$$py -m grpc_tools.protoc -I $(OUT) --python_out=$(GRPC_GEN) \
+	    --grpc_python_out=$(GRPC_GEN) $(OUT)/$(1).proto || exit 1
+BRIDGE_STALL = --module $(OUT)/libstall.geas.so --handlers $(GRPC_HANDLERS)/stall.py
+
+test-grpc-edge: $(RT_SO) $(GEAS)
+	@$(GRPC_FIND_PY); \
+	if [ -z "$$py" ]; then \
+	    echo "[test-grpc-edge] grpcio not found, skipping (make grpc-venv)"; \
+	    exit 0; \
+	fi; \
+	$(call grpc_edge_stub,stall); \
+	$(call grpc_edge_stub,nested_option); \
+	if $$py $(BRIDGE_SERVER) --port 50265 --max-workers 2 --reserve-workers 2 \
+	        $(BRIDGE_STALL) >/dev/null; then \
+	    echo "[test-grpc-edge] a pool with no session room started"; \
+	    exit 1; \
+	fi; \
+	$$py $(BRIDGE_SERVER) --port 50265 $(BRIDGE_STALL) \
+	    --module $(OUT)/libnested_option.geas.so & \
+	srv=$$!; \
+	$$py $(BRIDGE_SERVER) --port 50266 --max-workers 6 --reserve-workers 2 $(BRIDGE_STALL) & \
+	srvb=$$!; \
+	trap 'kill $$srv $$srvb 2>/dev/null; wait $$srv $$srvb 2>/dev/null' EXIT INT TERM; \
+	$$py $(BRIDGE_EDGE) --port 50265 --stall-walk && \
+	$$py $(BRIDGE_EDGE) --port 50265 --nested-walk && \
+	$$py $(BRIDGE_EDGE) --port 50266 --admission-walk 4; \
+	code=$$?; \
+	kill $$srv $$srvb 2>/dev/null; wait $$srv $$srvb 2>/dev/null; \
+	if [ $$code -eq 0 ]; then echo "[test-grpc-edge] ok"; fi; \
+	exit $$code
+
+# The hand off: Handoff's course waits for a signal and its Geas written
+# remedy writes a row per run to the store its dsn vow names. A session
+# broken outright runs it once; a session whose stream drops is parked and
+# released and runs it never; resumed and broken, it runs once more.
+test-grpc-handoff: $(RT_SO) $(GEAS)
+	@$(GRPC_FIND_PY); \
+	if [ -z "$$py" ]; then \
+	    echo "[test-grpc-handoff] grpcio not found, skipping (make grpc-venv)"; \
+	    exit 0; \
+	fi; \
+	$(call grpc_edge_stub,handoff); \
+	parkdb=$$(mktemp target/ashparkgrpc_XXXXXX); \
+	stores=$$(mktemp -d target/ashundogrpc_XXXXXX); \
+	$$py $(BRIDGE_SERVER) --port 50267 --module $(OUT)/libhandoff.geas.so \
+	    --park-dsn "$$parkdb" & \
+	srv=$$!; \
+	trap 'kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; rm -f "$$parkdb" "$$stores"/undo_*.db; rmdir "$$stores"' EXIT INT TERM; \
+	$$py $(BRIDGE_EDGE) --port 50267 --handoff-walk "$$stores"; \
+	code=$$?; \
+	if [ $$code -eq 0 ]; then echo "[test-grpc-handoff] ok"; fi; \
 	exit $$code
 
 smoke-asan: $(MODULE) $(HELLO_HEADER)

@@ -1,6 +1,6 @@
 # Geas from dusk
 
-So this is the dusk host binding for libgeasrt, the same surface the Python binding gives you, written as a dusk module over the C ABI. You load a compiled contract module, bind dusk functions over the abstract pledges and remedies, sign, fulfill, signal, tick, and read the partial surface, and the runtime does the rest, the terms, the retries, the remedy pass, all of it. Now a contract that carries a course goes one step further, the runtime runs the steps by itself, so the host only binds the bodies, signs, waits for the course to rest, and hands the signals in.
+So this is the dusk host binding for libgeasrt, the same surface the [Python package](../python/geas/) gives you, written as a dusk module over the C ABI. You load a compiled contract module, bind dusk functions over the abstract pledges and remedies, sign, fulfill, signal, tick, and read the partial surface, and the runtime does the rest, the terms, the retries, the remedy pass, all of it. Now a contract that carries a course goes one step further, the runtime runs the steps by itself, so the host only binds the bodies, signs, waits for the course to rest, and hands the signals in.
 
 Four files make up the binding, `geas.dusk` is the runtime surface, `geas_value.dusk` is the `Value` tree and its conversion to and from `GeasValue`, `geas_attrs.dusk` reads the declared settings, and `geas_shim.c` is the thin C side, which holds only what a dusk foreign block cannot say by itself: the union inside `GeasValue`, the trampolines the runtime calls back through, and the few calls that take a NULL. Every other runtime call is declared straight in `geas.dusk` and linked against libgeasrt.
 
@@ -12,7 +12,7 @@ interop/dusk/run_demo.sh
 
 It runs `make compiler runtime`, builds `skeleton/saga.geas` and `skeleton/order_course.geas` with `target/bin/geas`, builds `demo_saga.dusk` and `demo_course.dusk` with dusk, and runs both. When `dusk` is not on PATH the script prints a skip line for each and exits 0.
 
-`demo_saga.dusk` is the host driven saga, the host calls every step. It walks the order saga twice, a happy path where authorize eats one Timeout through its retry term and the saga lands Fulfilled, and a break path where the carrier refuses and the remedies undo what landed newest first, release then refund, and it ends with `[demo_saga_dusk] ok`.
+`demo_saga.dusk` is the host driven saga, the host calls every step. It walks the order saga three times, a happy path where authorize eats one Timeout through its retry term and the saga lands Fulfilled, a break path where the carrier refuses and the remedies undo what landed newest first, release then refund, and a hand off. Now the hand off is the one to look at, the first runtime lands everything up to ship, requests a cancel and shows the instance still takes ship while the request stands, parks it, and releases it with no remedy run and the state still Partial, then a second runtime claims the row, delivers the signal, and lands Fulfilled, and a second claim of the same key answers `GEAS_ERR_NAME` since the row is gone. It ends with `[demo_saga_dusk] ok`.
 
 `demo_course.dusk` is the same order saga with a course, so the runtime calls every step and the host never does. The happy path signs with the runtime's ticker running, waits until the course rests at its select, having planned, authorized through one Timeout, captured and reserved at the same time, and shipped, shows that a host fulfillment answers `GEAS_ERR_STATE`, then delivers the signal and waits for the course to finish with the saga Fulfilled. The break path has the carrier refuse, the course ends on ship's `?`, and refund runs once with the receipt while the saga reads Remedying, and it ends with `[demo_course_dusk] ok`.
 
@@ -58,6 +58,7 @@ The state rides a pointer rather than a capture because a dusk closure that capt
 | `runtime_shutdown(rt)` | `geas_runtime_shutdown` | then frees every binding and clock the shim held |
 | `contract_sign(rt, name, vows)`, `contract_sign_pinned(..., hash)` | `geas_contract_sign` | vows are a `*Vector<Vow>`, copied at the call |
 | `contract_resume(rt, dsn, key, hash)`, `contract_park(c, dsn, key)` | `geas_instance_resume`, `geas_instance_park` | bind on the new runtime before resuming |
+| `contract_claim(rt, dsn, key, hash)` | `geas_instance_claim` | resumes the row and takes it out of the store in one move, a second claim of the key answers `GEAS_ERR_NAME`, a row that will not build stays put |
 | `contract_fulfill_sync(c, pledge, args)` | `geas_pledge_fulfill_sync` | args is consumed; a pledge's Err is a value, not an error |
 | `contract_fulfill(c, pledge, args)` | `geas_pledge_fulfill` | answers a `Receipt` |
 | `future_poll(r)`, `future_wait(r)`, `future_release(r)` | `geas_future_poll`, `geas_future_wait`, `geas_future_release` | wait delivers once, release after wait or after a break |
@@ -69,6 +70,8 @@ The state rides a pointer rather than a capture because a dusk closure that capt
 | `contract_attrs(c)`, `contract_attr(c, item, key)` | `geas_instance_attr_count`, `geas_instance_attr_at`, `geas_instance_attr` | in `geas_attrs` |
 | `contract_state(c)`, `contract_hash(c)`, `contract_signed_at(c)`, `contract_vow(c, name)` | the matching `geas_contract_*` and `geas_vow_ref` | `state_name` spells a state |
 | `contract_break(c)`, `contract_cancel_requested(c)` | `geas_contract_break`, `geas_cancel_requested` | a body polls cancel through the `Contract` it was handed |
+| `contract_request_cancel(c)` | `geas_contract_request_cancel` | publishes a cancel bodies read and returns at once, the instance stays live and nothing breaks |
+| `contract_release(c)` | `geas_contract_release` | lets the instance go with no remedy run and no state change, its park row carries the obligation on, later calls answer `GEAS_ERR_STATE` |
 | `contract_course_info(c)` | `geas_course_info` | answers a `CourseInfo`, state, step, status and `wait_due_ms`; `course_state_name` spells a state |
 | `contract_course_wait(c, timeout_ms)` | `geas_course_wait` | blocks until the course is not running, negative waits forever, a timeout is no error and reads `course_running()` at the step the course is on |
 | `contract_set_autopark(c, dsn, key)`, `contract_clear_autopark(c)` | `geas_contract_set_autopark` | the instance parks itself after every change, clear is the NULL dsn form |

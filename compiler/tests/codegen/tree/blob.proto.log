@@ -1,0 +1,10 @@
+exit 1
+skeleton/blob.geas: 33:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge at(data: Bytes, index: Int) -> Result<Byte, Int> {
+      ^~~~~~~~~
+skeleton/blob.geas: 45:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: List<Byte>
+      pledge list(data: Bytes) -> Result<List<Byte>, Int> {
+      ^~~~~~~~~~~
+skeleton/blob.geas: 49:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge pack(data: List<Byte>) -> Result<Bytes, Int> {
+      ^~~~~~~~~~~

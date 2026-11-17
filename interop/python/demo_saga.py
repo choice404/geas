@@ -1,6 +1,6 @@
 """demo_saga.py: the order saga from Python. The same module tests/runtime/
 test_saga.c drives in C, built from skeleton/saga.geas by the C++ compiler,
-loaded here through geas.py with Python callables bound over the abstract
+loaded here through the geas package with Python callables bound over the abstract
 steps and a Python clock the runtime reads instead of the wall, so a three
 day deadline is a number this file moves.
 

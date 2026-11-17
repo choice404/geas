@@ -1,0 +1,4 @@
+exit 1
+lib/std/traits.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // std.traits: the shared provisional clauses. A provisional clause is a
+  ^

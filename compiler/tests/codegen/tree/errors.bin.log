@@ -1,0 +1,4 @@
+exit 1
+lib/std/errors.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // std.errors: the shared error sums the rest of the standard library
+  ^

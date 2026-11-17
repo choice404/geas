@@ -2,7 +2,7 @@
 generated. It is the store twin of demo_payment.py and demo_remote.py, and it
 carries the product claim into durable storage: the same host surface that
 signed a local contract and a remote one signs a contract backed by a SQLite
-file, and the database never shows through ctypes. geas.py speaks the
+file, and the database never shows through ctypes. The geas package speaks the
 documented ABI and the store is invisible to it, which is the whole point.
 
 The contract is skeleton/ledger.geas, its Accounts schema reconciled at sign and

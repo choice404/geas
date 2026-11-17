@@ -80,12 +80,15 @@ foreign "C" {
     func geas_contract_sign(rt: int64, name: *raw char, vows: int64, n: int64, hash: uint64, out: *raw int64) -> int32
     func geas_instance_resume(rt: int64, dsn: *raw char, key: *raw char, hash: uint64, out: *raw int64) -> int32
     func geas_instance_park(c: int64, dsn: *raw char, key: *raw char) -> int32
+    func geas_instance_claim(rt: int64, dsn: *raw char, key: *raw char, hash: uint64, out: *raw int64) -> int32
     func geas_contract_state(c: int64) -> int32
     func geas_contract_hash(c: int64) -> uint64
     func geas_contract_signed_at(c: int64) -> int64
     func geas_contract_amended_from(c: int64) -> uint32
     func geas_contract_break(c: int64) -> int32
     func geas_cancel_requested(c: int64) -> int32
+    func geas_contract_request_cancel(c: int64) -> int32
+    func geas_contract_release(c: int64) -> int32
     func geas_instance_tick(c: int64) -> int32
     func geas_vow_ref(c: int64, name: *raw char) -> int64
     func geas_future_wait(f: int64, out: int64) -> int32
@@ -481,6 +484,25 @@ export func contract_resume(rt: Runtime, dsn: string, key: string, hash: uint64)
     return (c, status_error(int64(st), "geas_instance_resume " + key))
 }
 
+/** Stands a parked instance back up and takes its row out of the store in
+ *  the same move, the one shot hand off. Of two claimers of one key exactly
+ *  one gets the instance, the other answers GEAS_ERR_NAME, the row being
+ *  gone; a row that will not build, a version skew included, answers its
+ *  status and stays in the store. Bind every handler on this runtime first;
+ *  hash 0 skips the shape check */
+export func contract_claim(rt: Runtime, dsn: string, key: string, hash: uint64) -> (Contract, error) {
+    d: *raw char = cbuf(dsn)
+    k: *raw char = cbuf(key)
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    st: int32 = geas_instance_claim(rt.h, d, k, hash, out)
+    c: Contract = Contract { h: out[0] }
+    free(d)
+    free(k)
+    free(out)
+    return (c, status_error(int64(st), "geas_instance_claim " + key))
+}
+
 /** Writes the instance under key into the store behind dsn */
 export func contract_park(c: Contract, dsn: string, key: string) -> error {
     d: *raw char = cbuf(dsn)
@@ -516,9 +538,27 @@ export func contract_break(c: Contract) -> error {
     return status_error(int64(geas_contract_break(c.h)), "geas_contract_break")
 }
 
-/** Whether a break or a shutdown has been requested, the poll a long body makes */
+/** Whether a cancel, a break, a release, or a shutdown has been requested,
+ *  the poll a long body makes */
 export func contract_cancel_requested(c: Contract) -> bool {
     return geas_cancel_requested(c.h) != int32(0)
+}
+
+/** Publishes a cancel and returns at once. Bodies read the request from then
+ *  on, a retry wait wakes, and a course is cut at its next step, but the
+ *  instance stays live, takes fulfillments, and nothing breaks; the request
+ *  stands until a break or a release */
+export func contract_request_cancel(c: Contract) -> error {
+    return status_error(int64(geas_contract_request_cancel(c.h)), "geas_contract_request_cancel")
+}
+
+/** Lets the instance go from this runtime with no remedy run and no state
+ *  change, the obligation living on in its park row for a claim elsewhere.
+ *  A running body is waited out, an open episode rolls back, and the heap is
+ *  reclaimed; an armed autopark writes its last row first. Every later call
+ *  on the instance answers GEAS_ERR_STATE */
+export func contract_release(c: Contract) -> error {
+    return status_error(int64(geas_contract_release(c.h)), "geas_contract_release")
 }
 
 /** Applies every passed deadline of this instance */

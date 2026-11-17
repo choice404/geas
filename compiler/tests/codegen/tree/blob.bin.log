@@ -1,0 +1,4 @@
+exit 1
+skeleton/blob.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Raw records cross the host boundary in one byte buffer
+  ^

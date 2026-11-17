@@ -1,0 +1,4 @@
+exit 1
+skeleton/order_course_v2.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The order saga, version 2. This is the same OrderCourse contract as
+  ^

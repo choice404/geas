@@ -29,6 +29,9 @@
 # with gcc no goto may jump over an initialization. Module C that carries an
 # amends table compiles only against a runtime header that declares
 # GeasAmendDesc, and is counted as skipped against one that does not
+# The tree goldens pin every remaining program under skeleton, lib/std, and
+# examples, including command failures from library modules and partial
+# skeletons
 #
 # Set GEAS to test another build, the sanitizer one at target/bin-asan/geas
 # for instance. BLESS=1 rewrites every golden from GEAS and does nothing
@@ -61,6 +64,13 @@ AMENDS_DIR="$ROOT/compiler/tests/codegen/amends"
 AMENDS_SOURCES="$(cd "$ROOT" && ls compiler/tests/codegen/amends/src/*.geas)
 $(printf 'tests/check/%s.geas ' amends_ok order_saga amends_vows_ok amends_items_ok amends_parts_ok amends_course_ok \
     amends_layout_ok amends_vow_order_ok amends_seed_remedy_ok)"
+TREE_DIR="$ROOT/compiler/tests/codegen/tree"
+TREE_SOURCES="$(printf 'skeleton/%s.geas ' blob hello_v2 jobattrs jobstep lifecycle order_course order_course_v2 steps)
+$(printf 'lib/std/%s.geas ' collections errors math process store strings traits)
+examples/supervisor/service.geas"
+
+# The tree modules whose generated C carries a course or amends table
+TREE_SYNTAX_STEMS="order_course order_course_v2"
 
 # The accepted programs of tests/check with no workflow construct in them,
 # which pin nothing the goldens above do not
@@ -204,6 +214,19 @@ check_workflow_coverage() {
     done
 }
 
+# Every source in the public source trees has to belong to a golden table
+check_source_tree_coverage() {
+    local src
+    while read -r src; do
+        if printf '%s\n' $GOLDEN_SOURCES $WORKFLOW_SOURCES $COURSE_SOURCES \
+            $AMENDS_SOURCES $TREE_SOURCES | grep -qxF "$src"; then
+            pass=$((pass + 1))
+        else
+            fail_case "coverage/$src" "source is not listed in a golden table"
+        fi
+    done < <(find skeleton lib/std examples -type f -name '*.geas' | sort)
+}
+
 # The line ranges of the course functions of one C file, as first last pairs
 course_ranges() {
     awk '/^static uint32_t k_[A-Za-z0-9_]*_course\(/ { first = NR }
@@ -265,6 +288,14 @@ check_course_syntax() {
         [ -f "$file" ] || continue
         check_c_file "$(basename "$(dirname "$file")")/$(basename "$file")" "$file"
     done
+    for stem in $TREE_SYNTAX_STEMS; do
+        file="$TREE_DIR/$stem.c"
+        if [ ! -f "$file" ]; then
+            fail_case "syntax/tree/$stem" "the golden table has no module C"
+            continue
+        fi
+        check_c_file "tree/$stem.c" "$file"
+    done
     for src in tests/course/*.geas; do
         stem="$(basename "${src%.geas}")"
         dir="$WORK/syntax/$stem"
@@ -297,6 +328,7 @@ if [ "${BLESS:-0}" = "1" ]; then
     bless_dir "$WORKFLOW_SOURCES" "$WORKFLOW_DIR"
     bless_dir "$COURSE_SOURCES" "$COURSE_DIR"
     bless_dir "$AMENDS_SOURCES" "$AMENDS_DIR"
+    bless_dir "$TREE_SOURCES" "$TREE_DIR"
     exit 0
 fi
 
@@ -305,7 +337,9 @@ check_goldens "$GOLDEN_SOURCES" "$GOLDEN_DIR"
 check_goldens "$WORKFLOW_SOURCES" "$WORKFLOW_DIR"
 check_goldens "$COURSE_SOURCES" "$COURSE_DIR"
 check_goldens "$AMENDS_SOURCES" "$AMENDS_DIR"
+check_goldens "$TREE_SOURCES" "$TREE_DIR"
 check_workflow_coverage
+check_source_tree_coverage
 check_course_syntax
 
 echo "[codegen] $pass passed, $fail failed"

@@ -1,0 +1,14 @@
+// The stalling contract the bridge's ending and admission walks hold open.
+// hold is abstract, and the body the walk supplies polls the cancel flag and
+// returns only once a cancel request reaches it, so a Break, a dropped
+// stream, or a server stopping beside a hold in flight all have to ask the
+// body to stop before they wait for it. ping answers at once, the unary call
+// a full server must still have a worker for.
+
+contract Stall [version: 1] {
+    pledge hold() -> Result<Bool, Int>
+
+    pledge ping() -> Result<Bool, Int> {
+        return Ok(true)
+    }
+}

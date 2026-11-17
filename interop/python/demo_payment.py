@@ -1,5 +1,5 @@
 """demo_payment.py: the payment walk from Python, no C written, no binding
-generated. geas.py speaks the documented ABI through ctypes and this demo
+generated. The geas package speaks the documented ABI through ctypes and this demo
 drives the same ground tests/runtime/test_partial.c covers in C: load the
 runtime and two compiled modules, bind Python callables over the abstract
 pledges, sign with a vow override, and walk the partial, fulfilled, and

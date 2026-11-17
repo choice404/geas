@@ -1,0 +1,4 @@
+exit 1
+lib/std/store.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // std.store: the store surface a store-backed contract reads and writes
+  ^

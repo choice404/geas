@@ -1,6 +1,6 @@
 """demo_course.py: the engine driven order saga from Python. The same module
 tests/runtime/test_course_saga.c drives in C, built from
-skeleton/order_course.geas by the C++ compiler, loaded here through geas.py
+skeleton/order_course.geas by the C++ compiler, loaded here through the geas package
 with Python callables bound over the abstract bodies, a Python clock the
 runtime reads instead of the wall, and the runtime's own ticker running so
 a deadline falls due without this file ticking.

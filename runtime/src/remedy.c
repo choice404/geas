@@ -221,7 +221,14 @@ static void run_remedy(GeasContract* c, uint32_t r) {
  * then drives the pass, so the body's own pledge is undone with the rest. */
 void geas_rt_remedy_drive(GeasContract* c) {
     GeasFlow* f = &c->flow;
-    if (f->remedy_active || f->in_thunk > 0) return;
+    if (f->remedy_active || f->in_thunk > 0 || f->reclaimed) return;
+    /* A published release hands the pass to whoever claims the row, so no
+     * pass starts here; a release a body left pending is carried out now that
+     * no body runs. A break noted first keeps its pass */
+    if (geas_rt_release_published(c) && !f->break_pending) {
+        if (f->release_pending) geas_rt_release_carry(c);
+        return;
+    }
     if (c->state == GEAS_REMEDYING || c->state == GEAS_BROKEN) {
         geas_rt_rollback_open(c);
     }
@@ -246,6 +253,7 @@ void geas_rt_remedy_drive(GeasContract* c) {
     f->remedy_active = 0;
     geas_rt_set_state(c, GEAS_BROKEN);
     if (f->break_pending) geas_rt_reclaim(c);
+    else if (f->release_pending) geas_rt_release_carry(c);
     pthread_cond_broadcast(&f->remedy_cv);
 }
 

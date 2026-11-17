@@ -1,16 +1,17 @@
 // bridge_client_go: the demo_payment.py walk, driven from Go against the
-// bridge server, built from nothing but geas's emitted artifacts. The
-// paymentpb package this imports is protoc's output over the emitted
-// payment.proto plus the emitted session wrapper, so every symbol the walk
-// touches, the typed pledge calls, the signature, the pinned shape hash,
-// and the session handle, came out of the compiler. No Geas binding,
-// no libgeasrt, no hand written stub.
+// generic bridge server, built from nothing but geas's emitted artifacts.
+// The paymentpb, sagapb, and order_coursepb packages this imports are
+// protoc's output over the emitted .proto files plus the emitted session
+// wrappers, so every symbol the walks touch, the typed pledge calls, the
+// signal helpers, the course read, the signature, the pinned shape hash,
+// and the session handle, came out of the compiler. No Geas binding, no
+// libgeasrt, no hand written stub.
 //
-// The walk asserts what bridge_client.py asserts, minus the Debug rpc,
-// which the emitted surface does not carry because the instance table is
-// server internal: where the Python client counts rows, this one reads the
-// row's own fate through GetPartial, present until its stream ends and
-// NOT_FOUND after. The sign calls pin the wrapper's shape hash, so a run
+// -walk picks the contract: payment, the default, asserts what
+// bridge_client.py asserts, reading a row's fate through GetPartial,
+// present until its stream ends and NOT_FOUND after; saga walks the host
+// driven order saga through its signal; course walks the engine driven one
+// through GetCourse. The sign calls pin the wrapper's shape hash, so a run
 // that reaches the first pledge has already proven the emitted hash is the
 // one the compiled module registered.
 package main
@@ -343,9 +344,35 @@ func holdSession(ctx context.Context, c paymentpb.PaymentServiceClient) int {
 
 var flagAddr string
 
+// serverUp retries a first read until the server answers something other
+// than UNAVAILABLE or ten seconds pass, since it may still be binding.
+func serverUp(read func() error) bool {
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		if st, ok := status.FromError(read()); ok && st.Code() != codes.Unavailable {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	fmt.Fprintln(os.Stderr, "[bridge_client_go] FAIL: server never came up")
+	failures = 1
+	return false
+}
+
+func runPayment(ctx context.Context, conn *grpc.ClientConn, legacy time.Duration) {
+	c := paymentpb.NewPaymentServiceClient(conn)
+	if !serverUp(func() error {
+		_, err := c.GetPartial(ctx, &paymentpb.PartialRequest{InstanceId: 1})
+		return err
+	}) {
+		return
+	}
+	walk(ctx, c, legacy)
+}
+
 func main() {
 	hold := flag.Bool("hold-session", false, "internal: open a session and hold it until killed")
-	legacy := flag.Duration("legacy-ttl", 2*time.Second, "the idle timer step 1's server ran, kept as the yardstick")
+	legacy := flag.Duration("legacy-ttl", 2*time.Second, "the idle timer the first prototype ran, kept as the yardstick")
+	which := flag.String("walk", "payment", "the walk to run: payment, saga, or course")
 	flag.StringVar(&flagAddr, "addr", "127.0.0.1:50251", "the bridge server's address")
 	flag.Parse()
 
@@ -356,30 +383,18 @@ func main() {
 		os.Exit(1)
 	}
 	defer conn.Close()
-	c := paymentpb.NewPaymentServiceClient(conn)
 	ctx := context.Background()
 
-	if *hold {
-		os.Exit(holdSession(ctx, c))
+	switch {
+	case *hold:
+		os.Exit(holdSession(ctx, paymentpb.NewPaymentServiceClient(conn)))
+	case *which == "saga":
+		runSaga(ctx, conn)
+	case *which == "course":
+		runCourse(ctx, conn)
+	default:
+		runPayment(ctx, conn, *legacy)
 	}
-
-	// The server may still be binding; the first read retries until it
-	// answers or ten seconds pass.
-	up := false
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
-		_, err := c.GetPartial(ctx, &paymentpb.PartialRequest{InstanceId: 1})
-		if st, ok := status.FromError(err); ok && st.Code() != codes.Unavailable {
-			up = true
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if !up {
-		fmt.Fprintln(os.Stderr, "[bridge_client_go] FAIL: server never came up")
-		os.Exit(1)
-	}
-
-	walk(ctx, c, *legacy)
 
 	if failures != 0 {
 		os.Exit(1)

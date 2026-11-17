@@ -459,10 +459,13 @@ GeasStatus geas_store_query(GeasStore* s, const char* sql,
     }
     sqlite3_finalize(stmt);
 
+    /* Each pass is its own read outside a caller's transaction, so a row
+     * another connection deletes between them leaves the second pass short;
+     * the list holds the rows the second pass read, never a zeroed slot */
     rows_out->ty = GEAS_TY_LIST;
-    rows_out->as.list.data = backbone;
-    rows_out->as.list.len = n;
-    rows_out->as.list.cap = n;
+    rows_out->as.list.data = j ? backbone : NULL;
+    rows_out->as.list.len = j;
+    rows_out->as.list.cap = j;
     rows_out->as.list.elem_ty = GEAS_TY_RECORD;
     return GEAS_OK;
 }

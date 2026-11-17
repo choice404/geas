@@ -1,0 +1,4 @@
+exit 1
+skeleton/order_course.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The order saga, engine driven. The host never calls a step here: the
+  ^

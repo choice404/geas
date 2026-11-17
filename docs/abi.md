@@ -2,6 +2,9 @@
 
 This is the normative ABI for Geas. It covers everything that crosses the boundary between a compiled module, the intermediary runtime, and a foreign host: the value representation, the thunk frame every pledge is called through, the descriptor tables a module publishes, the registrar protocol, the symbol mangling, the shape hash, and who owns what. The single header `runtime/include/geas/geas_abi.h` is the source of truth for every layout named here; a change to the wire lands in that header first and this document moves with it.
 
+The Python package in `interop/python/geas/` implements this ABI through
+`ctypes`, with the host surface exported from `geas`.
+
 ## Values
 
 Everything crosses the boundary by value in an `GeasValue`, one struct with a type tag, a variant tag, and a union.
@@ -893,7 +896,8 @@ typedef enum GeasEventKind {
     GEAS_EVENT_COURSE_FINISHED = 18,
     GEAS_EVENT_COURSE_HALTED = 19,
     GEAS_EVENT_COURSE_CANCELLED = 20,
-    GEAS_EVENT_AMENDED = 21
+    GEAS_EVENT_AMENDED = 21,
+    GEAS_EVENT_RELEASED = 22
 } GeasEventKind;
 
 typedef struct GeasEvent {
@@ -930,7 +934,7 @@ This reservation refuses host work instead of waiting on a callback. A hook may 
 
 A contract term emits `TERM_LAPSED` before its state transition. A break with remedies enters Remedying, then each remedy emits `REMEDY_STARTED` and one `REMEDY_DONE` or `REMEDY_FAILED`, newest fulfilled pledge first, and the pass emits the transition to Broken. Retry attempts have no separate event. Open transactions roll back before the remedy pass and the delivery boundary, so the callback sees their resolved fate.
 
-Explicit cancel emits `CANCELLED` once when the request enters the locked lifecycle, followed by the transitions, remedies, and `RECLAIMED` it causes. A request seen by a running body is recorded on that body's thread when the runtime carries it into the lifecycle; a deferred break inside a body is recorded there and its reclaim follows the outermost body. A cancel accepted just before another thread reserves delivery returns without waiting for that callback; the producing thread carries it into the lifecycle after the captured queue drains. If a deferred cancellation fails after callbacks, a break call still waiting receives that status; with no break call waiting, the runtime writes the status to stderr with its `[libgeasrt]` prefix. Delivery continues. Repeated break calls emit no second cancellation or reclaim. An automatic break keeps the heap and emits no reclaim. A successful park emits `PARKED` after its row is written and leaves the live instance's state unchanged. A successful resume emits only `RESUMED` for the restored state, without replaying latches or remedy history; a resume through an amends block emits `AMENDED` 21 just before it, `old_state` and `new_state` the two versions, see Amendment. Its later tick applies elapsed deadlines and unfinished remedies normally. Shutdown releases storage without synthesizing contract transitions.
+Explicit cancel emits `CANCELLED` once when the request enters the locked lifecycle, followed by the transitions, remedies, and `RECLAIMED` it causes. A request seen by a running body is recorded on that body's thread when the runtime carries it into the lifecycle; a deferred break inside a body is recorded there and its reclaim follows the outermost body. A cancel accepted just before another thread reserves delivery returns without waiting for that callback; the producing thread carries it into the lifecycle after the captured queue drains. If a deferred cancellation fails after callbacks, a break call still waiting receives that status; with no break call waiting, the runtime writes the status to stderr with its `[libgeasrt]` prefix. Delivery continues. Repeated break calls emit no second cancellation or reclaim. An automatic break keeps the heap and emits no reclaim. A successful park emits `PARKED` after its row is written and leaves the live instance's state unchanged. A successful resume emits only `RESUMED` for the restored state, without replaying latches or remedy history; a resume through an amends block emits `AMENDED` 21 just before it, `old_state` and `new_state` the two versions, see Amendment. Its later tick applies elapsed deadlines and unfinished remedies normally. A release emits `RELEASED` 22 once where an explicit break would emit `RECLAIMED`, `item` NULL and both states the one the instance was released in, with no `CANCELLED`, no remedy event, and no `STATE_CHANGED` before it, see Handing an instance off; a cancel request emits nothing. A claim emits what a resume emits. Shutdown releases storage without synthesizing contract transitions.
 
 Python exposes `rt.on_event(callback)`, or `rt.on_event(None)` to clear. The callback receives an `Event` with `kind`, `instance`, `contract`, `item`, `old_state`, `new_state`, `at_ms`, and `seq`. Names and scalar fields are copied into Python; `instance` is a borrowed `Contract` handle with the read rules above. The runtime wrapper anchors replaced callbacks until shutdown. A Python callback exception prints its traceback and delivery continues.
 
@@ -942,11 +946,42 @@ Python exposes `rt.on_event(callback)`, or `rt.on_event(None)` to clear. The cal
 int geas_cancel_requested(void* ctx);
 ```
 
-A body passes the `ctx` it was handed. The call reads atomic flags and takes no instance lock: it answers 1 once a break is requested on that instance, including a break deferred from inside a body, or when runtime shutdown starts, and 0 otherwise. The request stays set for the rest of that instance's life. A fresh sign or resume starts with no request, cancellation is not part of the park row. In Python a bound callback receives the instance and calls `inst.cancel_requested()`.
+A body passes the `ctx` it was handed. The call reads atomic flags and takes no instance lock: it answers 1 once a break, a cancel request, or a release is called on that instance, including a break or a release deferred from inside a body, or when runtime shutdown starts, and 0 otherwise. The request stays set for the rest of that instance's life. A fresh sign or resume starts with no request, cancellation is not part of the park row. In Python a bound callback receives the instance and calls `inst.cancel_requested()`.
 
 A break called from inside a body on its own instance returns `GEAS_OK` immediately and leaves the break pending until the outermost fulfillment ends. Its outcome latches before the remedies run, and the heap remains available until then. A break while another thread runs the remedy pass waits for that pass. Cancellation does not skip remedies or shorten their retry terms.
 
+```c
+GeasStatus geas_contract_request_cancel(GeasContract* c);
+```
+
+So break is the request and the ending in one call, and `geas_contract_request_cancel` is the request on its own. It raises the same flag and returns at once, it waits on no lock, runs no remedy, and breaks nothing. Every body on the instance reads `geas_cancel_requested` as 1 from then on, a default retry wait wakes and its fulfillment answers `GEAS_ERR_STATE` without another attempt, and a course is cut at its next operation and ends `CANCELLED`, its contract left in whatever state the latches gave it. Now the instance stays live: a body that returns after the request latches its outcome as usual, and later fulfillments and signals are taken, their bodies reading the flag the same way. Nothing lowers the flag, it stays raised until the instance ends in a break or a release, so a host that asked once never has to ask again and a body never sees a request come and go. A second request is the same request and answers `GEAS_OK`, a request after a break or a release reclaimed the instance answers `GEAS_ERR_STATE`, and a NULL handle `GEAS_ERR_TYPE`. A host with calls in flight on several threads requests the cancel, waits for its own calls to come back, and then breaks or releases, so no thread is left waiting on another. In Python it is `inst.request_cancel()`, in dusk `contract_request_cancel(c)`.
+
 Cancellation wakes a pledge's default retry delay and the fulfillment answers `GEAS_ERR_STATE` without another attempt. With a host supplied sleep callback, the receipt is forfeited immediately, and the worker makes no further attempt when the callback returns. The runtime never interrupts that callback; a scheduler that wants its worker back promptly wakes its own wait, or polls cancellation through its user context. Shutdown publishes its flag before joining workers, so bodies and sleep callbacks can finish cooperatively.
+
+## Handing an instance off
+
+So a park writes a row and leaves the instance live where it is, which is what a checkpoint wants, however a hand off wants the opposite: one process lets the obligation go, another one picks it up, and at no point do both of them hold it or does either one run a remedy for work the other is about to finish. Three calls make that move, in this order.
+
+```c
+GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key);
+GeasStatus geas_contract_release(GeasContract* c);
+GeasStatus geas_instance_claim(GeasRuntime* rt, const char* dsn, const char* key,
+                               uint64_t expected_hash, GeasContract** out);
+```
+
+**Park**, or an armed autopark, puts the row in the store, the same row a resume reads.
+
+**Release** lets the instance go from this process with no remedy and no state change. It publishes a cancel before it waits for the instance lock, so a body that polls `geas_cancel_requested` returns, and it waits out a body running on the instance and another thread's remedy pass, the way break does. Then a running or waiting course is cut, an open transactional episode rolls back and frees its store locks, every unwaited future is forfeited to `GEAS_ERR_STATE`, and the heap is reclaimed exactly as an explicit break reclaims it. The contract state is left as it was, never Remedying or Broken, and the call emits `RELEASED`. Every later call on the handle answers as on a broken one, `GEAS_ERR_STATE`, a fulfillment, a signal, a park, a break, a request, and a second release included, while the state and the partial reads keep answering what the instance was. A release of an Unsigned instance, of one a break already reclaimed, or of one with a break pending is `GEAS_ERR_STATE`, and a NULL handle is `GEAS_ERR_TYPE`.
+
+An instance armed with autopark that has changes not yet written writes its last row first, so the row is never older than what this process finished. That row records an open episode as rolled back and a course the release cut as still running at its step with no status, so the claimer carries the course on from there. A write that fails is the call's status, and the instance goes on as it was, live and unreleased, for the host to retry or to break. An instance with no autopark writes nothing at release: the host parked it, and a latch that moved after that park is the host's to have parked again before releasing, the runtime cannot tell which row the host means to hand over.
+
+Called from inside a body on its own instance, or while another thread delivers the instance's events, the release is noted and answers `GEAS_OK` at once, and it happens when that body's fulfillment or that delivery ends, the same deferral break follows. The body's outcome latches first, and a fulfillment the release ended answers `GEAS_ERR_STATE` through its wait. A break called while a release is pending answers `GEAS_ERR_STATE`.
+
+**Claim** resumes the row and takes it out of the store in the same move. The row is read and the instance built from it unpublished, exactly the way `geas_instance_resume` builds one, amends blocks and a course frame included, and a slot in the runtime's instance table is held for it. Then one `DELETE` that matches the row on every column it was built from takes it, as its own transaction. Only when that delete took the row does the instance publish, emit `RESUMED` (after `AMENDED` for an amended row), and start its course, so no tick, no ticker, and no course step reaches the instance before the row is gone. Two claimers of one key, in one process or in two, both read and both build, exactly one delete takes the row, and that claimer gets the instance while the other's built instance is discarded and its call answers `GEAS_ERR_NAME`, the row being gone. A row rewritten between the read and the delete, by an autopark still running in the releasing process for instance, is read and built again, and a key rewritten eight times in a row answers `GEAS_ERR_STATE`. A build that fails, `GEAS_ERR_VERSION`, `GEAS_ERR_TYPE`, `GEAS_ERR_UNBOUND`, an amends block's own status, or a full instance table, leaves the row where it was and answers that status, all or nothing. Every other status follows `geas_instance_resume`, and `geas_instance_resume` itself never deletes a row.
+
+The build happens before the delete, not inside one store transaction with it, because the contract a row holds can name the same store in its own `dsn` vow, and a build that opened that store while the claim held a write lock on it would wait on itself. The conditional delete gives the same answer the transaction would: the row a claimer took is the row it built.
+
+Put together, the order is park, release, claim, and the remedies run nowhere on the way. A host that releases without having parked, with no autopark armed, has let the obligation go with no row to take it up from, which is the host's call to make and not one the runtime second guesses. In Python the three are `inst.park(dsn, key)`, `inst.release()`, and `rt.claim(dsn, key, expected_hash=0)`, the event kind `GEAS_EVENT_RELEASED`; in dusk they are `contract_park`, `contract_release(c)`, and `contract_claim(rt, dsn, key, hash)`.
 
 ## The value wire codec
 

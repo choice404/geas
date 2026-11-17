@@ -167,6 +167,13 @@ static uint32_t end_event(uint32_t state) {
 static void course_land(GeasContract* c, uint32_t state) {
     GeasCourse* k = c->course;
     if (k->state != state) geas_rt_autopark_mark(c);
+    /* A cut that only a release explains leaves the course running as far as
+     * the row is concerned; a request, a break, or a contract past the live
+     * states is a real cancel */
+    uint32_t bits = geas_rt_cancel_bits(c);
+    k->release_cut = state == GEAS_COURSE_CANCELLED && (bits & CANCEL_RELEASE) &&
+                     !(bits & (CANCEL_ASK | CANCEL_BREAK)) && geas_rt_live(c) &&
+                     !__atomic_load_n(&c->rt->shutting_down, __ATOMIC_ACQUIRE);
     k->state = state;
     k->deferred = 0;
     geas_rt_event(c, end_event(state), NULL, c->state);
@@ -271,6 +278,15 @@ void geas_rt_course_stop(GeasContract* c) {
     if (!k || k->executing) return;
     if (k->state != GEAS_COURSE_RUNNING && k->state != GEAS_COURSE_WAITING) return;
     course_land(c, GEAS_COURSE_CANCELLED);
+}
+
+void geas_rt_course_unrelease(GeasContract* c) {
+    GeasCourse* k = c->course;
+    if (!k || !k->release_cut) return;
+    k->release_cut = 0;
+    k->refused = 0;
+    k->frame.status = GEAS_OK;
+    if (k->state == GEAS_COURSE_CANCELLED && geas_rt_live(c)) course_schedule(c);
 }
 
 void geas_rt_course_reclaimed(GeasContract* c) {

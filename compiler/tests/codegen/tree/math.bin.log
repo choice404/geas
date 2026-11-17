@@ -1,0 +1,4 @@
+exit 1
+lib/std/math.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // std.math: the integer and float arithmetic contract. Every operation is
+  ^

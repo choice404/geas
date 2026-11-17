@@ -631,3 +631,108 @@ window, which is not the normal path. It buys statelessness between replicas:
 there is no lease to renew, no fencing token to check, no registry of who holds
 what. The store file is the only thing two servers share, and the delete is the
 only word they exchange.
+
+# The gRPC bridge, step 4: the generic server
+
+## Any contract, one server
+
+Steps 1 through 3b served one contract, and every handler in the server named
+it. Step 4 is the server the emitted surface was built for: it knows no
+contract at all. It loads whatever modules it is given, binds the bodies a
+deployer supplies in plain Python handlers files, and reads each emitted
+`.proto` at startup through grpc_tools into a descriptor pool of its own, so
+there is no generated stub on the server side and nothing to regenerate when a
+contract changes. Every service becomes a generic handler, every rpc gets its
+role from the surface's own spelling, and every pledge rpc is matched against
+the names the loaded module registered, its parameter count checked, so a
+surface and a module that disagree fail at startup.
+
+The payment walk now runs on `payment.proto` exactly as geas emits it, the
+clients in all three languages build from the same emitted files, and where
+the Python client counted rows through a server internal call it now reads a
+row's fate the way the Go and Node clients always have, GetPartial answering
+while the stream holds the row and NOT_FOUND once it is gone.
+
+## Values by reflection
+
+The type set crosses backwards here. A message's shape says which Geas value
+it carries: a wrapper by its emitted name and its exact fields, a sum by its
+oneof of arms, a result by its ok and err arms, a record by everything else.
+The geas package carries a `Typed` value so the server can name a tag Python cannot pick
+on its own, a UInt, a Byte map key, an empty list's element type, a map, a
+tuple, and a map decodes to a dict in insertion order. The language gauntlet
+rides the same server with no line written for it, its lists, maps, tuples,
+and options crossing in both directions.
+
+A field of `Option` over a message shaped type is the message itself, since
+proto already tracks a message's presence. Over a record, a payload sum, or a
+list, map, or tuple wrapper that one spelling is shared by two types: going out
+the server reads which it has, coming in it reads the plain type. Over an
+Option wrapper it is not shared, a declared field never spells a plain Option
+that way, so the field's presence is the outer Some and an `Option` of an
+`Option` crosses whole, `Some(None)` included.
+
+## Signals and the course
+
+Signals are served: each `Signal` rpc delivers into the instance and answers
+the empty reply, an early or late delivery FAILED_PRECONDITION. The host
+driven saga walks to Fulfilled on its delivered signal and breaks on a refused
+shipment with the Err arm arriving as a value. The engine driven saga carries
+no pledge rpc on the wire at all: the sign starts its course on the server,
+the server's ticker brings its waits due, and the client watches it through
+GetCourse and hands its signal in.
+
+## Parking a contract with remedies
+
+The payment contract has no remedies, and a saga does, which made one rule of
+the park path matter. A session that parks hands its obligation to the row,
+and a refund run because a client's connection dropped would be wrong twice:
+the obligation is still live in the row, and the replica that resumes it would
+owe the refund again. So the hand off is park then release. The runtime's
+release lets the instance go from the process with no remedy pass and no
+state change, a remedy written in Geas and a supplied one alike, and the
+remedies stay owed in the row for whichever replica resumes it and breaks it
+for real. The handoff gate counts it: a course whose Geas remedy writes a
+store row per run shows no row after its session parks, and one row after the
+resumed session breaks.
+
+## Ending, handing off, and admitting
+
+Step 5 is the server's own ending made as strict as the runtime's. Three
+runtime calls carry it. A cancel request asks a body to stop and returns at
+once, a release lets a parked instance go with nothing paid, and a claim
+resumes a row and deletes it in the same move, so the bridge holds none of
+those rules itself and only puts them in order.
+
+An ending runs on a small pool of its own, never on the thread gRPC calls the
+termination callback on, and its order is fixed: the row leaves the table, the
+bodies are asked to stop, the calls already admitted are waited out with their
+replies decoded, and only then does the instance park and release, or break.
+A body that polls the cancel flag is what makes the wait end, and a reply
+built inside its call is what makes the wait enough. `Break` drains where the
+ending closes, so it never waits on itself and the calls it held back reach a
+broken instance that still answers. The edge gate puts a body that returns
+only on a cancel request beside a Break and beside a dropped stream, and both
+return with the server still answering.
+
+`Resume` is one claim. Racing two replicas over eight tokens gives one winner
+and one NOT_FOUND every round, and since the claim checks the row against
+the service's own shape hash, a wrong hash is ABORTED with the row untouched.
+
+**A session holds a thread, and the server bounds it.** The sync Python server
+dedicates a pool worker to each live session for its whole life, and it never
+lets sessions take the whole pool. `--reserve-workers`, 4 by default,
+is kept for pledge, signal, partial, course, and Break calls, a `Session` or
+`Resume` past `--max-workers` less that reserve is RESOURCE_EXHAUSTED, and a
+pool with no room for both refuses to start. The ceiling is still the pool,
+which is the property of a sync threaded server named above; what changed is
+that a full server says so and keeps answering the sessions it holds.
+
+**An error payload crosses as an int64.** `PledgeError` in the partial reply
+carries a broken pledge's Err as one int64: an Int as itself, a sum as its arm
+tag, anything else as 0. A record or a sum's payload fields do not cross
+there. The pledge's own rpc answers its Err arm whole, so the full value is on
+the wire the moment the pledge breaks, and only the later read through
+GetPartial is narrowed. That is the one value on the surface that does not
+cross whole, and it stays named here until the partial reply carries the
+declared error type.

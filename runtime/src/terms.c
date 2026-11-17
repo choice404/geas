@@ -538,7 +538,11 @@ int geas_contract_term_lapsed(GeasContract* c) {
  * the wait, so everything after it reads the instance as it stands then */
 GeasStatus geas_rt_fulfill_gate(GeasContract* c, uint32_t pidx) {
     geas_rt_course_settle(c);
-    if (geas_cancel_requested(c) || geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
+    /* A break or a release ends the instance and refuses new work at once; a
+     * plain request leaves it live, and the body it admits reads the flag */
+    uint32_t ending = CANCEL_BREAK | CANCEL_RELEASE;
+    if ((geas_rt_cancel_bits(c) & ending) || geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
+    if (__atomic_load_n(&c->rt->shutting_down, __ATOMIC_ACQUIRE)) return GEAS_ERR_STATE;
     geas_rt_tick(c);
     if (!geas_rt_live(c)) return GEAS_ERR_STATE;
     if (pidx >= c->desc->npledges) return GEAS_ERR_NAME;

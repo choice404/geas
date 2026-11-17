@@ -12,6 +12,13 @@
  *  refund handed the receipt capture produced, the saga reading Remedying
  *  while they run and Broken once they are done.
  *
+ *  A third walk hands the saga from one runtime to another. The first signs
+ *  it and lands everything up to ship, requests a cancel and shows the
+ *  instance still takes ship while the request stands, parks it, and
+ *  releases it, no remedy running and the state staying Partial. A second
+ *  runtime claims the row and delivers the signal, landing Fulfilled, and a
+ *  second claim of the same key finds the row gone.
+ *
  *  GEAS_OUT names the directory holding libsaga.geas.so, target/geas-out by
  *  default. Exit status 0 means every check held. */
 
@@ -332,6 +339,109 @@ func read_break(checks: *Checks, rt: Runtime, saga: Contract, host: *SagaHost) -
     return error {}
 }
 
+/* ---- the hand off ---- */
+
+// The store the hand off parks into, beside the module
+func handoff_dsn() -> string {
+    out: string = env("GEAS_OUT")
+    dir: string = str_len(out) > 0 ? out : "target/geas-out"
+    return dir + "/dusk_handoff.db"
+}
+
+func handoff_key() -> string { return "dusk-handoff" }
+
+// The first runtime's half: through ship with a cancel requested, then park
+// and release
+func handoff_give(checks: *Checks, saga: Contract, host: *SagaHost) -> error {
+    res, re := through_reserve(checks, saga)
+    if re.exists() {
+        return re
+    }
+    ce := contract_request_cancel(saga)
+    if ce.exists() {
+        return ce
+    }
+    check(checks, contract_cancel_requested(saga), "a requested cancel reads true")
+    shipped, fe := contract_fulfill_sync(saga, "ship", values1(res))
+    if fe.exists() {
+        return fe
+    }
+    check(checks, value_is_ok(shipped), "the instance still takes ship, got " + value_render(shipped))
+    value_free(shipped)
+    say("cancel requested, ship still landed, saga reads " + state_name(contract_state(saga)))
+    pe := contract_park(saga, handoff_dsn(), handoff_key())
+    if pe.exists() {
+        return pe
+    }
+    le := contract_release(saga)
+    if le.exists() {
+        return le
+    }
+    return handoff_released(checks, saga, host)
+}
+
+func handoff_released(checks: *Checks, saga: Contract, host: *SagaHost) -> error {
+    check(checks, vec_len((*host).refunds) == 0, "a release runs no remedy")
+    check(checks, contract_remedy_state(saga, "release") == remedy_idle(), "release's Geas body never ran")
+    check(checks, contract_state(saga) == state_partial(), "a released saga keeps its state")
+    tracking: *Value = value_record(values2(value_text("ACME"), value_text("T-1")))
+    late := contract_signal(saga, "delivered", values1(tracking))
+    check(checks, is_status(late, status_err_state()), "a released saga refuses a signal, got " + late.toString())
+    say("released, remedies run " + int_to_string(vec_len((*host).refunds)) + ", saga still reads " + state_name(contract_state(saga)))
+    return error {}
+}
+
+// The second runtime's half: claim, deliver, and find the row gone after
+func handoff_take(checks: *Checks, rt: Runtime) -> error {
+    saga, ce := contract_claim(rt, handoff_dsn(), handoff_key(), uint64(0))
+    if ce.exists() {
+        return ce
+    }
+    check(checks, contract_state(saga) == state_partial(), "the claimed saga stands Partial")
+    tracking: *Value = value_record(values2(value_text("ACME"), value_text("T-1")))
+    de := contract_signal(saga, "delivered", values1(tracking))
+    if de.exists() {
+        return de
+    }
+    check(checks, contract_state(saga) == state_fulfilled(), "the claimed saga is fulfilled")
+    lost, again := contract_claim(rt, handoff_dsn(), handoff_key(), uint64(0))
+    check(checks, is_status(again, status_err_name()), "a second claim finds no row, got " + again.toString())
+    check(checks, contract_hash(lost) == uint64(0), "a lost claim hands back no instance")
+    say("claimed elsewhere, ends " + state_name(contract_state(saga)) + ", second claim answers " + again.toString())
+    return contract_break(saga)
+}
+
+func handoff_path(checks: *Checks) -> error {
+    sleeps: *Vector<int64> = alloc(vec_new())
+    clock: *FakeClock = alloc(FakeClock { ms: 1000, sleeps: sleeps })
+    given: *Vector<string> = alloc(vec_new())
+    giver: *SagaHost = alloc(SagaHost { timeouts: 0, is_ship_failing: false, refunds: given })
+    rt, e := saga_runtime(giver, clock)
+    if e.exists() {
+        return e
+    }
+    vows: *Vector<Vow> = alloc(vec_new())
+    saga, se := contract_sign(rt, "OrderSaga", vows)
+    if se.exists() {
+        return se
+    }
+    ge := handoff_give(checks, saga, giver)
+    if ge.exists() {
+        return ge
+    }
+    taken: *Vector<string> = alloc(vec_new())
+    taker: *SagaHost = alloc(SagaHost { timeouts: 0, is_ship_failing: false, refunds: taken })
+    other, oe := saga_runtime(taker, clock)
+    if oe.exists() {
+        return oe
+    }
+    te := handoff_take(checks, other)
+    check(checks, vec_len((*taker).refunds) == 0, "the fulfilled claim undoes nothing")
+    runtime_shutdown(other)
+    runtime_shutdown(rt)
+    return te
+}
+
 func main() -> int32 {
     checks: *Checks = alloc(Checks { failures: 0 })
     he := happy_path(checks)
@@ -342,6 +452,11 @@ func main() -> int32 {
     be := break_path(checks)
     if be.exists() {
         printerr("[demo_saga_dusk] break path: " + be.toString())
+        return 1
+    }
+    oe := handoff_path(checks)
+    if oe.exists() {
+        printerr("[demo_saga_dusk] hand off: " + oe.toString())
         return 1
     }
     if (*checks).failures > 0 {
