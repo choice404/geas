@@ -46,61 +46,89 @@ static GeasStatus __geas_ash_Courier_unpick_d3a9dc08c6de3981_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_Courier_pledges[] = {
+static const GeasPledgeDesc k7_Courier_pledges[] = {
     { "pickup", "__geas_ash_Courier_pickup_6659cab9dec10d4e_v1", 1, __geas_ash_Courier_pickup_6659cab9dec10d4e_v1, -1 },
     { "scanned", NULL, 1, NULL, -1 },
 };
 
-static const GeasReqAtom k_Courier_atoms[] = {
+static const GeasReqAtom k7_Courier_atoms[] = {
     { "pickup", GEAS_ATOM_FULFILLED, -1, 0 },
     { "scanned", GEAS_ATOM_FULFILLED, -1, 1 },
     { "pickup", GEAS_ATOM_BROKEN, -1, 0 },
     { "scanned", GEAS_ATOM_BROKEN, -1, 1 },
 };
 
-static const GeasReqOp k_Courier_rf[] = {
+static const GeasReqOp k7_Courier_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Courier_rb[] = {
+static const GeasReqOp k7_Courier_rb[] = {
     { GEAS_REQ_ATOM, 2 },
     { GEAS_REQ_ATOM, 3 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const uint8_t k_Courier_kinds[] = {
+static const uint8_t k7_Courier_kinds[] = {
     GEAS_KIND_PLEDGE,
     GEAS_KIND_SIGNAL,
 };
 
-static const GeasItemRef k_Courier_after_1[] = {
+static const GeasItemRef k7_Courier_after_1[] = {
     { GEAS_REF_PLEDGE, 0 },
 };
 
-static const GeasTermDesc k_Courier_terms[] = {
+static const GeasTermDesc k7_Courier_terms[] = {
     { 0 },
-    { .within_ms = 7200000, .nafter = 1, .after = k_Courier_after_1 },
+    { .within_ms = 7200000, .nafter = 1, .after = k7_Courier_after_1 },
 };
 
-static const GeasRemedyDesc k_Courier_remedies[] = {
+static const GeasRemedyDesc k7_Courier_remedies[] = {
     { "unpick", "__geas_ash_Courier_unpick_d3a9dc08c6de3981_v1", 0, 1, __geas_ash_Courier_unpick_d3a9dc08c6de3981_v1, { 0 } },
 };
 
-static const GeasContractDesc k_Courier = {
+static const uint32_t k7_Courier_type_kids_1[] = { 2, 3 };
+static const uint32_t k7_Courier_type_kids_2[] = { 0, 3 };
+
+static const GeasTypeNode k7_Courier_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_Courier_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 2, k7_Courier_type_kids_2, "Parcel", 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_UNIT, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k7_Courier_item_params_0[] = { 0 };
+static const uint32_t k7_Courier_item_params_1[] = { 3 };
+
+static const GeasItemTypes k7_Courier_item_types[] = {
+    { 1, k7_Courier_item_params_0, 1 },
+    { 1, k7_Courier_item_params_1, GEAS_NO_TYPE },
+};
+
+static const uint32_t k7_Courier_remedy_params_0[] = { 2 };
+
+static const GeasItemTypes k7_Courier_remedy_types[] = {
+    { 1, k7_Courier_remedy_params_0, 4 },
+};
+
+static const GeasContractDesc k7_Courier = {
     "Courier", 0xa75e59e7dac071dfULL,
-    1, 2, k_Courier_pledges,
+    1, 2, k7_Courier_pledges,
     0, NULL,
     0, NULL, 4,
-    k_Courier_atoms, 0,
+    k7_Courier_atoms, 0,
     3, 0, 3,
-    k_Courier_rf, NULL, k_Courier_rb,
+    k7_Courier_rf, NULL, k7_Courier_rb,
     0, NULL,
     NULL,
-    k_Courier_kinds, k_Courier_terms, NULL,
-    1, k_Courier_remedies,
+    k7_Courier_kinds, k7_Courier_terms, NULL,
+    1, k7_Courier_remedies,
     86400000,
+    .ntypes = 5, .types = k7_Courier_types,
+    .item_types = k7_Courier_item_types, .vow_types = NULL,
+    .remedy_types = k7_Courier_remedy_types,
 };
 
 static GeasStatus __geas_ash_Desk_dispatch_79da24b2f50df428_v1(void* ctx, const GeasValue* args, size_t nargs,
@@ -418,7 +446,7 @@ static GeasStatus __geas_ash_Desk_bundle_e136d4df1da0d9ef_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_Desk_pledges[] = {
+static const GeasPledgeDesc k4_Desk_pledges[] = {
     { "dispatch", "__geas_ash_Desk_dispatch_79da24b2f50df428_v1", 2, __geas_ash_Desk_dispatch_79da24b2f50df428_v1, -1 },
     { "early", "__geas_ash_Desk_early_3d644fa037179943_v1", 1, __geas_ash_Desk_early_3d644fa037179943_v1, -1 },
     { "span", "__geas_ash_Desk_span_bd02641cd1045be3_v1", 2, __geas_ash_Desk_span_bd02641cd1045be3_v1, -1 },
@@ -426,7 +454,7 @@ static const GeasPledgeDesc k_Desk_pledges[] = {
     { "bundle", "__geas_ash_Desk_bundle_e136d4df1da0d9ef_v1", 1, __geas_ash_Desk_bundle_e136d4df1da0d9ef_v1, -1 },
 };
 
-static const GeasReqAtom k_Desk_atoms[] = {
+static const GeasReqAtom k4_Desk_atoms[] = {
     { "dispatch", GEAS_ATOM_FULFILLED, -1, 0 },
     { "early", GEAS_ATOM_FULFILLED, -1, 1 },
     { "span", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -439,7 +467,7 @@ static const GeasReqAtom k_Desk_atoms[] = {
     { "bundle", GEAS_ATOM_BROKEN, -1, 4 },
 };
 
-static const GeasReqOp k_Desk_rf[] = {
+static const GeasReqOp k4_Desk_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -451,7 +479,7 @@ static const GeasReqOp k_Desk_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Desk_rb[] = {
+static const GeasReqOp k4_Desk_rb[] = {
     { GEAS_REQ_ATOM, 5 },
     { GEAS_REQ_ATOM, 6 },
     { GEAS_REQ_AND, 0 },
@@ -463,24 +491,55 @@ static const GeasReqOp k_Desk_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_Desk = {
+static const uint32_t k4_Desk_type_kids_2[] = { 0, 1 };
+static const uint32_t k4_Desk_type_kids_3[] = { 1, 1 };
+static const uint32_t k4_Desk_type_kids_4[] = { 5, 1 };
+static const uint32_t k4_Desk_type_kids_5[] = { 0, 1 };
+
+static const GeasTypeNode k4_Desk_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Desk_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Desk_type_kids_3, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Desk_type_kids_4, NULL, 0, NULL },
+    { GEAS_TY_TUPLE, 2, k4_Desk_type_kids_5, NULL, 0, NULL },
+};
+
+static const uint32_t k4_Desk_item_params_0[] = { 0, 1 };
+static const uint32_t k4_Desk_item_params_1[] = { 1 };
+static const uint32_t k4_Desk_item_params_2[] = { 1, 1 };
+static const uint32_t k4_Desk_item_params_3[] = { 1, 1 };
+static const uint32_t k4_Desk_item_params_4[] = { 0 };
+
+static const GeasItemTypes k4_Desk_item_types[] = {
+    { 2, k4_Desk_item_params_0, 2 },
+    { 1, k4_Desk_item_params_1, 2 },
+    { 2, k4_Desk_item_params_2, 3 },
+    { 2, k4_Desk_item_params_3, 3 },
+    { 1, k4_Desk_item_params_4, 4 },
+};
+
+static const GeasContractDesc k4_Desk = {
     "Desk", 0xfd5046c594794ce1ULL,
-    1, 5, k_Desk_pledges,
+    1, 5, k4_Desk_pledges,
     0, NULL,
     0, NULL, 10,
-    k_Desk_atoms, 0,
+    k4_Desk_atoms, 0,
     9, 0, 9,
-    k_Desk_rf, NULL, k_Desk_rb,
+    k4_Desk_rf, NULL, k4_Desk_rb,
     0, NULL,
     NULL,
+    .ntypes = 6, .types = k4_Desk_types,
+    .item_types = k4_Desk_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Courier);
+    st = geas_register_contract(rt, &k7_Courier);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_Desk);
+    st = geas_register_contract(rt, &k4_Desk);
     if (st != GEAS_OK) return st;
     return st;
 }

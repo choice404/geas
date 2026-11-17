@@ -1,0 +1,13 @@
+// types Clock: 7 nodes
+0 INT
+1 RESULT(2, 3)
+2 LIST(0)
+3 STRING
+4 OPTION(2)
+5 TUPLE(0, 0)
+6 UNIT
+pledge stamp(0, 0, 0) -> 1
+pledge spread(2, 0) -> 4
+pledge pair(5, 5) -> 6
+vow grace 0
+vow since 0

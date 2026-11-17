@@ -1,0 +1,16 @@
+// types Stock: 10 nodes
+0 STRING
+1 RESULT(2, 7)
+2 LIST(3)
+3 RECORD Parts(4, 0, 5, 6)
+4 INT
+5 FLOAT
+6 BOOL
+7 SUM StoreError
+  StoreDecode
+  StoreShape
+8 RESULT(9, 7)
+9 UNIT
+pledge named(0) -> 1
+pledge put(3) -> 8
+vow dsn 0

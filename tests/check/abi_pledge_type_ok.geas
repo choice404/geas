@@ -1,0 +1,20 @@
+// The accept twin: a pledge type is legal where the value never leaves the
+// module, a clause parameter and a let annotation.
+
+contract Vault {
+    pledge ping() -> Result<Int, Int> {
+        return Ok(7)
+    }
+}
+
+contract Gate {
+    pledge open() -> Result<Int, Int> {
+        let v: Vault = Vault.sign()
+        let step: pledge() -> Result<Int, Int> = v.ping
+        return Ok(probe(step))
+    }
+
+    clause probe(step: pledge() -> Result<Int, Int>) -> Int {
+        return 2
+    }
+}

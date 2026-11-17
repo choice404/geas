@@ -180,12 +180,22 @@ static void run_remedy(GeasContract* c, uint32_t r) {
     memset(&arg, 0, sizeof(arg));
     if (rd->has_param) arg = f->pledge_ok[rd->target];
     size_t nargs = rd->has_param ? 1 : 0;
+    /* The value handed in is held to the remedy's declared parameter; one
+     * that does not conform fails the remedy before its body runs */
+    if (nargs && geas_rt_check_remedy_arg(c, r, &arg) != GEAS_OK) {
+        remedy_fail(c, r, GEAS_ERR_TYPE, NULL, 0);
+        return;
+    }
     for (uint32_t attempt = 0;; attempt++) {
         GeasValue out;
         memset(&out, 0, sizeof(out));
         f->in_thunk++;
         GeasStatus st = call_remedy(c, r, nargs ? &arg : NULL, nargs, &out);
         f->in_thunk--;
+        /* An answer that does not conform to the declared return is this
+         * attempt's GEAS_ERR_TYPE, and no Err payload of it is kept */
+        if (st == GEAS_OK) st = geas_rt_check_remedy_return(c, r, &out);
+        if (st == GEAS_ERR_TYPE) memset(&out, 0, sizeof(out));
         if (f->break_pending) geas_rt_event_cancel(c);
         if (st == GEAS_OK && !geas_rt_is_err(&out)) {
             f->remedy_state[r] = REMEDY_DONE;

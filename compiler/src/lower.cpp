@@ -74,6 +74,13 @@ TyId TypeLowering::lower(TypeId type, std::int64_t lo, std::int64_t hi) {
         return lowerNamed(*named, lo, hi);
     }
     const auto& pledge = std::get<PledgeType>(node);
+    // A pledge value is bound to the instance that made it, a handle with no
+    // meaning outside the process and no lifetime of its own, so like a
+    // contract type it stays out of every position a value crosses
+    if (isABIPosition) {
+        emit(lo, hi, "a pledge type cannot cross the contract boundary");
+        return types_.unknown();
+    }
     std::vector<TyId> params;
     for (const TypeId param : pledge.params) {
         params.push_back(lower(param, lo, hi));

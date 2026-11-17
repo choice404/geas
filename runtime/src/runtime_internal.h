@@ -913,6 +913,65 @@ GEAS_INTERNAL GeasStatus geas_rt_resume_build(GeasRuntime* rt, uint64_t expected
 GEAS_INTERNAL GeasStatus geas_rt_resume_publish(GeasResumed* r, int is_reserved);
 GEAS_INTERNAL void geas_rt_resume_discard(GeasResumed* r);
 
+/* ---- conform.c ---- */
+
+/* The deepest nesting geas_value_deep_copy follows. A value past it, a
+ * cyclic one among them, is GEAS_ERR_TYPE instead of a stack run away. Far
+ * above GEAS_VALUE_MAX_DEPTH, the line every boundary holds, since compiled
+ * code copies values that never cross a boundary */
+#define GEAS_COPY_MAX_DEPTH 4096u
+
+/* Whether a sequence of bytes is strict UTF-8: no overlong encoding, no
+ * surrogate, nothing above U+10FFFF, no sequence cut short */
+GEAS_INTERNAL int geas_rt_utf8_valid(const uint8_t* ptr, uint64_t len);
+
+/* Whether the npairs keys of a map's interleaved slots are distinct, keys of
+ * one keyable tag. GEAS_OK, GEAS_ERR_TYPE on a repeated key, GEAS_ERR_OOM
+ * when the sort's scratch cannot be had. O(n log n) */
+GEAS_INTERNAL GeasStatus geas_rt_map_keys_distinct(const GeasValue* data, uint64_t npairs);
+
+/* Whether v conforms to type index ty of d's table, or to the structural
+ * facts alone for GEAS_NO_TYPE. GEAS_OK, GEAS_ERR_TYPE, or GEAS_ERR_OOM from
+ * a large map's duplicate key check. Takes no lock: the caller keeps v still */
+GEAS_INTERNAL GeasStatus geas_rt_conform(const GeasContractDesc* d, uint32_t ty,
+                                       const GeasValue* v);
+
+/* The registrar's check of a descriptor's type table. GEAS_ERR_TYPE for a
+ * table that does not hold up, GEAS_OK for one that does or for none */
+GEAS_INTERNAL GeasStatus geas_rt_validate_types(const GeasContractDesc* d);
+
+/* Whether the descriptor carries a type table. Every check below answers
+ * GEAS_OK for one that does not, the behaviour such a descriptor always had */
+GEAS_INTERNAL int geas_rt_has_types(const GeasContractDesc* d);
+
+/* The boundary checks, each under whatever lock keeps its values still:
+ * args a fulfillment's frame, return a pledge body's answer, payload a
+ * signal's stored payload, vow one vow, remedy_arg and remedy_return a
+ * remedy's value in and answer out, and instance every value a resume, a
+ * claim, or an amend decoded onto a fresh unpublished instance */
+GEAS_INTERNAL GeasStatus geas_rt_check_args(const GeasContract* c, uint32_t pidx,
+                                          const GeasValue* frame, size_t nargs);
+GEAS_INTERNAL GeasStatus geas_rt_check_return(const GeasContract* c, uint32_t pidx,
+                                            const GeasValue* out);
+GEAS_INTERNAL GeasStatus geas_rt_check_payload(const GeasContract* c, uint32_t pidx,
+                                             const GeasValue* payload);
+GEAS_INTERNAL GeasStatus geas_rt_check_vow(const GeasContractDesc* d, uint32_t j,
+                                         const GeasValue* v);
+GEAS_INTERNAL GeasStatus geas_rt_check_remedy_arg(const GeasContract* c, uint32_t r,
+                                                const GeasValue* arg);
+GEAS_INTERNAL GeasStatus geas_rt_check_remedy_return(const GeasContract* c, uint32_t r,
+                                                   const GeasValue* out);
+GEAS_INTERNAL GeasStatus geas_rt_check_instance(const GeasContract* c);
+
+/* ---- heap marks ---- */
+
+/* A mark on the instance heap and the release back to it: every block
+ * geas_bytes linked in after the mark is freed, the values built of them
+ * refused. Sound only while the caller holds the instance lock from the mark
+ * to the release, so no other thread links a block in between */
+GEAS_INTERNAL GeasBlock* geas_rt_heap_mark(const GeasContract* c);
+GEAS_INTERNAL void geas_rt_heap_release(GeasContract* c, GeasBlock* mark);
+
 /* ---- handoff.c ---- */
 
 /* The release itself, under the instance lock held once, outside every body

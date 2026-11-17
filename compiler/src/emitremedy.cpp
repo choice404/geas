@@ -78,11 +78,7 @@ std::int64_t CEmitter::remedyTargetIndex(const ContractShape& shape,
 // Whether the remedy is handed its target's Ok value: it declared the
 // parameter and the target answers a Result whose Ok carries a value
 bool CEmitter::remedyTakesValue(const RemedyShape& remedy) const {
-    if (!remedy.decl->param || remedy.target == nullptr) {
-        return false;
-    }
-    const TyNode ret = nodeOf(lookup_.pledgeSig(*remedy.target).ret);
-    return ret.kind == TyKind::Result && kindOf(ret.args[0]) != TyKind::Unit;
+    return geas::remedyTakesValue(lookup_, remedy);
 }
 
 // The remedy table, NULL when the contract declares no remedy. The arrays
@@ -103,13 +99,13 @@ std::string CEmitter::emitRemedyTable(const ContractShape& shape) {
                               remedyTakesValue(remedy) ? "1" : "0", ", ", thunk, ", ", terms,
                               " },"));
     }
-    top(joined("static const GeasRemedyDesc k_", shape.decl->name, "_remedies[] = {"));
+    top(joined("static const GeasRemedyDesc ", contractStem(shape.decl->name), "_remedies[] = {"));
     for (const std::string& row : rows) {
         top(row);
     }
     top("};");
     top("");
-    return joined("k_", shape.decl->name, "_remedies");
+    return joined(contractStem(shape.decl->name), "_remedies");
 }
 
 // Every workflow table of one contract and the descriptor lines that point

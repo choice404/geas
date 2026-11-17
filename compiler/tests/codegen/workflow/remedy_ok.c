@@ -38,7 +38,7 @@ static GeasStatus __geas_ash_Shop_forget_c218b655ee1b7462_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_Shop_pledges[] = {
+static const GeasPledgeDesc k4_Shop_pledges[] = {
     { "capture", "__geas_ash_Shop_capture_c37f34d629cfee53_v1", 0, NULL, 0 },
     { "reserve", "__geas_ash_Shop_reserve_eee45d11777d8dad_v1", 0, NULL, -1 },
     { "notify", "__geas_ash_Shop_notify_0e2ba22315b89a85_v1", 0, NULL, -1 },
@@ -46,11 +46,11 @@ static const GeasPledgeDesc k_Shop_pledges[] = {
     { "log", "__geas_ash_Shop_log_c218b655ee1b7462_v1", 0, NULL, -1 },
 };
 
-static const char* const k_Shop_subs[] = {
+static const char* const k4_Shop_subs[] = {
     "Payment",
 };
 
-static const GeasReqAtom k_Shop_atoms[] = {
+static const GeasReqAtom k4_Shop_atoms[] = {
     { "Payment", GEAS_ATOM_FULFILLED, 0, -1 },
     { "reserve", GEAS_ATOM_FULFILLED, -1, 1 },
     { "notify", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -63,7 +63,7 @@ static const GeasReqAtom k_Shop_atoms[] = {
     { "log", GEAS_ATOM_BROKEN, -1, 4 },
 };
 
-static const GeasReqOp k_Shop_rf[] = {
+static const GeasReqOp k4_Shop_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -75,11 +75,11 @@ static const GeasReqOp k_Shop_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Shop_rp[] = {
+static const GeasReqOp k4_Shop_rp[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_Shop_rb[] = {
+static const GeasReqOp k4_Shop_rb[] = {
     { GEAS_REQ_ATOM, 5 },
     { GEAS_REQ_ATOM, 6 },
     { GEAS_REQ_AND, 0 },
@@ -91,7 +91,7 @@ static const GeasReqOp k_Shop_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasRemedyDesc k_Shop_remedies[] = {
+static const GeasRemedyDesc k4_Shop_remedies[] = {
     { "refund", "__geas_ash_Shop_refund_476b7004a9825223_v1", 0, 1, NULL, { .retry_count = 10, .retry_every_ms = 60000, .retry_backoff = 2.0, .retry_cap_ms = 3600000 } },
     { "release", "__geas_ash_Shop_release_7048d1fc295d5aa8_v1", 1, 1, __geas_ash_Shop_release_7048d1fc295d5aa8_v1, { 0 } },
     { "retract", "__geas_ash_Shop_retract_0e2ba22315b89a85_v1", 2, 0, NULL, { 0 } },
@@ -99,25 +99,75 @@ static const GeasRemedyDesc k_Shop_remedies[] = {
     { "erase", "__geas_ash_Shop_erase_0e2ba22315b89a85_v1", 4, 0, NULL, { 0 } },
 };
 
-static const GeasContractDesc k_Shop = {
+static const uint32_t k4_Shop_type_kids_0[] = { 1, 3 };
+static const uint32_t k4_Shop_type_kids_1[] = { 2 };
+static const uint32_t k4_Shop_type_kids_5[] = { 6, 3 };
+static const uint32_t k4_Shop_type_kids_6[] = { 2 };
+static const uint32_t k4_Shop_type_kids_8[] = { 6 };
+static const uint32_t k4_Shop_type_kids_9[] = { 7, 3 };
+
+static const uint32_t k4_Shop_type_fields_3_0[] = { 2 };
+static const uint32_t k4_Shop_type_fields_3_2[] = { 4 };
+static const GeasTypeVariant k4_Shop_type_variants_3[] = {
+    { "Declined", 1, k4_Shop_type_fields_3_0 },
+    { "Timeout", 0, NULL },
+    { "Gateway", 1, k4_Shop_type_fields_3_2 },
+};
+
+static const GeasTypeNode k4_Shop_types[] = {
+    { GEAS_TY_RESULT, 2, k4_Shop_type_kids_0, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 1, k4_Shop_type_kids_1, "Receipt", 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "PayError", 3, k4_Shop_type_variants_3 },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Shop_type_kids_5, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 1, k4_Shop_type_kids_6, "Item", 0, NULL },
+    { GEAS_TY_UNIT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_OPTION, 1, k4_Shop_type_kids_8, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Shop_type_kids_9, NULL, 0, NULL },
+};
+
+static const GeasItemTypes k4_Shop_item_types[] = {
+    { 0, NULL, 0 },
+    { 0, NULL, 5 },
+    { 0, NULL, 7 },
+    { 0, NULL, 8 },
+    { 0, NULL, 9 },
+};
+
+static const uint32_t k4_Shop_remedy_params_0[] = { 1 };
+static const uint32_t k4_Shop_remedy_params_1[] = { 6 };
+
+static const GeasItemTypes k4_Shop_remedy_types[] = {
+    { 1, k4_Shop_remedy_params_0, 9 },
+    { 1, k4_Shop_remedy_params_1, 7 },
+    { 0, NULL, 7 },
+    { 0, NULL, 9 },
+    { 0, NULL, 7 },
+};
+
+static const GeasContractDesc k4_Shop = {
     "Shop", 0x4f1dafc2484cec0bULL,
-    1, 5, k_Shop_pledges,
+    1, 5, k4_Shop_pledges,
     0, NULL,
-    1, k_Shop_subs, 10,
-    k_Shop_atoms, 0,
+    1, k4_Shop_subs, 10,
+    k4_Shop_atoms, 0,
     9, 1, 9,
-    k_Shop_rf, k_Shop_rp, k_Shop_rb,
+    k4_Shop_rf, k4_Shop_rp, k4_Shop_rb,
     0, NULL,
     NULL,
     NULL, NULL, NULL,
-    5, k_Shop_remedies,
+    5, k4_Shop_remedies,
     0,
+    .ntypes = 10, .types = k4_Shop_types,
+    .item_types = k4_Shop_item_types, .vow_types = NULL,
+    .remedy_types = k4_Shop_remedy_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Shop);
+    st = geas_register_contract(rt, &k4_Shop);
     if (st != GEAS_OK) return st;
     return st;
 }

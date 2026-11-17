@@ -212,7 +212,7 @@ static GeasStatus run_vows_fn(GeasContract* c, const GeasAmendDesc* a,
 }
 
 /* Step 2. A slot nothing filled is GEAS_ERR_UNBOUND, a slot of another
- * type than M declares GEAS_ERR_TYPE */
+ * type than M declares, at its top level or anywhere inside it, GEAS_ERR_TYPE */
 static GeasStatus amend_vows(GeasContract* c, const GeasAmendDesc* a, const GeasAmendImage* img) {
     const GeasContractDesc* d = c->desc;
     if (d->nvows == 0) return GEAS_OK;
@@ -226,6 +226,7 @@ static GeasStatus amend_vows(GeasContract* c, const GeasAmendDesc* a, const Geas
     for (uint32_t j = 0; st == GEAS_OK && j < d->nvows; j++) {
         if (!is_set[j]) st = GEAS_ERR_UNBOUND;
         else if (c->vow_vals[j].ty != d->vows[j].ty) st = GEAS_ERR_TYPE;
+        else st = geas_rt_check_vow(d, j, &c->vow_vals[j]);
     }
     free(before);
     free(is_set);

@@ -1,0 +1,19 @@
+// A schema row in a pledge signature is the Record of its columns in
+// declaration order, the layout the store hands rows back in
+
+import std.store
+
+contract Stock {
+    vow dsn: String = "file:target/stock.db"
+
+    schema Parts {
+        id: Int
+        name: String
+        price: Float
+        live: Bool
+    }
+
+    pledge named(n: String) -> Result<List<Parts>, StoreError>
+
+    pledge put(row: Parts) -> Result<Unit, StoreError>
+}

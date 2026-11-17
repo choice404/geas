@@ -1,0 +1,18 @@
+// A record that reaches itself through an Option and a sum that reaches
+// itself through its own payload: each takes its index before its kids are
+// walked, so the walk refers back instead of running on
+
+record Node {
+    value: Int
+    next: Option<Node>
+}
+
+Tree is either Leaf or Branch(left: Tree, right: Tree, top: Node)
+
+contract Walker {
+    vow limit: Int = 3
+    pledge walk(root: Tree) -> Result<Node, Int>
+    pledge note(text: String) -> Unit
+    signal moved(node: Node, depth: Int)
+    remedy undo for walk(node: Node) -> Unit
+}

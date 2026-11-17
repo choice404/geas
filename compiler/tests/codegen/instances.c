@@ -47,37 +47,56 @@ static GeasStatus __geas_ash_Counter_bump_a7c9229487606e8b_v1(void* ctx, const G
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Counter_vows[] = {
+static const GeasVowDesc k7_Counter_vows[] = {
     { "label", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"counter", 7 } } } },
 };
 
-static const GeasPledgeDesc k_Counter_pledges[] = {
+static const GeasPledgeDesc k7_Counter_pledges[] = {
     { "bump", "__geas_ash_Counter_bump_a7c9229487606e8b_v1", 1, __geas_ash_Counter_bump_a7c9229487606e8b_v1, -1 },
 };
 
-static const GeasReqAtom k_Counter_atoms[] = {
+static const GeasReqAtom k7_Counter_atoms[] = {
     { "bump", GEAS_ATOM_FULFILLED, -1, 0 },
     { "bump", GEAS_ATOM_BROKEN, -1, 0 },
 };
 
-static const GeasReqOp k_Counter_rf[] = {
+static const GeasReqOp k7_Counter_rf[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_Counter_rb[] = {
+static const GeasReqOp k7_Counter_rb[] = {
     { GEAS_REQ_ATOM, 1 },
 };
 
-static const GeasContractDesc k_Counter = {
+static const uint32_t k7_Counter_type_kids_2[] = { 1, 1 };
+
+static const GeasTypeNode k7_Counter_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_Counter_type_kids_2, NULL, 0, NULL },
+};
+
+static const uint32_t k7_Counter_item_params_0[] = { 1 };
+
+static const GeasItemTypes k7_Counter_item_types[] = {
+    { 1, k7_Counter_item_params_0, 2 },
+};
+
+static const uint32_t k7_Counter_vow_types[] = { 0 };
+
+static const GeasContractDesc k7_Counter = {
     "Counter", 0x9dc6263dd1d7802cULL,
-    1, 1, k_Counter_pledges,
-    1, k_Counter_vows,
+    1, 1, k7_Counter_pledges,
+    1, k7_Counter_vows,
     0, NULL, 2,
-    k_Counter_atoms, 0,
+    k7_Counter_atoms, 0,
     1, 0, 1,
-    k_Counter_rf, NULL, k_Counter_rb,
+    k7_Counter_rf, NULL, k7_Counter_rb,
     0, NULL,
     NULL,
+    .ntypes = 3, .types = k7_Counter_types,
+    .item_types = k7_Counter_item_types, .vow_types = k7_Counter_vow_types,
+    .remedy_types = NULL,
 };
 
 static GeasStatus __geas_ash_Duo_first_6476b0de7e2a50f8_v1(void* ctx, const GeasValue* args, size_t nargs,
@@ -129,38 +148,57 @@ static GeasStatus __geas_ash_Duo_second_6476b0de7e2a50f8_v1(void* ctx, const Gea
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_Duo_pledges[] = {
+static const GeasPledgeDesc k3_Duo_pledges[] = {
     { "first", "__geas_ash_Duo_first_6476b0de7e2a50f8_v1", 1, __geas_ash_Duo_first_6476b0de7e2a50f8_v1, -1 },
     { "second", "__geas_ash_Duo_second_6476b0de7e2a50f8_v1", 1, __geas_ash_Duo_second_6476b0de7e2a50f8_v1, -1 },
 };
 
-static const GeasReqAtom k_Duo_atoms[] = {
+static const GeasReqAtom k3_Duo_atoms[] = {
     { "first", GEAS_ATOM_FULFILLED, -1, 0 },
     { "second", GEAS_ATOM_FULFILLED, -1, 1 },
 };
 
-static const GeasReqOp k_Duo_rf[] = {
+static const GeasReqOp k3_Duo_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Duo_rp[] = {
+static const GeasReqOp k3_Duo_rp[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_OR, 0 },
 };
 
-static const GeasContractDesc k_Duo = {
+static const uint32_t k3_Duo_type_kids_1[] = { 2, 0 };
+
+static const GeasTypeNode k3_Duo_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k3_Duo_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k3_Duo_item_params_0[] = { 0 };
+static const uint32_t k3_Duo_item_params_1[] = { 0 };
+
+static const GeasItemTypes k3_Duo_item_types[] = {
+    { 1, k3_Duo_item_params_0, 1 },
+    { 1, k3_Duo_item_params_1, 1 },
+};
+
+static const GeasContractDesc k3_Duo = {
     "Duo", 0x546940363d4d6668ULL,
-    1, 2, k_Duo_pledges,
+    1, 2, k3_Duo_pledges,
     0, NULL,
     0, NULL, 2,
-    k_Duo_atoms, 1,
+    k3_Duo_atoms, 1,
     3, 3, 0,
-    k_Duo_rf, k_Duo_rp, NULL,
+    k3_Duo_rf, k3_Duo_rp, NULL,
     0, NULL,
     NULL,
+    .ntypes = 3, .types = k3_Duo_types,
+    .item_types = k3_Duo_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
 };
 
 static GeasStatus __geas_ash_Driver_walk_69ed26b4d4c6574a_v1(void* ctx, const GeasValue* args, size_t nargs,
@@ -661,18 +699,18 @@ static GeasStatus __geas_ash_Driver_bad_resume_0bb31837c8de3b5f_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Driver_vows[] = {
+static const GeasVowDesc k6_Driver_vows[] = {
     { "park_dsn", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"file:target/lifecycle.db", 24 } } } },
 };
 
-static const GeasPledgeDesc k_Driver_pledges[] = {
+static const GeasPledgeDesc k6_Driver_pledges[] = {
     { "walk", "__geas_ash_Driver_walk_69ed26b4d4c6574a_v1", 0, __geas_ash_Driver_walk_69ed26b4d4c6574a_v1, -1 },
     { "panel", "__geas_ash_Driver_panel_69ed26b4d4c6574a_v1", 0, __geas_ash_Driver_panel_69ed26b4d4c6574a_v1, -1 },
     { "bad_park", "__geas_ash_Driver_bad_park_0bb31837c8de3b5f_v1", 0, __geas_ash_Driver_bad_park_0bb31837c8de3b5f_v1, -1 },
     { "bad_resume", "__geas_ash_Driver_bad_resume_0bb31837c8de3b5f_v1", 0, __geas_ash_Driver_bad_resume_0bb31837c8de3b5f_v1, -1 },
 };
 
-static const GeasReqAtom k_Driver_atoms[] = {
+static const GeasReqAtom k6_Driver_atoms[] = {
     { "walk", GEAS_ATOM_FULFILLED, -1, 0 },
     { "panel", GEAS_ATOM_FULFILLED, -1, 1 },
     { "bad_park", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -683,7 +721,7 @@ static const GeasReqAtom k_Driver_atoms[] = {
     { "bad_resume", GEAS_ATOM_BROKEN, -1, 3 },
 };
 
-static const GeasReqOp k_Driver_rf[] = {
+static const GeasReqOp k6_Driver_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -693,7 +731,7 @@ static const GeasReqOp k_Driver_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Driver_rb[] = {
+static const GeasReqOp k6_Driver_rb[] = {
     { GEAS_REQ_ATOM, 4 },
     { GEAS_REQ_ATOM, 5 },
     { GEAS_REQ_AND, 0 },
@@ -703,26 +741,49 @@ static const GeasReqOp k_Driver_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_Driver = {
+static const uint32_t k6_Driver_type_kids_1[] = { 0, 2 };
+static const uint32_t k6_Driver_type_kids_3[] = { 4, 2 };
+
+static const GeasTypeNode k6_Driver_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Driver_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Driver_type_kids_3, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+};
+
+static const GeasItemTypes k6_Driver_item_types[] = {
+    { 0, NULL, 1 },
+    { 0, NULL, 1 },
+    { 0, NULL, 3 },
+    { 0, NULL, 3 },
+};
+
+static const uint32_t k6_Driver_vow_types[] = { 0 };
+
+static const GeasContractDesc k6_Driver = {
     "Driver", 0x2061b7ef174bc0d4ULL,
-    1, 4, k_Driver_pledges,
-    1, k_Driver_vows,
+    1, 4, k6_Driver_pledges,
+    1, k6_Driver_vows,
     0, NULL, 8,
-    k_Driver_atoms, 0,
+    k6_Driver_atoms, 0,
     7, 0, 7,
-    k_Driver_rf, NULL, k_Driver_rb,
+    k6_Driver_rf, NULL, k6_Driver_rb,
     0, NULL,
     NULL,
+    .ntypes = 5, .types = k6_Driver_types,
+    .item_types = k6_Driver_item_types, .vow_types = k6_Driver_vow_types,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Counter);
+    st = geas_register_contract(rt, &k7_Counter);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_Duo);
+    st = geas_register_contract(rt, &k3_Duo);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_Driver);
+    st = geas_register_contract(rt, &k6_Driver);
     if (st != GEAS_OK) return st;
     return st;
 }

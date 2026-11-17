@@ -103,6 +103,9 @@ add_executable(geas
     src/emitworkflow.cpp
     src/emitcourse.cpp
     src/emitamends.cpp
+    src/emittypes.cpp
+    src/typetable.cpp
+    src/typedump.cpp
     src/emitcoursestep.cpp
     src/emitcoursematch.cpp
     src/emitheader.cpp

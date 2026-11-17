@@ -44,39 +44,55 @@ static GeasStatus __geas_ash_IntGate_double_pos_a7c9229487606e8b_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_IntGate_pledges[] = {
+static const GeasPledgeDesc k7_IntGate_pledges[] = {
     { "double_pos", "__geas_ash_IntGate_double_pos_a7c9229487606e8b_v1", 1, __geas_ash_IntGate_double_pos_a7c9229487606e8b_v1, -1 },
 };
 
-static const GeasReqAtom k_IntGate_atoms[] = {
+static const GeasReqAtom k7_IntGate_atoms[] = {
     { "double_pos", GEAS_ATOM_FULFILLED, -1, 0 },
     { "double_pos", GEAS_ATOM_BROKEN, -1, 0 },
 };
 
-static const GeasReqOp k_IntGate_rf[] = {
+static const GeasReqOp k7_IntGate_rf[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_IntGate_rb[] = {
+static const GeasReqOp k7_IntGate_rb[] = {
     { GEAS_REQ_ATOM, 1 },
 };
 
-static const GeasContractDesc k_IntGate = {
-    "IntGate", 0xf442daee47750a14ULL,
-    1, 1, k_IntGate_pledges,
-    0, NULL,
-    0, NULL, 2,
-    k_IntGate_atoms, 0,
-    1, 0, 1,
-    k_IntGate_rf, NULL, k_IntGate_rb,
-    0, NULL,
-    NULL,
+static const uint32_t k7_IntGate_type_kids_1[] = { 0, 0 };
+
+static const GeasTypeNode k7_IntGate_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_IntGate_type_kids_1, NULL, 0, NULL },
 };
 
-static GeasStatus geas_clause_StdUser_compare(GeasContract* cc, const GeasValue* args, GeasValue* out);
-static GeasStatus geas_clause_StdUser_log_line(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static const uint32_t k7_IntGate_item_params_0[] = { 0 };
 
-static GeasStatus geas_clause_StdUser_compare(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static const GeasItemTypes k7_IntGate_item_types[] = {
+    { 1, k7_IntGate_item_params_0, 1 },
+};
+
+static const GeasContractDesc k7_IntGate = {
+    "IntGate", 0xf442daee47750a14ULL,
+    1, 1, k7_IntGate_pledges,
+    0, NULL,
+    0, NULL, 2,
+    k7_IntGate_atoms, 0,
+    1, 0, 1,
+    k7_IntGate_rf, NULL, k7_IntGate_rb,
+    0, NULL,
+    NULL,
+    .ntypes = 2, .types = k7_IntGate_types,
+    .item_types = k7_IntGate_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
+};
+
+static GeasStatus geas_clause7_StdUser_compare(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static GeasStatus geas_clause7_StdUser_log_line(GeasContract* cc, const GeasValue* args, GeasValue* out);
+
+static GeasStatus geas_clause7_StdUser_compare(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -111,7 +127,7 @@ static GeasStatus geas_clause_StdUser_compare(GeasContract* cc, const GeasValue*
     return GEAS_OK;
 }
 
-static GeasStatus geas_clause_StdUser_log_line(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static GeasStatus geas_clause7_StdUser_log_line(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -159,7 +175,7 @@ static GeasStatus __geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1(void* ctx, const 
     GeasValue t9 = *t8;
     GeasValue t10[2] = { t6, t9 };
     GeasValue t11 = {0};
-    GeasStatus t12 = geas_clause_StdUser_compare(cc, t10, &t11);
+    GeasStatus t12 = geas_clause7_StdUser_compare(cc, t10, &t11);
     if (t12 != GEAS_OK) return t12;
     GeasValue t13 = {0};
     t13.ty = GEAS_TY_INT;
@@ -210,7 +226,7 @@ static GeasStatus __geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1(void* ctx, const 
     GeasValue t33 = *t32;
     GeasValue t34[2] = { t30, t33 };
     GeasValue t35 = {0};
-    GeasStatus t36 = geas_clause_StdUser_compare(cc, t34, &t35);
+    GeasStatus t36 = geas_clause7_StdUser_compare(cc, t34, &t35);
     if (t36 != GEAS_OK) return t36;
     GeasValue t37 = {0};
     t37.ty = GEAS_TY_INT;
@@ -261,7 +277,7 @@ static GeasStatus __geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1(void* ctx, const 
     GeasValue t57 = *t56;
     GeasValue t58[2] = { t54, t57 };
     GeasValue t59 = {0};
-    GeasStatus t60 = geas_clause_StdUser_compare(cc, t58, &t59);
+    GeasStatus t60 = geas_clause7_StdUser_compare(cc, t58, &t59);
     if (t60 != GEAS_OK) return t60;
     GeasValue t61 = {0};
     t61.ty = GEAS_TY_INT;
@@ -363,7 +379,7 @@ static GeasStatus __geas_ash_StdUser_describe_bbf075dd95f7a80f_v1(void* ctx, con
     t0.as.i = 0;
     GeasValue t1[2] = { args[0], t0 };
     GeasValue t2 = {0};
-    GeasStatus t3 = geas_clause_StdUser_compare(cc, t1, &t2);
+    GeasStatus t3 = geas_clause7_StdUser_compare(cc, t1, &t2);
     if (t3 != GEAS_OK) return t3;
     GeasValue t4 = {0};
     t4.ty = GEAS_TY_INT;
@@ -378,7 +394,7 @@ static GeasStatus __geas_ash_StdUser_describe_bbf075dd95f7a80f_v1(void* ctx, con
         t6.as.s.len = 8;
         GeasValue t7[1] = { t6 };
         GeasValue t8 = {0};
-        GeasStatus t9 = geas_clause_StdUser_log_line(cc, t7, &t8);
+        GeasStatus t9 = geas_clause7_StdUser_log_line(cc, t7, &t8);
         if (t9 != GEAS_OK) return t9;
         GeasValue* t10 = geas_box(cc);
         if (!t10) return GEAS_ERR_OOM;
@@ -396,7 +412,7 @@ static GeasStatus __geas_ash_StdUser_describe_bbf075dd95f7a80f_v1(void* ctx, con
     t12.as.s.len = 12;
     GeasValue t13[1] = { t12 };
     GeasValue t14 = {0};
-    GeasStatus t15 = geas_clause_StdUser_log_line(cc, t13, &t14);
+    GeasStatus t15 = geas_clause7_StdUser_log_line(cc, t13, &t14);
     if (t15 != GEAS_OK) return t15;
     GeasValue* t16 = geas_box(cc);
     if (!t16) return GEAS_ERR_OOM;
@@ -513,14 +529,14 @@ static GeasStatus __geas_ash_StdUser_compute_a7c9229487606e8b_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_StdUser_pledges[] = {
+static const GeasPledgeDesc k7_StdUser_pledges[] = {
     { "sort3", "__geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1", 3, __geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1, -1 },
     { "check_positive", "__geas_ash_StdUser_check_positive_e48419e7eb8dd411_v1", 1, __geas_ash_StdUser_check_positive_e48419e7eb8dd411_v1, -1 },
     { "describe", "__geas_ash_StdUser_describe_bbf075dd95f7a80f_v1", 1, __geas_ash_StdUser_describe_bbf075dd95f7a80f_v1, -1 },
     { "compute", "__geas_ash_StdUser_compute_a7c9229487606e8b_v1", 1, __geas_ash_StdUser_compute_a7c9229487606e8b_v1, -1 },
 };
 
-static const GeasReqAtom k_StdUser_atoms[] = {
+static const GeasReqAtom k7_StdUser_atoms[] = {
     { "sort3", GEAS_ATOM_FULFILLED, -1, 0 },
     { "check_positive", GEAS_ATOM_FULFILLED, -1, 1 },
     { "describe", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -531,7 +547,7 @@ static const GeasReqAtom k_StdUser_atoms[] = {
     { "compute", GEAS_ATOM_BROKEN, -1, 3 },
 };
 
-static const GeasReqOp k_StdUser_rf[] = {
+static const GeasReqOp k7_StdUser_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -541,7 +557,7 @@ static const GeasReqOp k_StdUser_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_StdUser_rb[] = {
+static const GeasReqOp k7_StdUser_rb[] = {
     { GEAS_REQ_ATOM, 4 },
     { GEAS_REQ_ATOM, 5 },
     { GEAS_REQ_AND, 0 },
@@ -551,24 +567,62 @@ static const GeasReqOp k_StdUser_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_StdUser = {
-    "StdUser", 0x38c56172b5eea80aULL,
-    1, 4, k_StdUser_pledges,
-    0, NULL,
-    0, NULL, 8,
-    k_StdUser_atoms, 0,
-    7, 0, 7,
-    k_StdUser_rf, NULL, k_StdUser_rb,
-    0, NULL,
-    NULL,
+static const uint32_t k7_StdUser_type_kids_1[] = { 2, 0 };
+static const uint32_t k7_StdUser_type_kids_2[] = { 0 };
+static const uint32_t k7_StdUser_type_kids_3[] = { 0, 4 };
+static const uint32_t k7_StdUser_type_kids_5[] = { 6, 4 };
+static const uint32_t k7_StdUser_type_kids_7[] = { 0, 0 };
+
+static const GeasTypeVariant k7_StdUser_type_variants_4[] = {
+    { "NotFound", 0, NULL },
+    { "Invalid", 0, NULL },
+    { "Exhausted", 0, NULL },
 };
 
-static GeasStatus geas_clause_MathOps_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out);
-static GeasStatus geas_clause_MathOps_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out);
-static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out);
-static GeasStatus geas_clause_MathOps_abs_float(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static const GeasTypeNode k7_StdUser_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_StdUser_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_LIST, 1, k7_StdUser_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_StdUser_type_kids_3, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "CommonError", 3, k7_StdUser_type_variants_4 },
+    { GEAS_TY_RESULT, 2, k7_StdUser_type_kids_5, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_StdUser_type_kids_7, NULL, 0, NULL },
+};
 
-static GeasStatus geas_clause_MathOps_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static const uint32_t k7_StdUser_item_params_0[] = { 0, 0, 0 };
+static const uint32_t k7_StdUser_item_params_1[] = { 0 };
+static const uint32_t k7_StdUser_item_params_2[] = { 0 };
+static const uint32_t k7_StdUser_item_params_3[] = { 0 };
+
+static const GeasItemTypes k7_StdUser_item_types[] = {
+    { 3, k7_StdUser_item_params_0, 1 },
+    { 1, k7_StdUser_item_params_1, 3 },
+    { 1, k7_StdUser_item_params_2, 5 },
+    { 1, k7_StdUser_item_params_3, 7 },
+};
+
+static const GeasContractDesc k7_StdUser = {
+    "StdUser", 0x38c56172b5eea80aULL,
+    1, 4, k7_StdUser_pledges,
+    0, NULL,
+    0, NULL, 8,
+    k7_StdUser_atoms, 0,
+    7, 0, 7,
+    k7_StdUser_rf, NULL, k7_StdUser_rb,
+    0, NULL,
+    NULL,
+    .ntypes = 8, .types = k7_StdUser_types,
+    .item_types = k7_StdUser_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
+};
+
+static GeasStatus geas_clause7_MathOps_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static GeasStatus geas_clause7_MathOps_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static GeasStatus geas_clause7_MathOps_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static GeasStatus geas_clause7_MathOps_abs_float(GeasContract* cc, const GeasValue* args, GeasValue* out);
+
+static GeasStatus geas_clause7_MathOps_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -580,7 +634,7 @@ static GeasStatus geas_clause_MathOps_int_max(GeasContract* cc, const GeasValue*
     return GEAS_OK;
 }
 
-static GeasStatus geas_clause_MathOps_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static GeasStatus geas_clause7_MathOps_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -601,7 +655,7 @@ static GeasStatus geas_clause_MathOps_int_min(GeasContract* cc, const GeasValue*
     return GEAS_OK;
 }
 
-static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static GeasStatus geas_clause7_MathOps_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -644,7 +698,7 @@ static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const Geas
         t9.as.b = (args[1].as.i > t8.as.i);
         if (t9.as.b) {
             GeasValue t10 = {0};
-            GeasStatus t11 = geas_clause_MathOps_int_max(cc, NULL, &t10);
+            GeasStatus t11 = geas_clause7_MathOps_int_max(cc, NULL, &t10);
             if (t11 != GEAS_OK) return t11;
             GeasValue t12 = {0};
             t12.ty = GEAS_TY_INT;
@@ -656,7 +710,7 @@ static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const Geas
             return GEAS_OK;
         }
         GeasValue t14 = {0};
-        GeasStatus t15 = geas_clause_MathOps_int_min(cc, NULL, &t14);
+        GeasStatus t15 = geas_clause7_MathOps_int_min(cc, NULL, &t14);
         if (t15 != GEAS_OK) return t15;
         GeasValue t16 = {0};
         t16.ty = GEAS_TY_INT;
@@ -675,7 +729,7 @@ static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const Geas
     t19.as.b = (args[1].as.i > t18.as.i);
     if (t19.as.b) {
         GeasValue t20 = {0};
-        GeasStatus t21 = geas_clause_MathOps_int_min(cc, NULL, &t20);
+        GeasStatus t21 = geas_clause7_MathOps_int_min(cc, NULL, &t20);
         if (t21 != GEAS_OK) return t21;
         GeasValue t22 = {0};
         t22.ty = GEAS_TY_INT;
@@ -687,7 +741,7 @@ static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const Geas
         return GEAS_OK;
     }
     GeasValue t24 = {0};
-    GeasStatus t25 = geas_clause_MathOps_int_max(cc, NULL, &t24);
+    GeasStatus t25 = geas_clause7_MathOps_int_max(cc, NULL, &t24);
     if (t25 != GEAS_OK) return t25;
     GeasValue t26 = {0};
     t26.ty = GEAS_TY_INT;
@@ -701,7 +755,7 @@ static GeasStatus geas_clause_MathOps_mul_overflows(GeasContract* cc, const Geas
     return GEAS_OK;
 }
 
-static GeasStatus geas_clause_MathOps_abs_float(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static GeasStatus geas_clause7_MathOps_abs_float(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -731,7 +785,7 @@ static GeasStatus __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1(void* ctx, const Ge
     if (nargs != 1) return GEAS_ERR_TYPE;
     if (args[0].ty != GEAS_TY_INT) return GEAS_ERR_TYPE;
     GeasValue t0 = {0};
-    GeasStatus t1 = geas_clause_MathOps_int_min(cc, NULL, &t0);
+    GeasStatus t1 = geas_clause7_MathOps_int_min(cc, NULL, &t0);
     if (t1 != GEAS_OK) return t1;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_BOOL;
@@ -1029,7 +1083,7 @@ static GeasStatus __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1(void* ctx, cons
         if (!t9.as.b) break;
         GeasValue t10[2] = { t6, args[0] };
         GeasValue t11 = {0};
-        GeasStatus t12 = geas_clause_MathOps_mul_overflows(cc, t10, &t11);
+        GeasStatus t12 = geas_clause7_MathOps_mul_overflows(cc, t10, &t11);
         if (t12 != GEAS_OK) return t12;
         if (t11.as.b) {
             GeasValue t13 = {0};
@@ -1081,7 +1135,7 @@ static GeasStatus __geas_ash_MathOps_abs_f_bbe6048dc2677789_v1(void* ctx, const 
     if (args[0].ty != GEAS_TY_FLOAT) return GEAS_ERR_TYPE;
     GeasValue t0[1] = { args[0] };
     GeasValue t1 = {0};
-    GeasStatus t2 = geas_clause_MathOps_abs_float(cc, t0, &t1);
+    GeasStatus t2 = geas_clause7_MathOps_abs_float(cc, t0, &t1);
     if (t2 != GEAS_OK) return t2;
     GeasValue* t3 = geas_box(cc);
     if (!t3) return GEAS_ERR_OOM;
@@ -1312,7 +1366,7 @@ static GeasStatus __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1(void* ctx, co
     t0.as.f = args[0].as.f - args[1].as.f;
     GeasValue t1[1] = { t0 };
     GeasValue t2 = {0};
-    GeasStatus t3 = geas_clause_MathOps_abs_float(cc, t1, &t2);
+    GeasStatus t3 = geas_clause7_MathOps_abs_float(cc, t1, &t2);
     if (t3 != GEAS_OK) return t3;
     const GeasValue* t4 = geas_vow_ref(cc, "epsilon");
     if (!t4) return GEAS_ERR_NAME;
@@ -1333,11 +1387,11 @@ static GeasStatus __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_MathOps_vows[] = {
+static const GeasVowDesc k7_MathOps_vows[] = {
     { "epsilon", GEAS_TY_FLOAT, 1, { .ty = GEAS_TY_FLOAT, .tag = 0, .as = { .f = 0.000001 } } },
 };
 
-static const GeasPledgeDesc k_MathOps_pledges[] = {
+static const GeasPledgeDesc k7_MathOps_pledges[] = {
     { "abs", "__geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1", 1, __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1, -1 },
     { "sign", "__geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1", 1, __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1, -1 },
     { "min", "__geas_ash_MathOps_min_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_min_5f090dc695f53dde_v1, -1 },
@@ -1352,7 +1406,7 @@ static const GeasPledgeDesc k_MathOps_pledges[] = {
     { "approx_eq", "__geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1", 2, __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1, -1 },
 };
 
-static const GeasReqAtom k_MathOps_atoms[] = {
+static const GeasReqAtom k7_MathOps_atoms[] = {
     { "abs", GEAS_ATOM_FULFILLED, -1, 0 },
     { "sign", GEAS_ATOM_FULFILLED, -1, 1 },
     { "min", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -1379,7 +1433,7 @@ static const GeasReqAtom k_MathOps_atoms[] = {
     { "approx_eq", GEAS_ATOM_BROKEN, -1, 11 },
 };
 
-static const GeasReqOp k_MathOps_rf[] = {
+static const GeasReqOp k7_MathOps_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -1405,7 +1459,7 @@ static const GeasReqOp k_MathOps_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_MathOps_rb[] = {
+static const GeasReqOp k7_MathOps_rb[] = {
     { GEAS_REQ_ATOM, 12 },
     { GEAS_REQ_ATOM, 13 },
     { GEAS_REQ_AND, 0 },
@@ -1431,23 +1485,75 @@ static const GeasReqOp k_MathOps_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_MathOps = {
-    "MathOps", 0xd4c2a79230a9be2bULL,
-    1, 12, k_MathOps_pledges,
-    1, k_MathOps_vows,
-    0, NULL, 24,
-    k_MathOps_atoms, 0,
-    23, 0, 23,
-    k_MathOps_rf, NULL, k_MathOps_rb,
-    0, NULL,
-    NULL,
+static const uint32_t k7_MathOps_type_kids_2[] = { 1, 3 };
+static const uint32_t k7_MathOps_type_kids_4[] = { 0, 3 };
+static const uint32_t k7_MathOps_type_kids_5[] = { 6, 3 };
+
+static const GeasTypeVariant k7_MathOps_type_variants_3[] = {
+    { "DomainError", 0, NULL },
+    { "Overflowed", 0, NULL },
 };
 
-static GeasStatus geas_clause_ListOps_list_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out);
-static GeasStatus geas_clause_ListOps_list_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out);
-static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static const GeasTypeNode k7_MathOps_types[] = {
+    { GEAS_TY_FLOAT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_MathOps_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "GeasMathError", 2, k7_MathOps_type_variants_3 },
+    { GEAS_TY_RESULT, 2, k7_MathOps_type_kids_4, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_MathOps_type_kids_5, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+};
 
-static GeasStatus geas_clause_ListOps_list_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static const uint32_t k7_MathOps_item_params_0[] = { 1 };
+static const uint32_t k7_MathOps_item_params_1[] = { 1 };
+static const uint32_t k7_MathOps_item_params_2[] = { 1, 1 };
+static const uint32_t k7_MathOps_item_params_3[] = { 1, 1 };
+static const uint32_t k7_MathOps_item_params_4[] = { 1, 1, 1 };
+static const uint32_t k7_MathOps_item_params_5[] = { 1, 1 };
+static const uint32_t k7_MathOps_item_params_6[] = { 0 };
+static const uint32_t k7_MathOps_item_params_7[] = { 0 };
+static const uint32_t k7_MathOps_item_params_8[] = { 0, 0 };
+static const uint32_t k7_MathOps_item_params_9[] = { 0, 0 };
+static const uint32_t k7_MathOps_item_params_10[] = { 0, 0, 0 };
+static const uint32_t k7_MathOps_item_params_11[] = { 0, 0 };
+
+static const GeasItemTypes k7_MathOps_item_types[] = {
+    { 1, k7_MathOps_item_params_0, 2 },
+    { 1, k7_MathOps_item_params_1, 2 },
+    { 2, k7_MathOps_item_params_2, 2 },
+    { 2, k7_MathOps_item_params_3, 2 },
+    { 3, k7_MathOps_item_params_4, 2 },
+    { 2, k7_MathOps_item_params_5, 2 },
+    { 1, k7_MathOps_item_params_6, 4 },
+    { 1, k7_MathOps_item_params_7, 4 },
+    { 2, k7_MathOps_item_params_8, 4 },
+    { 2, k7_MathOps_item_params_9, 4 },
+    { 3, k7_MathOps_item_params_10, 4 },
+    { 2, k7_MathOps_item_params_11, 5 },
+};
+
+static const uint32_t k7_MathOps_vow_types[] = { 0 };
+
+static const GeasContractDesc k7_MathOps = {
+    "MathOps", 0xd4c2a79230a9be2bULL,
+    1, 12, k7_MathOps_pledges,
+    1, k7_MathOps_vows,
+    0, NULL, 24,
+    k7_MathOps_atoms, 0,
+    23, 0, 23,
+    k7_MathOps_rf, NULL, k7_MathOps_rb,
+    0, NULL,
+    NULL,
+    .ntypes = 7, .types = k7_MathOps_types,
+    .item_types = k7_MathOps_item_types, .vow_types = k7_MathOps_vow_types,
+    .remedy_types = NULL,
+};
+
+static GeasStatus geas_clause7_ListOps_list_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static GeasStatus geas_clause7_ListOps_list_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out);
+static GeasStatus geas_clause7_ListOps_list_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out);
+
+static GeasStatus geas_clause7_ListOps_list_int_max(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -1459,7 +1565,7 @@ static GeasStatus geas_clause_ListOps_list_int_max(GeasContract* cc, const GeasV
     return GEAS_OK;
 }
 
-static GeasStatus geas_clause_ListOps_list_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static GeasStatus geas_clause7_ListOps_list_int_min(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -1480,7 +1586,7 @@ static GeasStatus geas_clause_ListOps_list_int_min(GeasContract* cc, const GeasV
     return GEAS_OK;
 }
 
-static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+static GeasStatus geas_clause7_ListOps_list_mul_overflows(GeasContract* cc, const GeasValue* args, GeasValue* out) {
     (void)cc;
     (void)args;
     GeasValue t0 = {0};
@@ -1523,7 +1629,7 @@ static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const
         t9.as.b = (args[1].as.i > t8.as.i);
         if (t9.as.b) {
             GeasValue t10 = {0};
-            GeasStatus t11 = geas_clause_ListOps_list_int_max(cc, NULL, &t10);
+            GeasStatus t11 = geas_clause7_ListOps_list_int_max(cc, NULL, &t10);
             if (t11 != GEAS_OK) return t11;
             GeasValue t12 = {0};
             t12.ty = GEAS_TY_INT;
@@ -1535,7 +1641,7 @@ static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const
             return GEAS_OK;
         }
         GeasValue t14 = {0};
-        GeasStatus t15 = geas_clause_ListOps_list_int_min(cc, NULL, &t14);
+        GeasStatus t15 = geas_clause7_ListOps_list_int_min(cc, NULL, &t14);
         if (t15 != GEAS_OK) return t15;
         GeasValue t16 = {0};
         t16.ty = GEAS_TY_INT;
@@ -1554,7 +1660,7 @@ static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const
     t19.as.b = (args[1].as.i > t18.as.i);
     if (t19.as.b) {
         GeasValue t20 = {0};
-        GeasStatus t21 = geas_clause_ListOps_list_int_min(cc, NULL, &t20);
+        GeasStatus t21 = geas_clause7_ListOps_list_int_min(cc, NULL, &t20);
         if (t21 != GEAS_OK) return t21;
         GeasValue t22 = {0};
         t22.ty = GEAS_TY_INT;
@@ -1566,7 +1672,7 @@ static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const
         return GEAS_OK;
     }
     GeasValue t24 = {0};
-    GeasStatus t25 = geas_clause_ListOps_list_int_max(cc, NULL, &t24);
+    GeasStatus t25 = geas_clause7_ListOps_list_int_max(cc, NULL, &t24);
     if (t25 != GEAS_OK) return t25;
     GeasValue t26 = {0};
     t26.ty = GEAS_TY_INT;
@@ -1627,7 +1733,7 @@ static GeasStatus __geas_ash_ListOps_product_03dd8f77689df9be_v1(void* ctx, cons
         GeasValue t3 = ((const GeasValue*)args[0].as.list.data)[t2];
         GeasValue t4[2] = { t1, t3 };
         GeasValue t5 = {0};
-        GeasStatus t6 = geas_clause_ListOps_list_mul_overflows(cc, t4, &t5);
+        GeasStatus t6 = geas_clause7_ListOps_list_mul_overflows(cc, t4, &t5);
         if (t6 != GEAS_OK) return t6;
         if (t5.as.b) {
             GeasValue t7 = {0};
@@ -1956,7 +2062,7 @@ static GeasStatus __geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_ListOps_pledges[] = {
+static const GeasPledgeDesc k7_ListOps_pledges[] = {
     { "sum", "__geas_ash_ListOps_sum_03dd8f77689df9be_v1", 1, __geas_ash_ListOps_sum_03dd8f77689df9be_v1, -1 },
     { "product", "__geas_ash_ListOps_product_03dd8f77689df9be_v1", 1, __geas_ash_ListOps_product_03dd8f77689df9be_v1, -1 },
     { "min_of", "__geas_ash_ListOps_min_of_a4953c25fab4fe16_v1", 1, __geas_ash_ListOps_min_of_a4953c25fab4fe16_v1, -1 },
@@ -1967,7 +2073,7 @@ static const GeasPledgeDesc k_ListOps_pledges[] = {
     { "all_eq", "__geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1", 2, __geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1, -1 },
 };
 
-static const GeasReqAtom k_ListOps_atoms[] = {
+static const GeasReqAtom k7_ListOps_atoms[] = {
     { "sum", GEAS_ATOM_FULFILLED, -1, 0 },
     { "product", GEAS_ATOM_FULFILLED, -1, 1 },
     { "min_of", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -1986,7 +2092,7 @@ static const GeasReqAtom k_ListOps_atoms[] = {
     { "all_eq", GEAS_ATOM_BROKEN, -1, 7 },
 };
 
-static const GeasReqOp k_ListOps_rf[] = {
+static const GeasReqOp k7_ListOps_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -2004,7 +2110,7 @@ static const GeasReqOp k_ListOps_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_ListOps_rb[] = {
+static const GeasReqOp k7_ListOps_rb[] = {
     { GEAS_REQ_ATOM, 8 },
     { GEAS_REQ_ATOM, 9 },
     { GEAS_REQ_AND, 0 },
@@ -2022,28 +2128,72 @@ static const GeasReqOp k_ListOps_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_ListOps = {
+static const uint32_t k7_ListOps_type_kids_0[] = { 1 };
+static const uint32_t k7_ListOps_type_kids_2[] = { 1, 3 };
+static const uint32_t k7_ListOps_type_kids_4[] = { 1 };
+static const uint32_t k7_ListOps_type_kids_5[] = { 6, 3 };
+
+static const GeasTypeVariant k7_ListOps_type_variants_3[] = {
+    { "NotFound", 0, NULL },
+    { "Invalid", 0, NULL },
+    { "Exhausted", 0, NULL },
+};
+
+static const GeasTypeNode k7_ListOps_types[] = {
+    { GEAS_TY_LIST, 1, k7_ListOps_type_kids_0, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_ListOps_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "CommonError", 3, k7_ListOps_type_variants_3 },
+    { GEAS_TY_OPTION, 1, k7_ListOps_type_kids_4, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_ListOps_type_kids_5, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k7_ListOps_item_params_0[] = { 0 };
+static const uint32_t k7_ListOps_item_params_1[] = { 0 };
+static const uint32_t k7_ListOps_item_params_2[] = { 0 };
+static const uint32_t k7_ListOps_item_params_3[] = { 0 };
+static const uint32_t k7_ListOps_item_params_4[] = { 0, 1 };
+static const uint32_t k7_ListOps_item_params_5[] = { 0, 1 };
+static const uint32_t k7_ListOps_item_params_6[] = { 0, 1 };
+static const uint32_t k7_ListOps_item_params_7[] = { 0, 1 };
+
+static const GeasItemTypes k7_ListOps_item_types[] = {
+    { 1, k7_ListOps_item_params_0, 2 },
+    { 1, k7_ListOps_item_params_1, 2 },
+    { 1, k7_ListOps_item_params_2, 4 },
+    { 1, k7_ListOps_item_params_3, 4 },
+    { 2, k7_ListOps_item_params_4, 5 },
+    { 2, k7_ListOps_item_params_5, 2 },
+    { 2, k7_ListOps_item_params_6, 4 },
+    { 2, k7_ListOps_item_params_7, 5 },
+};
+
+static const GeasContractDesc k7_ListOps = {
     "ListOps", 0x8929b04c369b38eaULL,
-    1, 8, k_ListOps_pledges,
+    1, 8, k7_ListOps_pledges,
     0, NULL,
     0, NULL, 16,
-    k_ListOps_atoms, 0,
+    k7_ListOps_atoms, 0,
     15, 0, 15,
-    k_ListOps_rf, NULL, k_ListOps_rb,
+    k7_ListOps_rf, NULL, k7_ListOps_rb,
     0, NULL,
     NULL,
+    .ntypes = 7, .types = k7_ListOps_types,
+    .item_types = k7_ListOps_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_IntGate);
+    st = geas_register_contract(rt, &k7_IntGate);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_StdUser);
+    st = geas_register_contract(rt, &k7_StdUser);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_MathOps);
+    st = geas_register_contract(rt, &k7_MathOps);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_ListOps);
+    st = geas_register_contract(rt, &k7_ListOps);
     if (st != GEAS_OK) return st;
     return st;
 }

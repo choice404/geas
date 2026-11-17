@@ -19,10 +19,11 @@
 #include "record.hpp"
 #include "reqselftest.hpp"
 #include "source.hpp"
+#include "typetable.hpp"
 
 namespace {
 
-constexpr std::string_view versionString = "geas 0.9.2";
+constexpr std::string_view versionString = "geas 0.9.3";
 constexpr int exitSuccess = 0;
 constexpr int exitFailure = 1;
 
@@ -146,6 +147,28 @@ int runDumpCourse(std::string_view path) {
     return exitSuccess;
 }
 
+// The hidden debug command: checks the program, then prints the type table
+// of every contract in readable form on stdout
+int runDumpTypes(std::string_view path) {
+    auto checked = geas::checkProgram(path);
+    if (!checked) {
+        for (const std::string& fault : checked.error()) {
+            printError(fault);
+        }
+        return exitFailure;
+    }
+    const auto listing = geas::dumpTypes(*checked);
+    if (!listing) {
+        for (const geas::Diagnostic& fault : listing.error()) {
+            printError(geas::renderProgramDiagnostic(checked->program, fault));
+        }
+        return exitFailure;
+    }
+    std::fwrite(listing->data(), 1, listing->size(), stdout);
+    std::fflush(stdout);
+    return exitSuccess;
+}
+
 int missingFile(std::string_view command) {
     printError("geas: " + std::string{command} + " needs a file argument");
     printUsage();
@@ -213,6 +236,9 @@ int runFileCommand(std::span<char*> args, std::string_view command) {
     if (command == "dump-course") {
         return runDumpCourse(args[2]);
     }
+    if (command == "dump-types") {
+        return runDumpTypes(args[2]);
+    }
     if (command == "record") {
         return runRecordCommand(args);
     }
@@ -238,7 +264,7 @@ int main(int argc, char** argv) {
     }
     const bool isFrontEnd =
         command == "lex" || command == "parse" || command == "check" ||
-        command == "dump-shape" || command == "dump-course";
+        command == "dump-shape" || command == "dump-course" || command == "dump-types";
     const bool isArtifact = command == "build" || command == "emit-header" ||
                             command == "emit-proto" || command == "record";
     if (isFrontEnd || isArtifact) {

@@ -36,11 +36,22 @@ A contract's own `Err` is a value. It crosses as one arm of the result oneof on 
 | ----------------- | ------------------- |
 | `GEAS_ERR_STATE`   | FAILED_PRECONDITION |
 | `GEAS_ERR_NAME`    | NOT_FOUND           |
-| `GEAS_ERR_TYPE`    | INVALID_ARGUMENT    |
+| `GEAS_ERR_TYPE` on a request's values | INVALID_ARGUMENT |
+| `GEAS_ERR_TYPE` on a supplied body's answer | INTERNAL |
 | `GEAS_ERR_VERSION` | ABORTED             |
 | `GEAS_ERR_UNBOUND` | FAILED_PRECONDITION |
 
 An instance id the server does not hold, never issued, already gone with its stream, or issued for another contract's service, is NOT_FOUND, and a request whose value cannot be the declared type, a sum with no arm set, is INVALID_ARGUMENT before the runtime sees it. A status the table does not name is INTERNAL, and no message the server sends carries a path or a trace. The split is the language's own line, drawn once and held across the wire.
+
+**The checked boundary on the wire.** The runtime holds every value a request carries to its declared type all the way down, the same check a C host meets, so a request the server can build is never trusted to be well formed, and every way a proto client can send something that is not the declared type is INVALID_ARGUMENT, wherever along the way it is caught:
+
+- Bytes that do not parse as the request message, a `string` that is not UTF-8 or a message nested past the protobuf parser's own depth, are refused by the parser before any conversion. The parser takes about 100 nested messages, a `Category` root 100 levels deep in `skeleton/boundary.geas`, which is under the 256 levels the runtime admits, so the parser's limit is the one a bridge client meets first.
+- A value the proto type is wider than, a `Char` or `Byte` riding `uint32` outside its range, a `Char` in the surrogate block among them, an enum number no arm carries, a oneof with no arm set, and a map entry whose key came before in the same map, is refused by the conversion. A map key sent twice is refused rather than collapsed, since the bridge does not pick which of two values the client meant.
+- Anything past those that does not conform is refused by the runtime's own check, `GEAS_ERR_TYPE` with no body run, which the table above makes INVALID_ARGUMENT.
+
+A body the deployer supplied that answers a value its declared return does not admit is a different fault: the request was fine and the server's own code was not. The runtime refuses that answer with `GEAS_ERR_TYPE`, nothing latches, and the bridge, which watches every body it bound, sees a body ran under the call and answers INTERNAL, with the detail in the server's log and none on the wire. A supplied body that raises is the same fault and answers the same way. The pledge stays pending, so a later call whose body answers a conforming value lands as usual. A compiled body never answers a value outside its declared return, the compiler checked it.
+
+`make test-grpc-edge` walks all of it against `skeleton/boundary.geas`, a title that is not UTF-8, a `Category` past the parser's depth and one at it, a `Char` map key in the surrogate block and one past U+10FFFF, a `Char` and a `String` map key sent twice, each INVALID_ARGUMENT beside a conforming request that lands, and the deployer's `lookup` and `find` answering an `Address` a field short and a `Some(5)` for an `Option<Address>` and `find` raising, each INTERNAL with nothing latched and a conforming answer landing after.
 
 ## The type set
 
@@ -87,7 +98,7 @@ def ship(inst, args):
 HANDLERS = {"OrderSaga.ship": ship}
 ```
 
-A name nothing declares fails startup. An abstract body no file supplies leaves its contract refusing to sign with `GEAS_ERR_UNBOUND`, which is FAILED_PRECONDITION on the `Session` call, the same answer an in process host gets before it binds. A body that raises is logged with its traceback and reported to the runtime as `GEAS_ERR_TYPE`, the fulfillment produced no value.
+A name nothing declares fails startup. An abstract body no file supplies leaves its contract refusing to sign with `GEAS_ERR_UNBOUND`, which is FAILED_PRECONDITION on the `Session` call, the same answer an in process host gets before it binds. A body that raises is logged with its traceback and reported to the runtime as `GEAS_ERR_TYPE`, the fulfillment produced no value, and a pledge rpc whose supplied body raised answers INTERNAL, the server's fault and not the client's, see Business and transport.
 
 Calls against one instance run side by side and the runtime serializes what it must on its own instance lock, and every reply is built while its call is admitted, so nothing a reply reads outlives the instance it came from. The ending runs off gRPC's own threads, which the termination callback only hands it to, and it goes in a fixed order: the row leaves the table so no new call resolves the id, the bodies are asked to stop through the runtime's cancel request, the calls already admitted are waited out, and only then does the instance park and release, or break. A body that polls the cancel flag returns, so the wait always ends, and nothing is reclaimed under a call still decoding its reply. An engine driven contract that parks skips the request, since a course the request cut would reach the row as cancelled, and its course is given a moment to reach its next wait. `Break` drains instead of closing: it asks the bodies to stop, holds new calls back while the admitted ones finish, breaks with nothing in flight, and lets the held calls through to a broken instance that still answers. Stopping the server ends every live session the same way, and waits for every ending before the runtime goes.
 

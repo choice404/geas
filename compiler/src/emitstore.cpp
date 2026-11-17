@@ -53,7 +53,7 @@ std::optional<StoreOp> CEmitter::openStoreOp(const Expr& expr, const CallExpr& c
     op.errorType = types().named("StoreError");
     const bool hasKey = op.row != nullptr && !op.row->fields.empty();
     op.keyType = hasKey ? op.row->fields[0].type : unknown();
-    op.schemaRef = joined("&k_", shape_->decl->name, "_schemas[",
+    op.schemaRef = joined("&", contractStem(shape_->decl->name), "_schemas[",
                           decimal(static_cast<std::int64_t>(index)), "]");
     op.out = newValue();
     op.status = freshName();

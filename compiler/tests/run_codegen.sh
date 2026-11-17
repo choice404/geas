@@ -23,12 +23,14 @@
 # function of the source and nothing else. The coverage check walks the
 # accepted programs of tests/check, each one has to be a workflow, course,
 # or amends golden or on the plain list, so a new one cannot slip between
-# them. The syntax check runs the real cc over the module C of every course
-# and amends golden and every course of tests/course: it has to compile
-# under -Wall -Wextra, no warning may land inside a course function, and
-# with gcc no goto may jump over an initialization. Module C that carries an
+# them. The syntax check runs the real cc over the module C of every golden
+# and every course of tests/course: it has to compile under -Wall -Wextra,
+# no warning may land inside a course function or a type table, and with
+# gcc no goto may jump over an initialization. Module C that carries an
 # amends table compiles only against a runtime header that declares
-# GeasAmendDesc, and is counted as skipped against one that does not
+# GeasAmendDesc, and module C that carries a type table only against one
+# that declares GeasTypeNode; against a header without them such a file is
+# counted as skipped
 # The tree goldens pin every remaining program under skeleton, lib/std, and
 # examples, including command failures from library modules and partial
 # skeletons
@@ -44,11 +46,11 @@ cd "$ROOT"
 
 GEAS="${GEAS:-$ROOT/target/bin/geas}"
 GOLDEN_DIR="$ROOT/compiler/tests/codegen"
-GOLDEN_SOURCES="$(printf 'skeleton/%s.geas ' hello payment ledger lang main_demo std_user)
+GOLDEN_SOURCES="$(printf 'skeleton/%s.geas ' hello payment ledger lang main_demo std_user boundary_host)
 $(cd "$ROOT" && ls compiler/tests/codegen/src/*.geas)"
 OUT_DIR="target/geas-out"
 WORKFLOW_DIR="$ROOT/compiler/tests/codegen/workflow"
-WORKFLOW_SOURCES="skeleton/saga.geas skeleton/flowdesk.geas
+WORKFLOW_SOURCES="skeleton/saga.geas skeleton/flowdesk.geas skeleton/boundary.geas
 $(printf 'tests/check/%s.geas ' remedy_ok signal_ok term_attr_ok terms_ok)"
 COURSE_DIR="$ROOT/compiler/tests/codegen/course"
 COURSE_SOURCES="$(printf 'tests/course/%s.geas ' straight_line while_head for_list if_match select_arms together questions)
@@ -69,12 +71,12 @@ TREE_SOURCES="$(printf 'skeleton/%s.geas ' blob hello_v2 jobattrs jobstep lifecy
 $(printf 'lib/std/%s.geas ' collections errors math process store strings traits)
 examples/supervisor/service.geas"
 
-# The tree modules whose generated C carries a course or amends table
+# The tree modules whose generated C has to carry a course or amends table
 TREE_SYNTAX_STEMS="order_course order_course_v2"
 
 # The accepted programs of tests/check with no workflow construct in them,
 # which pin nothing the goldens above do not
-PLAIN_SOURCES="abi_clause_ok incorporate misc payment requirements std_user
+PLAIN_SOURCES="abi_clause_ok abi_pledge_type_ok incorporate misc payment requirements std_user
 store_ledger sub_transactional_ok attribute_name sizes req_forty req_worst_case bytes bytes_shadow process"
 
 if [ ! -x "$GEAS" ]; then
@@ -96,6 +98,10 @@ skipped=0
 HAS_AMEND_ABI=0
 if grep -q "GeasAmendDesc" "$ROOT/runtime/include/geas/geas_abi.h" 2>/dev/null; then
     HAS_AMEND_ABI=1
+fi
+HAS_TYPE_ABI=0
+if grep -q "GeasTypeNode" "$ROOT/runtime/include/geas/geas_abi.h" 2>/dev/null; then
+    HAS_TYPE_ABI=1
 fi
 
 fail_case() {
@@ -229,28 +235,43 @@ check_source_tree_coverage() {
 
 # The line ranges of the course functions of one C file, as first last pairs
 course_ranges() {
-    awk '/^static uint32_t k_[A-Za-z0-9_]*_course\(/ { first = NR }
+    awk '/^static uint32_t k[0-9]+_[A-Za-z0-9_]*_course\(/ { first = NR }
          first && /^}$/ { print first, NR; first = 0 }' "$1"
 }
 
-# Whether a line of a C file falls inside one of its course functions
-in_course() {
-    local file="$1" number="$2" first last
+# The line ranges of the type table arrays of one C file, as first last
+# pairs: a one line index array, or a table that runs to its closing brace
+type_ranges() {
+    awk '/^static const (uint32_t|GeasTypeVariant|GeasTypeNode|GeasItemTypes) k[0-9]+_[A-Za-z0-9_]*_(type_kids_|type_fields_|type_variants_|types\[|item_params_|item_types\[|vow_types\[|remedy_params_|remedy_types\[)/ {
+             if ($0 ~ /;$/) { print NR, NR } else { first = NR }
+             next
+         }
+         first && /^};$/ { print first, NR; first = 0 }' "$1"
+}
+
+# Whether a line of a C file falls inside one of the ranges a lister prints
+in_ranges() {
+    local lister="$1" file="$2" number="$3" first last
     while read -r first last; do
         if [ "$number" -ge "$first" ] && [ "$number" -le "$last" ]; then
             return 0
         fi
-    done < <(course_ranges "$file")
+    done < <("$lister" "$file")
     return 1
 }
 
 # Runs the real cc over one module C file: a failure, a warning inside a
-# course function, or a goto over an initialization fails it. A file that
-# carries an amends table is skipped when the runtime header has no
-# GeasAmendDesc to compile it against
+# course function or a type table, or a goto over an initialization fails
+# it. A file that carries an amends table or a type table is skipped when
+# the runtime header has no GeasAmendDesc or GeasTypeNode to compile it
+# against
 check_c_file() {
     local name="$1" file="$2" log="$WORK/syntax.log" number
     if [ "$HAS_AMEND_ABI" -eq 0 ] && grep -q "GeasAmendDesc" "$file"; then
+        skipped=$((skipped + 1))
+        return
+    fi
+    if [ "$HAS_TYPE_ABI" -eq 0 ] && grep -q "GeasTypeNode" "$file"; then
         skipped=$((skipped + 1))
         return
     fi
@@ -260,8 +281,13 @@ check_c_file() {
         return
     fi
     while IFS=: read -r _ number _; do
-        if in_course "$file" "$number"; then
+        if in_ranges course_ranges "$file" "$number"; then
             fail_case "syntax/$name" "a warning inside a course function at line $number"
+            grep -F ":$number:" "$log" | head -3
+            return
+        fi
+        if in_ranges type_ranges "$file" "$number"; then
+            fail_case "syntax/$name" "a warning inside a type table at line $number"
             grep -F ":$number:" "$log" | head -3
             return
         fi
@@ -269,13 +295,13 @@ check_c_file() {
     pass=$((pass + 1))
 }
 
-# The module C of every course and amends golden, then every course of
-# tests/course, emitted fresh
-check_course_syntax() {
+# The module C of every golden, the entry wrappers aside, then every course
+# of tests/course, emitted fresh
+check_module_syntax() {
     local cc src stem dir file
     cc="$(command -v cc || true)"
     if [ -z "$cc" ]; then
-        echo "[codegen] no cc on PATH, the course syntax check is skipped"
+        echo "[codegen] no cc on PATH, the syntax check is skipped"
         return
     fi
     CC_CHECK="$cc -std=c11 -Wall -Wextra -fsyntax-only -I $ROOT/runtime/include"
@@ -284,17 +310,16 @@ check_course_syntax() {
     else
         echo "[codegen] cc has no -Wjump-misses-init, the goto check rides on gcc alone"
     fi
-    for file in "$COURSE_DIR"/*.c "$AMENDS_DIR"/*.c; do
-        [ -f "$file" ] || continue
-        check_c_file "$(basename "$(dirname "$file")")/$(basename "$file")" "$file"
-    done
     for stem in $TREE_SYNTAX_STEMS; do
-        file="$TREE_DIR/$stem.c"
-        if [ ! -f "$file" ]; then
+        if [ ! -f "$TREE_DIR/$stem.c" ]; then
             fail_case "syntax/tree/$stem" "the golden table has no module C"
-            continue
         fi
-        check_c_file "tree/$stem.c" "$file"
+    done
+    for file in "$GOLDEN_DIR"/*.c "$WORKFLOW_DIR"/*.c "$COURSE_DIR"/*.c "$AMENDS_DIR"/*.c \
+        "$TREE_DIR"/*.c; do
+        [ -f "$file" ] || continue
+        case "$file" in *.main.c) continue ;; esac
+        check_c_file "${file#"$GOLDEN_DIR"/}" "$file"
     done
     for src in tests/course/*.geas; do
         stem="$(basename "${src%.geas}")"
@@ -318,8 +343,8 @@ check_course_syntax() {
         check_c_file "$stem" "$file"
     done
     if [ "$skipped" -gt 0 ]; then
-        echo "[codegen] runtime/include/geas/geas_abi.h declares no GeasAmendDesc," \
-            "$skipped module C files that carry an amends table were not compiled"
+        echo "[codegen] runtime/include/geas/geas_abi.h declares no GeasAmendDesc or no" \
+            "GeasTypeNode, $skipped module C files that carry such a table were not compiled"
     fi
 }
 
@@ -340,7 +365,7 @@ check_goldens "$AMENDS_SOURCES" "$AMENDS_DIR"
 check_goldens "$TREE_SOURCES" "$TREE_DIR"
 check_workflow_coverage
 check_source_tree_coverage
-check_course_syntax
+check_module_syntax
 
 echo "[codegen] $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -267,11 +267,11 @@ static GeasStatus __geas_ash_Blob_failure_a284f7667d72bf04_v1(void* ctx, const G
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Blob_vows[] = {
+static const GeasVowDesc k4_Blob_vows[] = {
     { "seed", GEAS_TY_BYTES, 0, { .ty = GEAS_TY_UNIT, .tag = 0, .as = { .i = 0 } } },
 };
 
-static const GeasPledgeDesc k_Blob_pledges[] = {
+static const GeasPledgeDesc k4_Blob_pledges[] = {
     { "raw", "__geas_ash_Blob_raw_dc5b8728a2ad90ad_v1", 1, __geas_ash_Blob_raw_dc5b8728a2ad90ad_v1, -1 },
     { "echo", "__geas_ash_Blob_echo_298497ba046b5126_v1", 1, __geas_ash_Blob_echo_298497ba046b5126_v1, -1 },
     { "host", "__geas_ash_Blob_host_298497ba046b5126_v1", 1, NULL, -1 },
@@ -288,7 +288,7 @@ static const GeasPledgeDesc k_Blob_pledges[] = {
     { "received", NULL, 1, NULL, -1 },
 };
 
-static const GeasReqAtom k_Blob_atoms[] = {
+static const GeasReqAtom k4_Blob_atoms[] = {
     { "raw", GEAS_ATOM_FULFILLED, -1, 0 },
     { "echo", GEAS_ATOM_FULFILLED, -1, 1 },
     { "host", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -319,7 +319,7 @@ static const GeasReqAtom k_Blob_atoms[] = {
     { "received", GEAS_ATOM_BROKEN, -1, 13 },
 };
 
-static const GeasReqOp k_Blob_rf[] = {
+static const GeasReqOp k4_Blob_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -349,7 +349,7 @@ static const GeasReqOp k_Blob_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Blob_rb[] = {
+static const GeasReqOp k4_Blob_rb[] = {
     { GEAS_REQ_ATOM, 14 },
     { GEAS_REQ_ATOM, 15 },
     { GEAS_REQ_AND, 0 },
@@ -379,7 +379,7 @@ static const GeasReqOp k_Blob_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const uint8_t k_Blob_kinds[] = {
+static const uint8_t k4_Blob_kinds[] = {
     GEAS_KIND_PLEDGE,
     GEAS_KIND_PLEDGE,
     GEAS_KIND_PLEDGE,
@@ -396,29 +396,104 @@ static const uint8_t k_Blob_kinds[] = {
     GEAS_KIND_SIGNAL,
 };
 
-static const GeasRemedyDesc k_Blob_remedies[] = {
+static const GeasRemedyDesc k4_Blob_remedies[] = {
     { "undo", "__geas_ash_Blob_undo_dc5b7928a2ad78e3_v1", 1, 1, NULL, { 0 } },
 };
 
-static const GeasContractDesc k_Blob = {
+static const uint32_t k4_Blob_type_kids_1[] = { 0, 0 };
+static const uint32_t k4_Blob_type_kids_2[] = { 0, 3 };
+static const uint32_t k4_Blob_type_kids_4[] = { 5, 3 };
+static const uint32_t k4_Blob_type_kids_6[] = { 3, 3 };
+static const uint32_t k4_Blob_type_kids_7[] = { 8, 3 };
+static const uint32_t k4_Blob_type_kids_10[] = { 9 };
+static const uint32_t k4_Blob_type_kids_11[] = { 12, 3 };
+static const uint32_t k4_Blob_type_kids_12[] = { 8 };
+static const uint32_t k4_Blob_type_kids_13[] = { 0 };
+static const uint32_t k4_Blob_type_kids_14[] = { 13, 3 };
+static const uint32_t k4_Blob_type_kids_15[] = { 16, 0 };
+
+static const GeasTypeNode k4_Blob_types[] = {
+    { GEAS_TY_BYTES, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_4, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_6, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_7, NULL, 0, NULL },
+    { GEAS_TY_BYTE, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_OPTION, 1, k4_Blob_type_kids_10, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_11, NULL, 0, NULL },
+    { GEAS_TY_LIST, 1, k4_Blob_type_kids_12, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 1, k4_Blob_type_kids_13, "BlobRecord", 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_14, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Blob_type_kids_15, NULL, 0, NULL },
+    { GEAS_TY_UNIT, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k4_Blob_item_params_0[] = { 0 };
+static const uint32_t k4_Blob_item_params_1[] = { 0 };
+static const uint32_t k4_Blob_item_params_2[] = { 0 };
+static const uint32_t k4_Blob_item_params_3[] = { 0, 0 };
+static const uint32_t k4_Blob_item_params_4[] = { 0, 0 };
+static const uint32_t k4_Blob_item_params_5[] = { 0 };
+static const uint32_t k4_Blob_item_params_6[] = { 0, 3 };
+static const uint32_t k4_Blob_item_params_7[] = { 9 };
+static const uint32_t k4_Blob_item_params_8[] = { 0 };
+static const uint32_t k4_Blob_item_params_9[] = { 0 };
+static const uint32_t k4_Blob_item_params_10[] = { 12 };
+static const uint32_t k4_Blob_item_params_11[] = { 13 };
+static const uint32_t k4_Blob_item_params_12[] = { 0 };
+static const uint32_t k4_Blob_item_params_13[] = { 0 };
+
+static const GeasItemTypes k4_Blob_item_types[] = {
+    { 1, k4_Blob_item_params_0, 0 },
+    { 1, k4_Blob_item_params_1, 1 },
+    { 1, k4_Blob_item_params_2, 1 },
+    { 2, k4_Blob_item_params_3, 2 },
+    { 2, k4_Blob_item_params_4, 4 },
+    { 1, k4_Blob_item_params_5, 6 },
+    { 2, k4_Blob_item_params_6, 7 },
+    { 1, k4_Blob_item_params_7, 2 },
+    { 1, k4_Blob_item_params_8, 10 },
+    { 1, k4_Blob_item_params_9, 11 },
+    { 1, k4_Blob_item_params_10, 2 },
+    { 1, k4_Blob_item_params_11, 14 },
+    { 1, k4_Blob_item_params_12, 15 },
+    { 1, k4_Blob_item_params_13, GEAS_NO_TYPE },
+};
+
+static const uint32_t k4_Blob_vow_types[] = { 0 };
+
+static const uint32_t k4_Blob_remedy_params_0[] = { 0 };
+
+static const GeasItemTypes k4_Blob_remedy_types[] = {
+    { 1, k4_Blob_remedy_params_0, 16 },
+};
+
+static const GeasContractDesc k4_Blob = {
     "Blob", 0x76ca5c99ac82e4b1ULL,
-    1, 14, k_Blob_pledges,
-    1, k_Blob_vows,
+    1, 14, k4_Blob_pledges,
+    1, k4_Blob_vows,
     0, NULL, 28,
-    k_Blob_atoms, 0,
+    k4_Blob_atoms, 0,
     27, 0, 27,
-    k_Blob_rf, NULL, k_Blob_rb,
+    k4_Blob_rf, NULL, k4_Blob_rb,
     0, NULL,
     NULL,
-    k_Blob_kinds, NULL, NULL,
-    1, k_Blob_remedies,
+    k4_Blob_kinds, NULL, NULL,
+    1, k4_Blob_remedies,
     0,
+    .ntypes = 17, .types = k4_Blob_types,
+    .item_types = k4_Blob_item_types, .vow_types = k4_Blob_vow_types,
+    .remedy_types = k4_Blob_remedy_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Blob);
+    st = geas_register_contract(rt, &k4_Blob);
     if (st != GEAS_OK) return st;
     return st;
 }

@@ -1,0 +1,11 @@
+// One node per type a conforming value can tell apart: Duration and Time
+// cross as Int, so they share the Int node and List<Duration> shares the
+// List<Int> node
+
+contract Clock {
+    vow grace: Duration = 30s
+    vow since: Time
+    pledge stamp(at: Time, wait: Duration, count: Int) -> Result<List<Duration>, String>
+    pledge spread(values: List<Int>, step: Duration) -> Option<List<Time>>
+    pledge pair(left: Tuple<Int, Time>, right: Tuple<Duration, Int>) -> Unit
+}

@@ -373,13 +373,13 @@ static void test_break_race(GeasRuntime* rt) {
 int main(void) {
     /* A small pool on purpose: fewer workers than host threads means the
      * queue actually queues and the drain path actually drains. */
-    GeasRuntimeConfig cfg = { 2, 0 };
+    GeasRuntimeConfig cfg = { .max_threads = 2, .handshake_ms = 0 };
     GeasRuntime* rt = NULL;
     CHECK(geas_runtime_init(&cfg, &rt) == GEAS_OK, "runtime init with config");
     if (!rt) return 1;
 
     /* An oversized pool request is refused, not obeyed. */
-    GeasRuntimeConfig huge = { 100000 };
+    GeasRuntimeConfig huge = { .max_threads = 100000 };
     GeasRuntime* rt2 = NULL;
     CHECK(geas_runtime_init(&huge, &rt2) == GEAS_ERR_TYPE,
           "oversized max_threads is refused");

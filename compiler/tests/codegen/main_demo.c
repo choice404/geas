@@ -27,33 +27,57 @@ static GeasStatus __geas_ash_Sidekick_double_cab3c6d41dba2c03_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_Sidekick_pledges[] = {
+static const GeasPledgeDesc k8_Sidekick_pledges[] = {
     { "double", "__geas_ash_Sidekick_double_cab3c6d41dba2c03_v1", 1, __geas_ash_Sidekick_double_cab3c6d41dba2c03_v1, -1 },
 };
 
-static const GeasReqAtom k_Sidekick_atoms[] = {
+static const GeasReqAtom k8_Sidekick_atoms[] = {
     { "double", GEAS_ATOM_FULFILLED, -1, 0 },
     { "double", GEAS_ATOM_BROKEN, -1, 0 },
 };
 
-static const GeasReqOp k_Sidekick_rf[] = {
+static const GeasReqOp k8_Sidekick_rf[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_Sidekick_rb[] = {
+static const GeasReqOp k8_Sidekick_rb[] = {
     { GEAS_REQ_ATOM, 1 },
 };
 
-static const GeasContractDesc k_Sidekick = {
+static const uint32_t k8_Sidekick_type_kids_1[] = { 0, 2 };
+
+static const uint32_t k8_Sidekick_type_fields_2_0[] = { 3 };
+static const GeasTypeVariant k8_Sidekick_type_variants_2[] = {
+    { "BadMood", 1, k8_Sidekick_type_fields_2_0 },
+    { "Empty", 0, NULL },
+};
+
+static const GeasTypeNode k8_Sidekick_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k8_Sidekick_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "DemoError", 2, k8_Sidekick_type_variants_2 },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k8_Sidekick_item_params_0[] = { 0 };
+
+static const GeasItemTypes k8_Sidekick_item_types[] = {
+    { 1, k8_Sidekick_item_params_0, 1 },
+};
+
+static const GeasContractDesc k8_Sidekick = {
     "Sidekick", 0xb4324b39e6ea588aULL,
-    1, 1, k_Sidekick_pledges,
+    1, 1, k8_Sidekick_pledges,
     0, NULL,
     0, NULL, 2,
-    k_Sidekick_atoms, 0,
+    k8_Sidekick_atoms, 0,
     1, 0, 1,
-    k_Sidekick_rf, NULL, k_Sidekick_rb,
+    k8_Sidekick_rf, NULL, k8_Sidekick_rb,
     0, NULL,
     NULL,
+    .ntypes = 4, .types = k8_Sidekick_types,
+    .item_types = k8_Sidekick_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
 };
 
 static GeasStatus __geas_ash_Main_run_420e4dcf040d9270_v1(void* ctx, const GeasValue* args, size_t nargs,
@@ -122,45 +146,73 @@ static GeasStatus __geas_ash_Main_run_420e4dcf040d9270_v1(void* ctx, const GeasV
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Main_vows[] = {
+static const GeasVowDesc k4_Main_vows[] = {
     { "greeting", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"counted", 7 } } } },
 };
 
-static const GeasPledgeDesc k_Main_pledges[] = {
+static const GeasPledgeDesc k4_Main_pledges[] = {
     { "run", "__geas_ash_Main_run_420e4dcf040d9270_v1", 1, __geas_ash_Main_run_420e4dcf040d9270_v1, -1 },
 };
 
-static const GeasReqAtom k_Main_atoms[] = {
+static const GeasReqAtom k4_Main_atoms[] = {
     { "run", GEAS_ATOM_FULFILLED, -1, 0 },
     { "run", GEAS_ATOM_BROKEN, -1, 0 },
 };
 
-static const GeasReqOp k_Main_rf[] = {
+static const GeasReqOp k4_Main_rf[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_Main_rb[] = {
+static const GeasReqOp k4_Main_rb[] = {
     { GEAS_REQ_ATOM, 1 },
 };
 
-static const GeasContractDesc k_Main = {
+static const uint32_t k4_Main_type_kids_1[] = { 0 };
+static const uint32_t k4_Main_type_kids_2[] = { 3, 4 };
+
+static const uint32_t k4_Main_type_fields_4_0[] = { 0 };
+static const GeasTypeVariant k4_Main_type_variants_4[] = {
+    { "BadMood", 1, k4_Main_type_fields_4_0 },
+    { "Empty", 0, NULL },
+};
+
+static const GeasTypeNode k4_Main_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_LIST, 1, k4_Main_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Main_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "DemoError", 2, k4_Main_type_variants_4 },
+};
+
+static const uint32_t k4_Main_item_params_0[] = { 1 };
+
+static const GeasItemTypes k4_Main_item_types[] = {
+    { 1, k4_Main_item_params_0, 2 },
+};
+
+static const uint32_t k4_Main_vow_types[] = { 0 };
+
+static const GeasContractDesc k4_Main = {
     "Main", 0xa55394f654fdaec4ULL,
-    1, 1, k_Main_pledges,
-    1, k_Main_vows,
+    1, 1, k4_Main_pledges,
+    1, k4_Main_vows,
     0, NULL, 2,
-    k_Main_atoms, 0,
+    k4_Main_atoms, 0,
     1, 0, 1,
-    k_Main_rf, NULL, k_Main_rb,
+    k4_Main_rf, NULL, k4_Main_rb,
     0, NULL,
     NULL,
+    .ntypes = 5, .types = k4_Main_types,
+    .item_types = k4_Main_item_types, .vow_types = k4_Main_vow_types,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Sidekick);
+    st = geas_register_contract(rt, &k8_Sidekick);
     if (st != GEAS_OK) return st;
-    st = geas_register_contract(rt, &k_Main);
+    st = geas_register_contract(rt, &k4_Main);
     if (st != GEAS_OK) return st;
     return st;
 }

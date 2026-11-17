@@ -90,29 +90,29 @@ static GeasStatus __geas_ash_PaymentService_notify_user_68beb7ec91457117_v1(void
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_PaymentService_vows[] = {
+static const GeasVowDesc k14_PaymentService_vows[] = {
     { "currency", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"USD", 3 } } } },
 };
 
-static const GeasPledgeDesc k_PaymentService_pledges[] = {
+static const GeasPledgeDesc k14_PaymentService_pledges[] = {
     { "validate_card", "__geas_ash_PaymentService_validate_card_f87e6e53e535b87a_v1", 1, __geas_ash_PaymentService_validate_card_f87e6e53e535b87a_v1, 0 },
     { "validate_amount", "__geas_ash_PaymentService_validate_amount_da0dd6bb5b07e61b_v1", 1, __geas_ash_PaymentService_validate_amount_da0dd6bb5b07e61b_v1, 0 },
     { "charge", "__geas_ash_PaymentService_charge_b11c26ed126b5f30_v1", 2, NULL, 1 },
     { "notify_user", "__geas_ash_PaymentService_notify_user_68beb7ec91457117_v1", 1, __geas_ash_PaymentService_notify_user_68beb7ec91457117_v1, -1 },
 };
 
-static const char* const k_PaymentService_subs[] = {
+static const char* const k14_PaymentService_subs[] = {
     "Validation",
     "Processing",
 };
 
-static const GeasReqAtom k_PaymentService_atoms[] = {
+static const GeasReqAtom k14_PaymentService_atoms[] = {
     { "Validation", GEAS_ATOM_FULFILLED, 0, -1 },
     { "Processing", GEAS_ATOM_FULFILLED, 1, -1 },
     { "notify_user", GEAS_ATOM_FULFILLED, -1, 3 },
 };
 
-static const GeasReqOp k_PaymentService_rf[] = {
+static const GeasReqOp k14_PaymentService_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -120,13 +120,13 @@ static const GeasReqOp k_PaymentService_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_PaymentService_rp[] = {
+static const GeasReqOp k14_PaymentService_rp[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_OR, 0 },
 };
 
-static const GeasReqOp k_PaymentService_rb[] = {
+static const GeasReqOp k14_PaymentService_rb[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_NOT, 0 },
     { GEAS_REQ_ATOM, 1 },
@@ -137,22 +137,49 @@ static const GeasReqOp k_PaymentService_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_PaymentService = {
+static const uint32_t k14_PaymentService_type_kids_1[] = { 2, 3 };
+
+static const GeasTypeNode k14_PaymentService_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k14_PaymentService_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_FLOAT, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k14_PaymentService_item_params_0[] = { 0 };
+static const uint32_t k14_PaymentService_item_params_1[] = { 4 };
+static const uint32_t k14_PaymentService_item_params_2[] = { 0, 4 };
+static const uint32_t k14_PaymentService_item_params_3[] = { 2 };
+
+static const GeasItemTypes k14_PaymentService_item_types[] = {
+    { 1, k14_PaymentService_item_params_0, 1 },
+    { 1, k14_PaymentService_item_params_1, 1 },
+    { 2, k14_PaymentService_item_params_2, 1 },
+    { 1, k14_PaymentService_item_params_3, 1 },
+};
+
+static const uint32_t k14_PaymentService_vow_types[] = { 0 };
+
+static const GeasContractDesc k14_PaymentService = {
     "PaymentService", 0xc4261f5e32ecf727ULL,
-    1, 4, k_PaymentService_pledges,
-    1, k_PaymentService_vows,
-    2, k_PaymentService_subs, 3,
-    k_PaymentService_atoms, 1,
+    1, 4, k14_PaymentService_pledges,
+    1, k14_PaymentService_vows,
+    2, k14_PaymentService_subs, 3,
+    k14_PaymentService_atoms, 1,
     5, 3, 8,
-    k_PaymentService_rf, k_PaymentService_rp, k_PaymentService_rb,
+    k14_PaymentService_rf, k14_PaymentService_rp, k14_PaymentService_rb,
     0, NULL,
     NULL,
+    .ntypes = 5, .types = k14_PaymentService_types,
+    .item_types = k14_PaymentService_item_types, .vow_types = k14_PaymentService_vow_types,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_PaymentService);
+    st = geas_register_contract(rt, &k14_PaymentService);
     if (st != GEAS_OK) return st;
     return st;
 }

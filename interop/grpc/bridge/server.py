@@ -12,6 +12,7 @@ from concurrent import futures
 from dataclasses import dataclass
 
 import grpc
+from google.protobuf.message import DecodeError
 
 from geas import Runtime
 
@@ -20,6 +21,7 @@ from .handlers import bind_handlers, load_handlers
 from .lifecycle import Lifecycle, ParkStore
 from .protoload import load_protos
 from .sessions import Reaper, SessionSlots
+from .status import abort_argument
 from .surface import RESUME, SESSION, build_surfaces
 from .table import InstanceTable
 
@@ -40,17 +42,35 @@ class Config:
     reserve_workers: int
 
 
+def _parsed(method, behavior):
+    """Parses the request inside the rpc rather than in gRPC's own
+    deserializer, so bytes that do not parse as the request message, a
+    string that is not UTF-8, a message nested past the parser's depth, are
+    INVALID_ARGUMENT, the client's fault, and not the INTERNAL a failed
+    deserializer answers"""
+    def run(raw, context):
+        try:
+            request = method.request.FromString(raw)
+        except DecodeError:
+            abort_argument(context, method.name, "the request does not parse as "
+                           f"{method.request.DESCRIPTOR.name}")
+        return behavior(request, context)
+    return run
+
+
 def _method_handler(lifecycle, calls, surface, method):
-    serializers = dict(request_deserializer=method.request.FromString,
+    serializers = dict(request_deserializer=None,
                        response_serializer=method.reply.SerializeToString)
     if method.role == SESSION:
         return grpc.unary_stream_rpc_method_handler(
-            lambda req, ctx: lifecycle.session(surface, req, ctx), **serializers)
+            _parsed(method, lambda req, ctx: lifecycle.session(surface, req, ctx)),
+            **serializers)
     if method.role == RESUME:
         return grpc.unary_stream_rpc_method_handler(
-            lambda req, ctx: lifecycle.resume(surface, req, ctx), **serializers)
+            _parsed(method, lambda req, ctx: lifecycle.resume(surface, req, ctx)),
+            **serializers)
     return grpc.unary_unary_rpc_method_handler(
-        calls.handler(surface, method), **serializers)
+        _parsed(method, calls.handler(surface, method)), **serializers)
 
 
 def _generic_handlers(lifecycle, calls, surfaces):

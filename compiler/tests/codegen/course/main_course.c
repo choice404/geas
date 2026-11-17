@@ -24,7 +24,7 @@ static GeasStatus __geas_ash_Main_run_9f39bfb78af39036_v1(void* ctx, const GeasV
     return GEAS_OK;
 }
 
-static uint32_t k_Main_course(void* ctx, GeasCourseFrame* f) {
+static uint32_t k4_Main_course(void* ctx, GeasCourseFrame* f) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
     switch (f->step) {
@@ -53,47 +53,74 @@ step_1:
     return GEAS_COURSE_DONE;
 }
 
-static const GeasPledgeDesc k_Main_pledges[] = {
+static const GeasPledgeDesc k4_Main_pledges[] = {
     { "run", "__geas_ash_Main_run_9f39bfb78af39036_v1", 1, __geas_ash_Main_run_9f39bfb78af39036_v1, -1 },
     { "step", "__geas_ash_Main_step_a6bca9ba6197572c_v1", 0, NULL, -1 },
 };
 
-static const GeasReqAtom k_Main_atoms[] = {
+static const GeasReqAtom k4_Main_atoms[] = {
     { "run", GEAS_ATOM_FULFILLED, -1, 0 },
     { "step", GEAS_ATOM_FULFILLED, -1, 1 },
     { "run", GEAS_ATOM_BROKEN, -1, 0 },
     { "step", GEAS_ATOM_BROKEN, -1, 1 },
 };
 
-static const GeasReqOp k_Main_rf[] = {
+static const GeasReqOp k4_Main_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Main_rb[] = {
+static const GeasReqOp k4_Main_rb[] = {
     { GEAS_REQ_ATOM, 2 },
     { GEAS_REQ_ATOM, 3 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_Main = {
+static const uint32_t k4_Main_type_kids_0[] = { 1 };
+static const uint32_t k4_Main_type_kids_2[] = { 3, 4 };
+static const uint32_t k4_Main_type_kids_5[] = { 3 };
+
+static const GeasTypeVariant k4_Main_type_variants_4[] = {
+    { "Bad", 0, NULL },
+};
+
+static const GeasTypeNode k4_Main_types[] = {
+    { GEAS_TY_LIST, 1, k4_Main_type_kids_0, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k4_Main_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "Failure", 1, k4_Main_type_variants_4 },
+    { GEAS_TY_OPTION, 1, k4_Main_type_kids_5, NULL, 0, NULL },
+};
+
+static const uint32_t k4_Main_item_params_0[] = { 0 };
+
+static const GeasItemTypes k4_Main_item_types[] = {
+    { 1, k4_Main_item_params_0, 2 },
+    { 0, NULL, 5 },
+};
+
+static const GeasContractDesc k4_Main = {
     "Main", 0x999a08f81701d140ULL,
-    1, 2, k_Main_pledges,
+    1, 2, k4_Main_pledges,
     0, NULL,
     0, NULL, 4,
-    k_Main_atoms, 0,
+    k4_Main_atoms, 0,
     3, 0, 3,
-    k_Main_rf, NULL, k_Main_rb,
+    k4_Main_rf, NULL, k4_Main_rb,
     0, NULL,
     NULL,
-    .course_fn = k_Main_course, .course_nslots = 1, .course_hash = 0xcd5c23e2cc2440c3ULL,
+    .course_fn = k4_Main_course, .course_nslots = 1, .course_hash = 0xcd5c23e2cc2440c3ULL,
+    .ntypes = 6, .types = k4_Main_types,
+    .item_types = k4_Main_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Main);
+    st = geas_register_contract(rt, &k4_Main);
     if (st != GEAS_OK) return st;
     return st;
 }

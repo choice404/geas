@@ -27,50 +27,75 @@ static GeasStatus __geas_ash_Greeter_greet_5155c52e95ed821d_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Greeter_vows[] = {
+static const GeasVowDesc k7_Greeter_vows[] = {
     { "prefix", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"hello, ", 7 } } } },
 };
 
-static const GeasPledgeDesc k_Greeter_pledges[] = {
+static const GeasPledgeDesc k7_Greeter_pledges[] = {
     { "greet", "__geas_ash_Greeter_greet_5155c52e95ed821d_v1", 1, __geas_ash_Greeter_greet_5155c52e95ed821d_v1, -1 },
     { "shout", "__geas_ash_Greeter_shout_5155c52e95ed821d_v1", 1, NULL, -1 },
 };
 
-static const GeasReqAtom k_Greeter_atoms[] = {
+static const GeasReqAtom k7_Greeter_atoms[] = {
     { "greet", GEAS_ATOM_FULFILLED, -1, 0 },
     { "shout", GEAS_ATOM_FULFILLED, -1, 1 },
     { "greet", GEAS_ATOM_BROKEN, -1, 0 },
     { "shout", GEAS_ATOM_BROKEN, -1, 1 },
 };
 
-static const GeasReqOp k_Greeter_rf[] = {
+static const GeasReqOp k7_Greeter_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Greeter_rb[] = {
+static const GeasReqOp k7_Greeter_rb[] = {
     { GEAS_REQ_ATOM, 2 },
     { GEAS_REQ_ATOM, 3 },
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_Greeter = {
+static const uint32_t k7_Greeter_type_kids_1[] = { 0, 2 };
+
+static const GeasTypeVariant k7_Greeter_type_variants_2[] = {
+    { "Empty", 0, NULL },
+};
+
+static const GeasTypeNode k7_Greeter_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k7_Greeter_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "GreetError", 1, k7_Greeter_type_variants_2 },
+};
+
+static const uint32_t k7_Greeter_item_params_0[] = { 0 };
+static const uint32_t k7_Greeter_item_params_1[] = { 0 };
+
+static const GeasItemTypes k7_Greeter_item_types[] = {
+    { 1, k7_Greeter_item_params_0, 1 },
+    { 1, k7_Greeter_item_params_1, 1 },
+};
+
+static const uint32_t k7_Greeter_vow_types[] = { 0 };
+
+static const GeasContractDesc k7_Greeter = {
     "Greeter", 0x8b67a53d561ff526ULL,
-    1, 2, k_Greeter_pledges,
-    1, k_Greeter_vows,
+    1, 2, k7_Greeter_pledges,
+    1, k7_Greeter_vows,
     0, NULL, 4,
-    k_Greeter_atoms, 0,
+    k7_Greeter_atoms, 0,
     3, 0, 3,
-    k_Greeter_rf, NULL, k_Greeter_rb,
+    k7_Greeter_rf, NULL, k7_Greeter_rb,
     0, NULL,
     NULL,
+    .ntypes = 3, .types = k7_Greeter_types,
+    .item_types = k7_Greeter_item_types, .vow_types = k7_Greeter_vow_types,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Greeter);
+    st = geas_register_contract(rt, &k7_Greeter);
     if (st != GEAS_OK) return st;
     return st;
 }

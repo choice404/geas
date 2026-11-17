@@ -1,0 +1,40 @@
+// Contract names that run into one another's table and clause names when the
+// name is joined to its suffix with an underscore alone: Ledger's type table
+// against the descriptor of Ledger_types, Ledger's item table against the
+// type table of Ledger_item, and Ledger's clause note_entry against the
+// clause entry of Ledger_note. The syntax check compiles the module C with
+// the real cc, so a symbol spelled twice fails the suite
+
+contract Ledger {
+    vow opening: Int = 1
+
+    pledge post(amount: Int) -> Result<Int, String> {
+        return Ok(note_entry(amount))
+    }
+
+    clause note_entry(amount: Int) -> Int {
+        return amount + opening
+    }
+}
+
+contract Ledger_types {
+    pledge post(amount: Int) -> Result<Int, String> {
+        return Ok(amount)
+    }
+}
+
+contract Ledger_item {
+    pledge post(amount: Int) -> Result<Int, String> {
+        return Ok(amount)
+    }
+}
+
+contract Ledger_note {
+    pledge post(amount: Int) -> Result<Int, String> {
+        return Ok(entry(amount))
+    }
+
+    clause entry(amount: Int) -> Int {
+        return amount
+    }
+}

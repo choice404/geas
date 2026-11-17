@@ -1,0 +1,177 @@
+// The checked boundary, end to end. Every pledge, signal, vow, and remedy of
+// Boundary carries a type the runtime can hold a value to all the way down:
+// nested records, a sum with payload and bare variants, List, Map, Option,
+// Result, Tuple, Bytes, Duration, a record that reaches itself through a
+// List, and a sum that reaches itself through one. All of it rides the gRPC
+// surface too, so the bridge hands Boundary the same values a C host does;
+// boundary_host.geas holds the shapes only a host that links the module
+// carries, a Char, a Byte, and a Result handed in. The compiled bodies read
+// deep into what they are handed, a list element, a field of a field, a
+// match over a sum, an unwrapped option, so a value that does not conform
+// would be read as declared if it ever got that far. It never does: a host
+// that hands one in, a bound body that answers one, or a park row edited
+// under the runtime's feet meets GEAS_ERR_TYPE at the boundary, with no body
+// run and no latch moved.
+//
+// lookup, find, and the remedy are the host's, the one place a value built
+// outside Geas comes back in as an answer. BoundaryCourse runs its own fetch
+// from a course, so a bound body's answer that does not conform halts the
+// course instead of reaching the step after it.
+
+record Address {
+    street: String
+    zip: UInt
+}
+
+record Customer {
+    name: String
+    address: Address
+    tags: List<String>
+    nick: Option<String>
+}
+
+record Category {
+    title: String
+    children: List<Category>
+}
+
+Shape is either Dot or Circle(radius: Float) or Group(parts: List<Shape>, label: String)
+
+ShipError is either Missing or Refused(code: Int, note: String)
+
+contract Boundary [version: 1] {
+    vow label: String = "boundary"
+    vow live: Bool = true
+    vow limit: Int = 100
+    vow seed: Bytes
+    vow grace: Duration = 30s
+
+    // A field of a field, the first tag, and the nickname when there is one
+    pledge greet(customer: Customer) -> Result<String, ShipError> {
+        if customer.address.street == "" {
+            return Err(Missing)
+        }
+        let mut first = "untagged"
+        for tag in customer.tags {
+            first = tag
+            break
+        }
+        let called = match customer.nick {
+            Some(nick) -> nick
+            None -> customer.name
+        }
+        return Ok(called + "@" + customer.address.street + "#" + first)
+    }
+
+    // Every variant met, the group read element by element
+    pledge measure(shape: Shape) -> Result<Float, ShipError> {
+        return Ok(area(shape))
+    }
+
+    // The scores summed through the map, the pair compared whole
+    pledge tally(scores: Map<String, Int>, pair: Tuple<Int, String>) -> Result<Int, String> {
+        let mut total = 0
+        for key in scores {
+            match scores[key] {
+                Some(score) -> {
+                    total = total + score
+                }
+                None -> {
+                    return Err(key)
+                }
+            }
+        }
+        if pair == (1, "one") {
+            total = total + 1
+        }
+        return Ok(total)
+    }
+
+    // The tree walked to its leaves
+    pledge census(root: Category) -> Result<Int, String> {
+        return Ok(count(root))
+    }
+
+    // The scalars a host builds by hand, each read as declared, and a map
+    // keyed by Char, the one place a Char rides the gRPC surface
+    pledge stamp(data: Bytes, wait: Duration, flag: Bool, marks: Map<Char, Int>) -> Result<Int, String> {
+        if !flag {
+            return Err("refused")
+        }
+        let mut total = len(data) + len(marks)
+        for letter in marks {
+            if letter == 'x' {
+                return Err("x")
+            }
+        }
+        if wait > grace {
+            total = total + 1
+        }
+        return Ok(total)
+    }
+
+    // An Option unwrapped by a match
+    pledge pick(maybe: Option<Int>, floor: Int) -> Result<Int, String> {
+        let extra = match maybe {
+            Some(n) -> n
+            None -> 0
+        }
+        if extra + floor > limit {
+            return Err("past the limit")
+        }
+        return Ok(extra + floor)
+    }
+
+    // A host may hand count and note by reference
+    pledge note(count: Int, text: String) -> Result<Int, String> {
+        if text == "" {
+            return Err("empty")
+        }
+        return Ok(count + 1)
+    }
+
+    pledge lookup(customer: Customer, wait: Duration) -> Result<Address, ShipError>
+
+    pledge find(name: String) -> Option<Address>
+
+    signal arrived(customer: Customer, codes: Map<Int, List<Int>>)
+
+    signal shaped(shape: Shape)
+
+    remedy unlookup for lookup(address: Address) -> Result<Unit, ShipError>
+
+    clause area(shape: Shape) -> Float {
+        return match shape {
+            Dot -> 0.0
+            Circle(radius) -> radius * radius * 3.0
+            Group(parts, label) -> {
+                let mut sum = 0.0
+                for part in parts {
+                    sum = sum + area(part)
+                }
+                if label == "none" {
+                    return 0.0
+                }
+                sum
+            }
+        }
+    }
+
+    clause count(node: Category) -> Int {
+        let mut total = 1
+        for child in node.children {
+            total = total + count(child)
+        }
+        return total
+    }
+}
+
+contract BoundaryCourse [version: 1] {
+    vow id: Int = 1
+
+    pledge fetch(id: Int) -> Result<Address, ShipError>
+
+    course {
+        let address = fetch(id)?
+    }
+}

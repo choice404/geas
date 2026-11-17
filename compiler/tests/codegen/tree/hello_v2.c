@@ -31,43 +31,66 @@ static GeasStatus __geas_ash_Greeter2_greet_0b2357619b406722_v2(void* ctx, const
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Greeter2_vows[] = {
+static const GeasVowDesc k8_Greeter2_vows[] = {
     { "prefix", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"hello, ", 7 } } } },
 };
 
-static const GeasPledgeDesc k_Greeter2_pledges[] = {
+static const GeasPledgeDesc k8_Greeter2_pledges[] = {
     { "greet", "__geas_ash_Greeter2_greet_0b2357619b406722_v2", 2, __geas_ash_Greeter2_greet_0b2357619b406722_v2, -1 },
 };
 
-static const GeasReqAtom k_Greeter2_atoms[] = {
+static const GeasReqAtom k8_Greeter2_atoms[] = {
     { "greet", GEAS_ATOM_FULFILLED, -1, 0 },
     { "greet", GEAS_ATOM_BROKEN, -1, 0 },
 };
 
-static const GeasReqOp k_Greeter2_rf[] = {
+static const GeasReqOp k8_Greeter2_rf[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_Greeter2_rb[] = {
+static const GeasReqOp k8_Greeter2_rb[] = {
     { GEAS_REQ_ATOM, 1 },
 };
 
-static const GeasContractDesc k_Greeter2 = {
+static const uint32_t k8_Greeter2_type_kids_1[] = { 0, 2 };
+
+static const GeasTypeVariant k8_Greeter2_type_variants_2[] = {
+    { "Empty", 0, NULL },
+};
+
+static const GeasTypeNode k8_Greeter2_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k8_Greeter2_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "GreetError2", 1, k8_Greeter2_type_variants_2 },
+};
+
+static const uint32_t k8_Greeter2_item_params_0[] = { 0, 0 };
+
+static const GeasItemTypes k8_Greeter2_item_types[] = {
+    { 2, k8_Greeter2_item_params_0, 1 },
+};
+
+static const uint32_t k8_Greeter2_vow_types[] = { 0 };
+
+static const GeasContractDesc k8_Greeter2 = {
     "Greeter2", 0xed0ccb47c5176d84ULL,
-    2, 1, k_Greeter2_pledges,
-    1, k_Greeter2_vows,
+    2, 1, k8_Greeter2_pledges,
+    1, k8_Greeter2_vows,
     0, NULL, 2,
-    k_Greeter2_atoms, 0,
+    k8_Greeter2_atoms, 0,
     1, 0, 1,
-    k_Greeter2_rf, NULL, k_Greeter2_rb,
+    k8_Greeter2_rf, NULL, k8_Greeter2_rb,
     0, NULL,
     NULL,
+    .ntypes = 3, .types = k8_Greeter2_types,
+    .item_types = k8_Greeter2_item_types, .vow_types = k8_Greeter2_vow_types,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Greeter2);
+    st = geas_register_contract(rt, &k8_Greeter2);
     if (st != GEAS_OK) return st;
     return st;
 }

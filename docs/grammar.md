@@ -167,7 +167,7 @@ The builtin named types are `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `Str
 
 Two `Duration` values or two `Time` values compare with `==`, `!=`, `<`, `<=`, `>`, and `>=`. Every other pairing is a type error: `Duration * Float`, `Duration + Int`, `Int * Duration`, `Time + Time`, and comparing a `Duration` with a `Time` among them. A `Time` comes from outside, a vow, a parameter, a signal payload, or `now()` inside a course; there is no `Time` literal.
 
-A `PledgeType` is the type of a first class pledge value. The value is always bound to a signed contract instance, so calling one fulfills that pledge on that instance.
+A `PledgeType` is the type of a first class pledge value. The value is always bound to a signed contract instance, so calling one fulfills that pledge on that instance. Like the instance it is bound to, a pledge value never crosses the boundary, so a `PledgeType` is rejected at every position a contract type is, listed below, and lives in clause parameters, clause returns, and local bindings.
 
 A contract name used as a type denotes a signed instance, and an instance never crosses the boundary. A contract type is therefore rejected anywhere a value would cross it: a pledge, remedy, or signal parameter or return, a vow, a record or sum field, and a provisional clause signature, at any nesting depth. Clause parameters, clause returns, and local bindings may carry contract types freely, since they never leave the module.
 

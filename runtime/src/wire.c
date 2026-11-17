@@ -19,6 +19,8 @@
 
 #include <geas/geas_wire.h>
 
+#include "runtime_internal.h"
+
 #include <stdint.h>
 #include <string.h>
 
@@ -184,7 +186,13 @@ static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
         if (!v->as.box) return GEAS_ERR_TYPE;
         return encode_size((const GeasValue*)v->as.box, depth + 1, total);
     case GEAS_TY_RESULT:
-        if (v->tag > 1 || !v->as.box) return GEAS_ERR_TYPE;
+        /* An arm with no box is the Ok or Err of Unit a body may answer,
+         * written as the boxed Unit it stands for, one header */
+        if (v->tag > 1) return GEAS_ERR_TYPE;
+        if (!v->as.box) {
+            if (depth + 1 > GEAS_WIRE_MAX_DEPTH) return GEAS_ERR_TYPE;
+            return size_add(total, 8);
+        }
         return encode_size((const GeasValue*)v->as.box, depth + 1, total);
     default:
         /* GEAS_TY_INSTANCE, GEAS_TY_PLEDGE_REF, and anything unknown. */
@@ -257,7 +265,13 @@ static void encode_write(const GeasValue* v, uint8_t** p) {
         if (v->tag == 1) encode_write((const GeasValue*)v->as.box, p);
         return;
     case GEAS_TY_RESULT:
-        encode_write((const GeasValue*)v->as.box, p);
+        if (v->as.box) {
+            encode_write((const GeasValue*)v->as.box, p);
+            return;
+        }
+        put_u32(*p, GEAS_TY_UNIT);
+        put_u32(*p + 4, 0);
+        *p += 8;
         return;
     default:
         return; /* unreachable past the sizing pass */
@@ -433,19 +447,12 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
         for (uint64_t i = 0; i < slots; i++) {
             GeasStatus st = decode_rec(owner, c, depth + 1, &data[i]);
             if (st != GEAS_OK) return st;
-            if (i % 2 == 0) {
-                if (data[i].ty != key_ty) return GEAS_ERR_TYPE;
-                /* A map the runtime built has no duplicate keys, so a wire
-                 * map carrying one is malformed, not a merge request. The
-                 * scan is linear per key, the same v1 tradeoff the map
-                 * itself makes. */
-                for (uint64_t j = 0; j < i; j += 2) {
-                    if (geas_value_eq(&data[j], &data[i]))
-                        return GEAS_ERR_TYPE;
-                }
-            }
+            if (i % 2 == 0 && data[i].ty != key_ty) return GEAS_ERR_TYPE;
         }
-        return GEAS_OK;
+        /* A map the runtime built has no duplicate keys, so a wire map
+         * carrying one is malformed, not a merge request. Checked once every
+         * key is in, in n log n over the pair count */
+        return geas_rt_map_keys_distinct(data, slots / 2);
     }
     case GEAS_TY_OPTION: {
         if (tag > 1) return GEAS_ERR_TYPE;

@@ -661,6 +661,11 @@ static GeasStatus run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
         GeasStatus st = run_body(c, fn, frame, nargs, out);
         /* A body that broke its own instance left nothing to latch. */
         if (c->flow.reclaimed) return GEAS_ERR_STATE;
+        /* An answer that does not conform to the declared return is this
+         * attempt's failure, GEAS_ERR_TYPE, retried like any other status
+         * and never latched; the value goes nowhere */
+        if (st == GEAS_OK) st = geas_rt_check_return(c, pidx, out);
+        if (st == GEAS_ERR_TYPE) memset(out, 0, sizeof(*out));
         /* A returned outcome still latches, including a retriable Err,
          * when cancellation was requested while the body ran */
         if (geas_cancel_requested(c)) return st;

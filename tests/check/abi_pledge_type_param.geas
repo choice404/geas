@@ -1,0 +1,12 @@
+// A pledge type in a pledge parameter: a pledge value is bound to the
+// instance that made it, so the boundary has nothing it could carry or check.
+
+contract Vault {
+    pledge ping() -> Result<Int, Int>
+}
+
+contract Gate {
+    pledge accept(step: pledge() -> Result<Int, Int>) -> Result<Int, Int> {
+        return Ok(1)
+    }
+}

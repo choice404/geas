@@ -4,10 +4,11 @@
 // at the annotation: type arguments belong to the builtin composites alone
 // and arrive in the right number, Map keys stay in the keyable set, a user
 // named type takes no arguments, and a pledge returns Result, Option, or
-// Unit. A contract type is rejected at every boundary position, pledge,
-// signal, and remedy signatures, vow types, record and variant fields, and
-// provisional clause signatures; clause signatures and let annotations keep
-// it. A name no declaration owns lowers to an opaque named type
+// Unit. A contract type and a pledge type are rejected at every boundary
+// position, pledge, signal, and remedy signatures, vow types, record and
+// variant fields, and provisional clause signatures; clause signatures and
+// let annotations keep them. A name no declaration owns lowers to an opaque
+// named type
 #pragma once
 
 #include <cstdint>

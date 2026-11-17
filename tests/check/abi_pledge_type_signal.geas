@@ -1,0 +1,6 @@
+// A pledge type in a signal parameter: a host delivers a signal, so its
+// payload crosses the boundary.
+
+contract Gate {
+    signal handed(step: pledge(Int) -> Unit)
+}

@@ -2,8 +2,8 @@
 // signal's row of the pledges table, the terms of every pledge, signal, and
 // subcontract with the after and retry on arrays they point at, the remedy
 // table, and the contract's own term. A contract that declares none of the
-// workflow surface emits none of it and its descriptor stops at sub_flags,
-// so the C it compiles to is the C it always compiled to.
+// workflow surface emits none of it, and its descriptor names no positional
+// field past sub_flags; the later tails it carries are designated fields.
 //
 // Signals ride the pledges table after every pledge, in declaration order,
 // so a pledge keeps the index it always had and a signal's index is the
@@ -183,12 +183,13 @@ std::string CEmitter::termEntry(const ContractShape& shape, const std::vector<Te
     }
     std::size_t afterCount = 0;
     const std::string after =
-        emitAfterArray(shape, pick.after, joined("k_", name, "_after_", stem), afterCount);
+        emitAfterArray(shape, pick.after, joined(contractStem(name), "_after_", stem), afterCount);
     if (afterCount > 0) {
         fields.push_back(joined(".nafter = ", countOf(afterCount), ", .after = ", after));
     }
     if (pick.retry != nullptr) {
-        appendRetryFields(*pick.retry, joined("k_", name, "_retry_on_", stem), lo, hi, fields);
+        appendRetryFields(*pick.retry, joined(contractStem(name), "_retry_on_", stem), lo, hi,
+                          fields);
     }
     if (fields.empty()) {
         return "{ 0 }";
@@ -206,7 +207,7 @@ std::string CEmitter::emitKinds(const ContractShape& shape) {
     if (shape.signals.empty()) {
         return "NULL";
     }
-    top(joined("static const uint8_t k_", shape.decl->name, "_kinds[] = {"));
+    top(joined("static const uint8_t ", contractStem(shape.decl->name), "_kinds[] = {"));
     for (std::size_t i = 0; i < shape.pledges.size(); ++i) {
         top("    GEAS_KIND_PLEDGE,");
     }
@@ -215,7 +216,7 @@ std::string CEmitter::emitKinds(const ContractShape& shape) {
     }
     top("};");
     top("");
-    return joined("k_", shape.decl->name, "_kinds");
+    return joined(contractStem(shape.decl->name), "_kinds");
 }
 
 // The terms per pledges table row, NULL when no pledge or signal has one.
@@ -241,13 +242,13 @@ std::string CEmitter::emitPledgeTerms(const ContractShape& shape) {
         entries.push_back(termEntry(shape, signal.terms, countOf(shape.pledges.size() + i),
                                     signal.lo, signal.hi));
     }
-    top(joined("static const GeasTermDesc k_", shape.decl->name, "_terms[] = {"));
+    top(joined("static const GeasTermDesc ", contractStem(shape.decl->name), "_terms[] = {"));
     for (const std::string& entry : entries) {
         top(joined("    ", entry, ","));
     }
     top("};");
     top("");
-    return joined("k_", shape.decl->name, "_terms");
+    return joined(contractStem(shape.decl->name), "_terms");
 }
 
 // The terms per subcontract, NULL when none carries one
@@ -264,13 +265,13 @@ std::string CEmitter::emitSubTerms(const ContractShape& shape) {
         const SubcontractDecl& sub = *shape.subs[i];
         entries.push_back(termEntry(shape, sub.terms, joined("sub_", countOf(i)), sub.lo, sub.hi));
     }
-    top(joined("static const GeasTermDesc k_", shape.decl->name, "_sub_terms[] = {"));
+    top(joined("static const GeasTermDesc ", contractStem(shape.decl->name), "_sub_terms[] = {"));
     for (const std::string& entry : entries) {
         top(joined("    ", entry, ","));
     }
     top("};");
     top("");
-    return joined("k_", shape.decl->name, "_sub_terms");
+    return joined(contractStem(shape.decl->name), "_sub_terms");
 }
 
 }  // namespace geas

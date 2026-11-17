@@ -472,6 +472,58 @@ typedef struct GeasAmendDesc {
     GeasAmendVowsFn         vows_fn;
 } GeasAmendDesc;
 
+/* ---- the type table ---- */
+
+/* The deep description of every value a contract's boundary carries, one
+ * table per contract with each distinct type once. Every index below points
+ * into the contract's types array; a recursive type refers back to its own
+ * index. The runtime walks the table to hold an argument, a return, a signal
+ * payload, a vow, a remedy's value, and every value a park row carries to
+ * its declared type all the way down.
+ *
+ * GEAS_NO_TYPE in a slot says the table has no spelling for the type, a name
+ * with no layout the compiler could describe; such a value is held to the
+ * structural facts every value keeps and its top level tag alone. A signal's
+ * return is always GEAS_NO_TYPE, it returns nothing. */
+#define GEAS_NO_TYPE 0xFFFFFFFFu
+
+/* The deepest a value may nest and still cross a boundary, counted in
+ * values from the outermost down to the innermost, both included: a value
+ * of GEAS_VALUE_MAX_DEPTH levels conforms, parks, and resumes, and one level
+ * more is GEAS_ERR_TYPE. The check at every boundary and the wire codec the
+ * park rows ride both hold this one line, so whatever a boundary accepts can
+ * always be parked and read back */
+#define GEAS_VALUE_MAX_DEPTH 256u
+
+/* One variant of a sum, its payload fields in declaration order */
+typedef struct GeasTypeVariant {
+    const char*      name;
+    uint32_t         nfields;
+    const uint32_t*  fields;      /* indices into the contract's types table */
+} GeasTypeVariant;
+
+/* One type. tag is the GeasTypeTag a conforming value carries, Duration and
+ * Time appearing as GEAS_TY_INT. kids by tag: List its element, Map its key
+ * then its value, Option its inner type, Result its Ok then its Err type,
+ * Tuple its slots, Record its fields in declaration order, and none for
+ * everything else. A sum carries its variants in declaration order, the
+ * order their tags count in. */
+typedef struct GeasTypeNode {
+    uint32_t                tag;
+    uint32_t                nkids;
+    const uint32_t*         kids;
+    const char*             name;       /* record or sum name, NULL otherwise */
+    uint32_t                nvariants;  /* sums only */
+    const GeasTypeVariant*  variants;
+} GeasTypeNode;
+
+/* The parameter and return types of one pledge, signal, or remedy */
+typedef struct GeasItemTypes {
+    uint32_t         nparams;
+    const uint32_t*  params;      /* indices into the types table */
+    uint32_t         ret;         /* return type index; GEAS_NO_TYPE for a signal */
+} GeasItemTypes;
+
 /* The requirements surface rides at the tail of the contract descriptor so a
  * zero-filled handwritten descriptor stays valid: no atoms and no lines means
  * the runtime applies the structural default policy over subs and loose
@@ -548,6 +600,19 @@ typedef struct GeasContractDesc {
      * amends carries none. */
     uint32_t              namends;
     const GeasAmendDesc*  amends;
+    /* The type table, absent when ntypes is zero, which is what a
+     * handwritten descriptor and a module built before the table carry. A
+     * descriptor whose reported size ends before remedy_types carries none.
+     * item_types holds one entry per pledges table entry in that table's
+     * order, signals included; vow_types one index per vow; remedy_types one
+     * entry per remedy, whose params hold the 0 or 1 parameter the remedy
+     * takes and whose ret is the remedy's return. The registrar checks the
+     * whole table and refuses a contract whose table does not hold up */
+    uint32_t              ntypes;
+    const GeasTypeNode*   types;
+    const GeasItemTypes*  item_types;
+    const uint32_t*       vow_types;
+    const GeasItemTypes*  remedy_types;
 } GeasContractDesc;
 
 /* The byte size of the descriptor every module built before the workflow
@@ -567,6 +632,10 @@ typedef struct GeasContractDesc {
 /* The descriptor with the course and no amends */
 #define GEAS_CONTRACT_DESC_V4_SIZE \
     (offsetof(GeasContractDesc, course_hash) + sizeof(uint64_t))
+
+/* The descriptor with the amends blocks and no type table */
+#define GEAS_CONTRACT_DESC_V5_SIZE \
+    (offsetof(GeasContractDesc, amends) + sizeof(const GeasAmendDesc*))
 
 /* A vow override a host supplies at sign. The value is copied onto the
  * instance, string bytes included; the runtime keeps nothing the host owns. */

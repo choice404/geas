@@ -1,0 +1,6 @@
+// A pledge type nested inside a pledge's return is as unrepresentable at the
+// boundary as a bare one.
+
+contract Gate {
+    pledge handles() -> Option<List<pledge(Int) -> Unit>>
+}

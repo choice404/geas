@@ -575,8 +575,17 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
         own->namends = 0;
         own->amends = NULL;
     }
+    /* A partial type table tail carries no table */
+    if (desc_size < offsetof(GeasContractDesc, remedy_types) + sizeof(own->remedy_types)) {
+        own->ntypes = 0;
+        own->types = NULL;
+        own->item_types = NULL;
+        own->vow_types = NULL;
+        own->remedy_types = NULL;
+    }
     GeasStatus attr_status = geas_rt_validate_attrs(own);
     if (attr_status == GEAS_OK) attr_status = geas_rt_validate_amends(own);
+    if (attr_status == GEAS_OK) attr_status = geas_rt_validate_types(own);
     if (attr_status != GEAS_OK) {
         free(own);
         return attr_status;
@@ -744,6 +753,12 @@ static GeasStatus bind_vows(GeasContract* c, const GeasVowBinding* vows,
         if (!desc->vows[j].has_default) return GEAS_ERR_UNBOUND;
         GeasStatus st = copy_vow_value(c, &desc->vows[j].default_value,
                                       &c->vow_vals[j]);
+        if (st != GEAS_OK) return st;
+    }
+    /* Every vow, a default as much as an override, is held to its declared
+     * type in the copy the instance keeps */
+    for (uint32_t j = 0; j < desc->nvows; j++) {
+        GeasStatus st = geas_rt_check_vow(desc, j, &c->vow_vals[j]);
         if (st != GEAS_OK) return st;
     }
     return GEAS_OK;
@@ -2534,9 +2549,7 @@ static GeasStatus ref_copy_in(GeasContract* c, const GeasRef* r, GeasValue* slot
     }
     case GEAS_TY_STRING: {
         const GeasString* hs = (const GeasString*)r->host_ptr;
-        *slot = geas_string_copy(c, hs->ptr, hs->len);
-        if (hs->len && !slot->as.s.ptr) return GEAS_ERR_OOM;
-        return GEAS_OK;
+        return geas_string_copy_into(c, hs->ptr, hs->len, slot);
     }
     default:
         return GEAS_ERR_TYPE;
@@ -2585,14 +2598,16 @@ static GeasStatus write_back_refs(const GeasRef* refs, const GeasValue* slots,
  * parameter, the value arguments deep copied first, the refs copied in
  * behind them. Everything happens on the caller's thread, so no host memory
  * is ever read after the fulfill call returns. */
-static GeasStatus prepare_frame(GeasContract* c, const GeasValue* args,
-                               size_t nargs, const GeasRef* refs, size_t nrefs,
-                               GeasValue** frame_out) {
+static GeasStatus build_frame(GeasContract* c, const GeasValue* args,
+                              size_t nargs, const GeasRef* refs, size_t nrefs,
+                              GeasValue** frame_out) {
     size_t total = nargs + nrefs;
     *frame_out = NULL;
     if (total == 0) return GEAS_OK;
+    if (total > SIZE_MAX / sizeof(GeasValue)) return GEAS_ERR_OOM;
     GeasValue* frame = (GeasValue*)geas_bytes(c, total * sizeof(GeasValue));
     if (!frame) return GEAS_ERR_OOM;
+    memset(frame, 0, total * sizeof(GeasValue));
     for (size_t i = 0; i < nargs; i++) {
         GeasStatus st = geas_value_deep_copy(c, &args[i], &frame[i]);
         if (st != GEAS_OK) return st;
@@ -2603,6 +2618,24 @@ static GeasStatus prepare_frame(GeasContract* c, const GeasValue* args,
     }
     *frame_out = frame;
     return GEAS_OK;
+}
+
+/* The frame, then the check of what landed in it against the pledge's
+ * parameter types: the instance's own copy is what is checked, so a host
+ * that changes its values after the call changes nothing the body sees. A
+ * frame that fails either step is taken off the heap again. Under the
+ * instance lock, held throughout, which is what makes the heap mark sound */
+static GeasStatus prepare_frame(GeasContract* c, uint32_t pidx, const GeasValue* args,
+                               size_t nargs, const GeasRef* refs, size_t nrefs,
+                               GeasValue** frame_out) {
+    GeasBlock* mark = geas_rt_heap_mark(c);
+    GeasStatus st = build_frame(c, args, nargs, refs, nrefs, frame_out);
+    if (st == GEAS_OK) st = geas_rt_check_args(c, pidx, *frame_out, nargs + nrefs);
+    if (st != GEAS_OK) {
+        *frame_out = NULL;
+        geas_rt_heap_release(c, mark);
+    }
+    return st;
 }
 
 /* ---- the requirements evaluator ---- */
@@ -2975,7 +3008,8 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
             f->nrefs = nrefs;
         }
         GeasValue* frame = NULL;
-        st = prepare_frame(c, args, nargs, refs, nrefs, &frame);
+        st = prepare_frame(c, (uint32_t)(p - c->desc->pledges), args, nargs, refs, nrefs,
+                           &frame);
         if (st != GEAS_OK) break;
         f->fn = c->fns[p - c->desc->pledges];
         f->pidx = (uint32_t)(p - c->desc->pledges);
@@ -3061,7 +3095,7 @@ static GeasStatus fulfill_locked(GeasContract* c, uint32_t pidx,
     GeasStatus st = geas_rt_fulfill_gate(c, pidx);
     if (st != GEAS_OK) return st;
     GeasValue* frame = NULL;
-    st = prepare_frame(c, args, nargs, refs, nrefs, &frame);
+    st = prepare_frame(c, pidx, args, nargs, refs, nrefs, &frame);
     if (st != GEAS_OK) return st;
     st = txn_before(c, pidx);
     if (st != GEAS_OK) return st;
@@ -3727,6 +3761,9 @@ GeasStatus geas_rt_resume_build(GeasRuntime* rt, uint64_t expected_hash, GeasRes
     }
     free(fns);
     if (st == GEAS_OK) st = amend ? resume_amended(c, amend, &r->row) : resume_plain(c, &r->row);
+    /* What the row carried is held to the registered table before anything
+     * can reach the instance */
+    if (st == GEAS_OK) st = geas_rt_check_instance(c);
     if (st != GEAS_OK) return st;
     c->state = (GeasContractState)r->row.state;
     c->shape_hash = desc->shape_hash;
@@ -3876,13 +3913,30 @@ GeasStatus geas_instance_resume_v(GeasRuntime* rt, const GeasValue* dsn,
  * same list or string value remain a host bug. */
 uint8_t* geas_bytes(GeasContract* c, uint64_t n) {
     if (!c) return NULL;
-    GeasBlock* b = malloc(sizeof(GeasBlock) + n);
+    if (n > SIZE_MAX - sizeof(GeasBlock)) return NULL;
+    GeasBlock* b = malloc(sizeof(GeasBlock) + (size_t)n);
     if (!b) return NULL;
     geas_rt_lock(c);
     b->next = c->owned;
     c->owned = b;
     geas_rt_unlock(c);
     return (uint8_t*)(b + 1);
+}
+
+/* The block at the head of the list stands for everything linked in so
+ * far; a release frees every block in front of it. The caller holds the
+ * instance lock across both, so the head moves only through its own
+ * allocations */
+GeasBlock* geas_rt_heap_mark(const GeasContract* c) {
+    return c->owned;
+}
+
+void geas_rt_heap_release(GeasContract* c, GeasBlock* mark) {
+    while (c->owned && c->owned != mark) {
+        GeasBlock* b = c->owned;
+        c->owned = b->next;
+        free(b);
+    }
 }
 
 GeasValue* geas_box(GeasContract* c) {
@@ -3895,6 +3949,7 @@ GeasValue geas_string_copy(GeasContract* c, const uint8_t* utf8, uint64_t len) {
     GeasValue v;
     memset(&v, 0, sizeof(v));
     v.ty = GEAS_TY_STRING;
+    if (!utf8 && len) return v;
     uint8_t* dst = geas_bytes(c, len);
     if (dst && len) memcpy(dst, utf8, len);
     v.as.s.ptr = dst;
@@ -4140,10 +4195,60 @@ GeasStatus geas_tuple_new(GeasContract* c, uint64_t count, GeasValue* out) {
  * string copies its bytes, list, map, tuple, record, and sum payloads copy
  * element by element on the shared list arm, a map's interleaved keys and
  * values riding along like any other elements, and Option and Result rebox
- * their payload. */
-GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
-                              GeasValue* dst) {
-    if (!c || !src || !dst) return GEAS_ERR_TYPE;
+ * their payload.
+ *
+ * The source may come straight from a host, so nothing it claims is taken on
+ * faith: a length with no data behind it and a list longer than its own
+ * capacity are GEAS_ERR_TYPE, an element count whose byte size overflows is
+ * GEAS_ERR_OOM, None never follows its box, and nesting past
+ * GEAS_COPY_MAX_DEPTH, a cyclic value among them, is GEAS_ERR_TYPE */
+static GeasStatus copy_rec(GeasContract* c, const GeasValue* src, GeasValue* dst,
+                           uint32_t depth);
+
+static GeasStatus copy_arm(GeasContract* c, const GeasValue* src, GeasValue* dst,
+                           uint32_t depth) {
+    uint64_t n = src->as.list.len;
+    const GeasValue* from = (const GeasValue*)src->as.list.data;
+    if (n && !from) return GEAS_ERR_TYPE;
+    if (src->ty == GEAS_TY_LIST && n > src->as.list.cap) return GEAS_ERR_TYPE;
+    if (n > (SIZE_MAX - sizeof(GeasBlock)) / sizeof(GeasValue)) return GEAS_ERR_OOM;
+    memset(dst, 0, sizeof(*dst));
+    dst->ty = src->ty;
+    dst->tag = src->tag;
+    dst->as.list.elem_ty = src->as.list.elem_ty;
+    dst->as.list.len = n;
+    dst->as.list.cap = n;
+    if (n == 0) return GEAS_OK;
+    GeasValue* data = (GeasValue*)geas_bytes(c, n * sizeof(GeasValue));
+    if (!data) return GEAS_ERR_OOM;
+    for (uint64_t i = 0; i < n; i++) {
+        GeasStatus st = copy_rec(c, &from[i], &data[i], depth + 1);
+        if (st != GEAS_OK) return st;
+    }
+    dst->as.list.data = data;
+    return GEAS_OK;
+}
+
+/* Option follows its box for Some alone; Result for either arm that carries
+ * one. A tag past the arms copies with no payload and is the walk's to refuse */
+static GeasStatus copy_boxed(GeasContract* c, const GeasValue* src, GeasValue* dst,
+                             uint32_t depth) {
+    memset(dst, 0, sizeof(*dst));
+    dst->ty = src->ty;
+    dst->tag = src->tag;
+    int is_followed = src->ty == GEAS_TY_OPTION ? src->tag == 1 : src->tag <= 1;
+    if (!is_followed || !src->as.box) return GEAS_OK;
+    GeasValue* boxed = geas_box(c);
+    if (!boxed) return GEAS_ERR_OOM;
+    GeasStatus st = copy_rec(c, (const GeasValue*)src->as.box, boxed, depth + 1);
+    if (st != GEAS_OK) return st;
+    dst->as.box = boxed;
+    return GEAS_OK;
+}
+
+static GeasStatus copy_rec(GeasContract* c, const GeasValue* src, GeasValue* dst,
+                           uint32_t depth) {
+    if (depth >= GEAS_COPY_MAX_DEPTH) return GEAS_ERR_TYPE;
     switch ((GeasTypeTag)src->ty) {
     case GEAS_TY_UNIT:
     case GEAS_TY_INT:
@@ -4162,49 +4267,28 @@ GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
     case GEAS_TY_BYTES:
         return geas_bytes_copy_into(c, src->as.s.ptr, src->as.s.len, dst);
     case GEAS_TY_STRING:
-        *dst = geas_string_copy(c, src->as.s.ptr, src->as.s.len);
-        if (src->as.s.len && !dst->as.s.ptr) return GEAS_ERR_OOM;
-        return GEAS_OK;
+        return geas_string_copy_into(c, src->as.s.ptr, src->as.s.len, dst);
     case GEAS_TY_LIST:
     case GEAS_TY_MAP:
     case GEAS_TY_TUPLE:
     case GEAS_TY_RECORD:
-    case GEAS_TY_SUM: {
-        uint64_t n = src->as.list.len;
-        memset(dst, 0, sizeof(*dst));
-        dst->ty = src->ty;
-        dst->tag = src->tag;
-        dst->as.list.elem_ty = src->as.list.elem_ty;
-        dst->as.list.len = n;
-        dst->as.list.cap = n;
-        if (n == 0) return GEAS_OK;
-        GeasValue* data = (GeasValue*)geas_bytes(c, n * sizeof(GeasValue));
-        if (!data) return GEAS_ERR_OOM;
-        const GeasValue* from = (const GeasValue*)src->as.list.data;
-        for (uint64_t i = 0; i < n; i++) {
-            GeasStatus st = geas_value_deep_copy(c, &from[i], &data[i]);
-            if (st != GEAS_OK) return st;
-        }
-        dst->as.list.data = data;
-        return GEAS_OK;
-    }
+    case GEAS_TY_SUM:
+        return copy_arm(c, src, dst, depth);
     case GEAS_TY_OPTION:
-    case GEAS_TY_RESULT: {
-        memset(dst, 0, sizeof(*dst));
-        dst->ty = src->ty;
-        dst->tag = src->tag;
-        if (!src->as.box) return GEAS_OK;
-        GeasValue* boxed = geas_box(c);
-        if (!boxed) return GEAS_ERR_OOM;
-        GeasStatus st = geas_value_deep_copy(c, (const GeasValue*)src->as.box,
-                                           boxed);
-        if (st != GEAS_OK) return st;
-        dst->as.box = boxed;
-        return GEAS_OK;
-    }
+    case GEAS_TY_RESULT:
+        return copy_boxed(c, src, dst, depth);
     default:
         return GEAS_ERR_TYPE;
     }
+}
+
+GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
+                              GeasValue* dst) {
+    if (!c || !src || !dst) return GEAS_ERR_TYPE;
+    /* The source and the destination may be one slot, so the copy reads a
+     * private image of the top value */
+    GeasValue from = *src;
+    return copy_rec(c, &from, dst, 0);
 }
 
 /* ---- the debug renderer ---- */

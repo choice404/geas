@@ -126,13 +126,13 @@ static GeasStatus __geas_ash_StringOps_wrap_b1df27f8e66f334d_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static const GeasPledgeDesc k_StringOps_pledges[] = {
+static const GeasPledgeDesc k9_StringOps_pledges[] = {
     { "repeat", "__geas_ash_StringOps_repeat_4488afeaa5b00bce_v1", 2, __geas_ash_StringOps_repeat_4488afeaa5b00bce_v1, -1 },
     { "join", "__geas_ash_StringOps_join_b1df27f8e66f334d_v1", 3, __geas_ash_StringOps_join_b1df27f8e66f334d_v1, -1 },
     { "wrap", "__geas_ash_StringOps_wrap_b1df27f8e66f334d_v1", 3, __geas_ash_StringOps_wrap_b1df27f8e66f334d_v1, -1 },
 };
 
-static const GeasReqAtom k_StringOps_atoms[] = {
+static const GeasReqAtom k9_StringOps_atoms[] = {
     { "repeat", GEAS_ATOM_FULFILLED, -1, 0 },
     { "join", GEAS_ATOM_FULFILLED, -1, 1 },
     { "wrap", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -141,7 +141,7 @@ static const GeasReqAtom k_StringOps_atoms[] = {
     { "wrap", GEAS_ATOM_BROKEN, -1, 2 },
 };
 
-static const GeasReqOp k_StringOps_rf[] = {
+static const GeasReqOp k9_StringOps_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -149,7 +149,7 @@ static const GeasReqOp k_StringOps_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_StringOps_rb[] = {
+static const GeasReqOp k9_StringOps_rb[] = {
     { GEAS_REQ_ATOM, 3 },
     { GEAS_REQ_ATOM, 4 },
     { GEAS_REQ_AND, 0 },
@@ -157,22 +157,50 @@ static const GeasReqOp k_StringOps_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasContractDesc k_StringOps = {
+static const uint32_t k9_StringOps_type_kids_2[] = { 0, 3 };
+
+static const GeasTypeVariant k9_StringOps_type_variants_3[] = {
+    { "NotFound", 0, NULL },
+    { "Invalid", 0, NULL },
+    { "Exhausted", 0, NULL },
+};
+
+static const GeasTypeNode k9_StringOps_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k9_StringOps_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "CommonError", 3, k9_StringOps_type_variants_3 },
+};
+
+static const uint32_t k9_StringOps_item_params_0[] = { 0, 1 };
+static const uint32_t k9_StringOps_item_params_1[] = { 0, 0, 0 };
+static const uint32_t k9_StringOps_item_params_2[] = { 0, 0, 0 };
+
+static const GeasItemTypes k9_StringOps_item_types[] = {
+    { 2, k9_StringOps_item_params_0, 2 },
+    { 3, k9_StringOps_item_params_1, 2 },
+    { 3, k9_StringOps_item_params_2, 2 },
+};
+
+static const GeasContractDesc k9_StringOps = {
     "StringOps", 0x84ef2010d953f52dULL,
-    1, 3, k_StringOps_pledges,
+    1, 3, k9_StringOps_pledges,
     0, NULL,
     0, NULL, 6,
-    k_StringOps_atoms, 0,
+    k9_StringOps_atoms, 0,
     5, 0, 5,
-    k_StringOps_rf, NULL, k_StringOps_rb,
+    k9_StringOps_rf, NULL, k9_StringOps_rb,
     0, NULL,
     NULL,
+    .ntypes = 4, .types = k9_StringOps_types,
+    .item_types = k9_StringOps_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_StringOps);
+    st = geas_register_contract(rt, &k9_StringOps);
     if (st != GEAS_OK) return st;
     return st;
 }

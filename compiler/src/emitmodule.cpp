@@ -50,7 +50,7 @@ void CEmitter::emitRegistrar(const std::vector<const ContractShape*>& contracts)
     top("    (void)rt;");
     top("    GeasStatus st = GEAS_OK;");
     for (const ContractShape* shape : contracts) {
-        top(joined("    st = geas_register_contract(rt, &k_", shape->decl->name, ");"));
+        top(joined("    st = geas_register_contract(rt, &", contractStem(shape->decl->name), ");"));
         top("    if (st != GEAS_OK) return st;");
     }
     top("    return st;");
@@ -92,6 +92,9 @@ void CEmitter::emitContract(const ContractShape& shape) {
         tail.push_back(std::move(line));
     }
     if (std::string line = emitAmends(shape); !line.empty()) {
+        tail.push_back(std::move(line));
+    }
+    if (std::string line = emitTypeTables(shape); !line.empty()) {
         tail.push_back(std::move(line));
     }
     emitDescriptor(shape, counts, subFlagsRef, tail);

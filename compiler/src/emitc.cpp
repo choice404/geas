@@ -107,8 +107,13 @@ std::string decodeBody(std::string_view body) {
 
 }  // namespace
 
+std::string contractStem(std::string_view contract) {
+    return joined("k", decimal(static_cast<std::int64_t>(contract.size())), "_", contract);
+}
+
 std::string clauseFunctionName(std::string_view contract, std::string_view clause) {
-    return joined("geas_clause_", contract, "_", clause);
+    return joined("geas_clause", decimal(static_cast<std::int64_t>(contract.size())), "_",
+                  contract, "_", clause);
 }
 
 CEmitter::CEmitter(CheckedProgram& checked, std::vector<Diagnostic>& diagnostics)

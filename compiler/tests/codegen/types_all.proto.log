@@ -1,0 +1,19 @@
+exit 1
+compiler/tests/codegen/src/types_all.geas: 39:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow mark: Byte
+      ^~~~~~~~
+compiler/tests/codegen/src/types_all.geas: 40:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow initial: Char
+      ^~~~~~~~~~~
+compiler/tests/codegen/src/types_all.geas: 52:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Char
+      pledge draw(shape: Shape, scale: Map<String, Float>) -> Result<Tuple<Shape, Bool>, String>
+      ^~~~~~~~~~~
+compiler/tests/codegen/src/types_all.geas: 56:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge route(steps: List<Option<Int>>, retries: Byte) -> Unit
+      ^~~~~~~~~~~~
+compiler/tests/codegen/src/types_all.geas: 56:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge route(steps: List<Option<Int>>, retries: Byte) -> Unit
+      ^~~~~~~~~~~~
+compiler/tests/codegen/src/types_all.geas: 64:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Map<Int, List<Byte>>
+      signal arrived(customer: Customer, at: Time, codes: Map<Int, List<Byte>>)
+      ^~~~~~~~~~~~~~

@@ -6,6 +6,8 @@ own small contract under interop/grpc/contracts.
                        the next Session is RESOURCE_EXHAUSTED
   --handoff-walk DIR   a parked course runs no Geas remedy, its stores in DIR
   --nested-walk        None, Some(None), and Some(Some(x)) both ways
+  --boundary-walk      malformed requests refused INVALID_ARGUMENT, a malformed
+                       supplied answer INTERNAL
 
 The stubs are protoc's output over the emitted .proto files, generated into
 target/grpc-gen by the make gate. Exit status 0 means every check held.
@@ -35,6 +37,8 @@ def parse_args():
                       help="park a course and count its remedy runs, stores in DIR")
     mode.add_argument("--nested-walk", action="store_true",
                       help="cross every nesting of an Option of an Option")
+    mode.add_argument("--boundary-walk", action="store_true",
+                      help="send malformed requests and draw malformed answers")
     return ap.parse_args()
 
 
@@ -48,6 +52,9 @@ def run(args, channel):
     elif args.handoff_walk:
         import walk_handoff
         walk_handoff.walk(channel, TALLY, args.handoff_walk)
+    elif args.boundary_walk:
+        import walk_boundary
+        walk_boundary.walk(channel, TALLY)
     else:
         import walk_nested
         walk_nested.walk(channel, TALLY)

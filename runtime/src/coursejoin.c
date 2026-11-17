@@ -174,17 +174,26 @@ static int join_matches(const GeasCourse* k, uint32_t step,
     return 1;
 }
 
-/* The instance owned copy of one call's arguments */
+/* The instance owned copy of one call's arguments, held to the pledge's
+ * parameter types before any call of the together starts, so a together with
+ * one malformed argument runs no body at all. A copy refused is taken off
+ * the heap again. Under the instance lock, held throughout */
 static GeasStatus copy_args(GeasContract* c, GeasJoinCall* call, const GeasCourseCall* src) {
     call->nargs = src->nargs;
     if (src->nargs == 0) return GEAS_OK;
     if (src->nargs > SIZE_MAX / sizeof(GeasValue)) return GEAS_ERR_OOM;
+    GeasBlock* mark = geas_rt_heap_mark(c);
     GeasValue* args = (GeasValue*)geas_bytes(c, src->nargs * sizeof(GeasValue));
     if (!args) return GEAS_ERR_OOM;
     memset(args, 0, src->nargs * sizeof(GeasValue));
-    for (size_t j = 0; j < src->nargs; j++) {
-        GeasStatus st = geas_value_deep_copy(c, &src->args[j], &args[j]);
-        if (st != GEAS_OK) return st;
+    GeasStatus st = GEAS_OK;
+    for (size_t j = 0; j < src->nargs && st == GEAS_OK; j++) {
+        st = geas_value_deep_copy(c, &src->args[j], &args[j]);
+    }
+    if (st == GEAS_OK) st = geas_rt_check_args(c, call->pledge, args, src->nargs);
+    if (st != GEAS_OK) {
+        geas_rt_heap_release(c, mark);
+        return st;
     }
     call->args = args;
     return GEAS_OK;

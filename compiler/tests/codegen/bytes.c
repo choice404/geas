@@ -284,11 +284,11 @@ static GeasStatus __geas_ash_Buffer_observe_raw_dc5b7928a2ad78e3_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Buffer_vows[] = {
+static const GeasVowDesc k6_Buffer_vows[] = {
     { "seed", GEAS_TY_BYTES, 0, { .ty = GEAS_TY_UNIT, .tag = 0, .as = { .i = 0 } } },
 };
 
-static const GeasPledgeDesc k_Buffer_pledges[] = {
+static const GeasPledgeDesc k6_Buffer_pledges[] = {
     { "raw", "__geas_ash_Buffer_raw_dc5b8728a2ad90ad_v1", 1, __geas_ash_Buffer_raw_dc5b8728a2ad90ad_v1, -1 },
     { "host", "__geas_ash_Buffer_host_298497ba046b5126_v1", 1, NULL, -1 },
     { "convert", "__geas_ash_Buffer_convert_06f52ea1a8bfb390_v1", 2, __geas_ash_Buffer_convert_06f52ea1a8bfb390_v1, -1 },
@@ -300,7 +300,7 @@ static const GeasPledgeDesc k_Buffer_pledges[] = {
     { "received", NULL, 1, NULL, -1 },
 };
 
-static const GeasReqAtom k_Buffer_atoms[] = {
+static const GeasReqAtom k6_Buffer_atoms[] = {
     { "raw", GEAS_ATOM_FULFILLED, -1, 0 },
     { "host", GEAS_ATOM_FULFILLED, -1, 1 },
     { "convert", GEAS_ATOM_FULFILLED, -1, 2 },
@@ -321,7 +321,7 @@ static const GeasReqAtom k_Buffer_atoms[] = {
     { "received", GEAS_ATOM_BROKEN, -1, 8 },
 };
 
-static const GeasReqOp k_Buffer_rf[] = {
+static const GeasReqOp k6_Buffer_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -341,7 +341,7 @@ static const GeasReqOp k_Buffer_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_Buffer_rb[] = {
+static const GeasReqOp k6_Buffer_rb[] = {
     { GEAS_REQ_ATOM, 9 },
     { GEAS_REQ_ATOM, 10 },
     { GEAS_REQ_AND, 0 },
@@ -361,7 +361,7 @@ static const GeasReqOp k_Buffer_rb[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const uint8_t k_Buffer_kinds[] = {
+static const uint8_t k6_Buffer_kinds[] = {
     GEAS_KIND_PLEDGE,
     GEAS_KIND_PLEDGE,
     GEAS_KIND_PLEDGE,
@@ -373,29 +373,98 @@ static const uint8_t k_Buffer_kinds[] = {
     GEAS_KIND_SIGNAL,
 };
 
-static const GeasRemedyDesc k_Buffer_remedies[] = {
+static const GeasRemedyDesc k6_Buffer_remedies[] = {
     { "observe_raw", "__geas_ash_Buffer_observe_raw_dc5b7928a2ad78e3_v1", 0, 0, __geas_ash_Buffer_observe_raw_dc5b7928a2ad78e3_v1, { 0 } },
 };
 
-static const GeasContractDesc k_Buffer = {
+static const uint32_t k6_Buffer_type_kids_1[] = { 0, 0 };
+static const uint32_t k6_Buffer_type_kids_3[] = { 0, 4 };
+static const uint32_t k6_Buffer_type_kids_5[] = { 2 };
+static const uint32_t k6_Buffer_type_kids_6[] = { 0 };
+static const uint32_t k6_Buffer_type_kids_7[] = { 8, 4 };
+static const uint32_t k6_Buffer_type_kids_9[] = { 10, 4 };
+static const uint32_t k6_Buffer_type_kids_10[] = { 11, 12, 13 };
+static const uint32_t k6_Buffer_type_kids_11[] = { 0 };
+static const uint32_t k6_Buffer_type_kids_12[] = { 0 };
+static const uint32_t k6_Buffer_type_kids_13[] = { 2, 0 };
+static const uint32_t k6_Buffer_type_kids_14[] = { 15, 0 };
+
+static const uint32_t k6_Buffer_type_fields_15_1[] = { 0 };
+static const GeasTypeVariant k6_Buffer_type_variants_15[] = {
+    { "NoData", 0, NULL },
+    { "Data", 1, k6_Buffer_type_fields_15_1 },
+};
+
+static const GeasTypeNode k6_Buffer_types[] = {
+    { GEAS_TY_BYTES, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Buffer_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Buffer_type_kids_3, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_OPTION, 1, k6_Buffer_type_kids_5, NULL, 0, NULL },
+    { GEAS_TY_OPTION, 1, k6_Buffer_type_kids_6, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Buffer_type_kids_7, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Buffer_type_kids_9, NULL, 0, NULL },
+    { GEAS_TY_TUPLE, 3, k6_Buffer_type_kids_10, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 1, k6_Buffer_type_kids_11, "Packet", 0, NULL },
+    { GEAS_TY_LIST, 1, k6_Buffer_type_kids_12, NULL, 0, NULL },
+    { GEAS_TY_MAP, 2, k6_Buffer_type_kids_13, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k6_Buffer_type_kids_14, NULL, 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "PacketPayload", 2, k6_Buffer_type_variants_15 },
+    { GEAS_TY_UNIT, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k6_Buffer_item_params_0[] = { 0 };
+static const uint32_t k6_Buffer_item_params_1[] = { 0 };
+static const uint32_t k6_Buffer_item_params_2[] = { 0, 2 };
+static const uint32_t k6_Buffer_item_params_3[] = { 0 };
+static const uint32_t k6_Buffer_item_params_4[] = { 0 };
+static const uint32_t k6_Buffer_item_params_5[] = { 0, 0 };
+static const uint32_t k6_Buffer_item_params_6[] = { 0 };
+static const uint32_t k6_Buffer_item_params_7[] = { 0 };
+static const uint32_t k6_Buffer_item_params_8[] = { 0 };
+
+static const GeasItemTypes k6_Buffer_item_types[] = {
+    { 1, k6_Buffer_item_params_0, 0 },
+    { 1, k6_Buffer_item_params_1, 1 },
+    { 2, k6_Buffer_item_params_2, 3 },
+    { 1, k6_Buffer_item_params_3, 5 },
+    { 1, k6_Buffer_item_params_4, 6 },
+    { 2, k6_Buffer_item_params_5, 7 },
+    { 1, k6_Buffer_item_params_6, 9 },
+    { 1, k6_Buffer_item_params_7, 14 },
+    { 1, k6_Buffer_item_params_8, GEAS_NO_TYPE },
+};
+
+static const uint32_t k6_Buffer_vow_types[] = { 0 };
+
+static const GeasItemTypes k6_Buffer_remedy_types[] = {
+    { 0, NULL, 16 },
+};
+
+static const GeasContractDesc k6_Buffer = {
     "Buffer", 0xca6ae330d37473e0ULL,
-    1, 9, k_Buffer_pledges,
-    1, k_Buffer_vows,
+    1, 9, k6_Buffer_pledges,
+    1, k6_Buffer_vows,
     0, NULL, 18,
-    k_Buffer_atoms, 0,
+    k6_Buffer_atoms, 0,
     17, 0, 17,
-    k_Buffer_rf, NULL, k_Buffer_rb,
+    k6_Buffer_rf, NULL, k6_Buffer_rb,
     0, NULL,
     NULL,
-    k_Buffer_kinds, NULL, NULL,
-    1, k_Buffer_remedies,
+    k6_Buffer_kinds, NULL, NULL,
+    1, k6_Buffer_remedies,
     0,
+    .ntypes = 17, .types = k6_Buffer_types,
+    .item_types = k6_Buffer_item_types, .vow_types = k6_Buffer_vow_types,
+    .remedy_types = k6_Buffer_remedy_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Buffer);
+    st = geas_register_contract(rt, &k6_Buffer);
     if (st != GEAS_OK) return st;
     return st;
 }

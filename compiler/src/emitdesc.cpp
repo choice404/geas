@@ -20,7 +20,7 @@ std::string countOf(std::size_t count) {
 
 // A table's symbol when it has entries, NULL when it was not emitted
 std::string tableRef(std::string_view contract, std::string_view suffix, std::int64_t count) {
-    return count > 0 ? joined("k_", contract, suffix) : std::string{"NULL"};
+    return count > 0 ? joined(contractStem(contract), suffix) : std::string{"NULL"};
 }
 
 // The number a scalar literal carries, a Bool as 0 or 1 and a Char as its
@@ -53,7 +53,8 @@ void CEmitter::emitSchemas(const ContractShape& shape) {
     }
     const std::string& contract = shape.decl->name;
     for (const SchemaDecl* schema : shape.schemas) {
-        top(joined("static const GeasSchemaCol k_", contract, "_", schema->name, "_cols[] = {"));
+        top(joined("static const GeasSchemaCol ", contractStem(contract), "_", schema->name,
+                   "_cols[] = {"));
         const RecordSig* row = lookup_.sigs().record(schema->name);
         for (std::size_t i = 0; row != nullptr && i < row->fields.size(); ++i) {
             const FieldSig& column = row->fields[i];
@@ -62,12 +63,12 @@ void CEmitter::emitSchemas(const ContractShape& shape) {
         top("};");
         top("");
     }
-    top(joined("static const GeasSchemaDesc k_", contract, "_schemas[] = {"));
+    top(joined("static const GeasSchemaDesc ", contractStem(contract), "_schemas[] = {"));
     for (const SchemaDecl* schema : shape.schemas) {
         const RecordSig* row = lookup_.sigs().record(schema->name);
         const std::size_t columns = row == nullptr ? 0 : row->fields.size();
-        top(joined("    { \"", schema->name, "\", ", countOf(columns), ", k_", contract, "_",
-                   schema->name, "_cols },"));
+        top(joined("    { \"", schema->name, "\", ", countOf(columns), ", ",
+                   contractStem(contract), "_", schema->name, "_cols },"));
     }
     top("};");
     top("");
@@ -105,7 +106,7 @@ void CEmitter::emitVows(const ContractShape& shape) {
     if (shape.vows.empty()) {
         return;
     }
-    top(joined("static const GeasVowDesc k_", shape.decl->name, "_vows[] = {"));
+    top(joined("static const GeasVowDesc ", contractStem(shape.decl->name), "_vows[] = {"));
     for (const VowDecl* vow : shape.vows) {
         const TyId type = lookup_.vowType(*vow);
         const bool isCarriable =
@@ -130,7 +131,7 @@ void CEmitter::emitPledgeTable(const ContractShape& shape) {
     if (shape.pledges.empty() && shape.signals.empty()) {
         return;
     }
-    top(joined("static const GeasPledgeDesc k_", shape.decl->name, "_pledges[] = {"));
+    top(joined("static const GeasPledgeDesc ", contractStem(shape.decl->name), "_pledges[] = {"));
     for (const PledgeShape& pledge : shape.pledges) {
         const std::string_view thunk =
             pledge.decl->body ? std::string_view{pledge.mangled} : "NULL";
@@ -159,13 +160,13 @@ std::string CEmitter::emitSubFlags(const ContractShape& shape) {
     if (!hasTransactional) {
         return "NULL";
     }
-    top(joined("static const uint8_t k_", shape.decl->name, "_sub_flags[] = {"));
+    top(joined("static const uint8_t ", contractStem(shape.decl->name), "_sub_flags[] = {"));
     for (const SubcontractDecl* sub : shape.subs) {
         top(joined("    ", sub->isTransactional ? "GEAS_SUB_TRANSACTIONAL" : "0", ","));
     }
     top("};");
     top("");
-    return joined("k_", shape.decl->name, "_sub_flags");
+    return joined(contractStem(shape.decl->name), "_sub_flags");
 }
 
 void CEmitter::emitDescriptor(const ContractShape& shape, const RequirementCounts& counts,
@@ -174,7 +175,7 @@ void CEmitter::emitDescriptor(const ContractShape& shape, const RequirementCount
     const auto pledges = static_cast<std::int64_t>(shape.pledges.size() + shape.signals.size());
     const auto vows = static_cast<std::int64_t>(shape.vows.size());
     const auto schemas = static_cast<std::int64_t>(shape.schemas.size());
-    top(joined("static const GeasContractDesc k_", name, " = {"));
+    top(joined("static const GeasContractDesc ", contractStem(name), " = {"));
     top(joined("    \"", name, "\", 0x", hashHex16(shape.shapeHash), "ULL,"));
     top(joined("    ", decimal(shape.version), ", ", decimal(pledges), ", ",
                tableRef(name, "_pledges", pledges), ","));
@@ -274,7 +275,7 @@ void CEmitter::emitAttrTail(const ContractShape& shape, std::vector<std::string>
         appendAttrEntries(shape.remedies[i].decl->attrs, AttrTarget::Remedy, i, entries);
     }
     if (entries.empty()) return;
-    const std::string symbol = joined("k_", shape.decl->name, "_attrs");
+    const std::string symbol = joined(contractStem(shape.decl->name), "_attrs");
     top(joined("static const GeasAttrDesc ", symbol, "[] = {"));
     for (const std::string& entry : entries) top(entry);
     top("};");

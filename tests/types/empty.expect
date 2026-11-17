@@ -1,0 +1,6 @@
+// types Blank: 0 nodes
+// types Settings: 2 nodes
+0 STRING
+1 UINT
+vow name 0
+vow retries 1

@@ -1,0 +1,15 @@
+// types Walker: 7 nodes
+0 INT
+1 SUM Tree
+  Leaf
+  Branch(1, 1, 2)
+2 RECORD Node(0, 3)
+3 OPTION(2)
+4 RESULT(2, 0)
+5 STRING
+6 UNIT
+pledge walk(1) -> 4
+pledge note(5) -> 6
+signal moved(2, 0) -> none
+vow limit 0
+remedy undo(2) -> 6

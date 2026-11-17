@@ -1,0 +1,10 @@
+// A contract with no pledge, signal, vow, or remedy has an empty table, and
+// one with vows alone lists only them
+
+contract Blank {
+}
+
+contract Settings {
+    vow name: String = "x"
+    vow retries: UInt
+}

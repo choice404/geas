@@ -1,0 +1,16 @@
+exit 1
+skeleton/boundary_host.geas: 9:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow mark: Char = 'b'
+      ^~~~~~~~
+skeleton/boundary_host.geas: 10:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow small: Byte = 7
+      ^~~~~~~~~
+skeleton/boundary_host.geas: 12:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Char
+      pledge mark_with(letter: Char, size: Byte, choice: Result<Int, String>) -> Result<Int, String> {
+      ^~~~~~~~~~~~~~~~
+skeleton/boundary_host.geas: 12:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge mark_with(letter: Char, size: Byte, choice: Result<Int, String>) -> Result<Int, String> {
+      ^~~~~~~~~~~~~~~~
+skeleton/boundary_host.geas: 12:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Result<Int, String>
+      pledge mark_with(letter: Char, size: Byte, choice: Result<Int, String>) -> Result<Int, String> {
+      ^~~~~~~~~~~~~~~~

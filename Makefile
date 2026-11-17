@@ -28,7 +28,7 @@ RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
     runtime/src/events.c runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
     runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c \
     runtime/src/course.c runtime/src/coursejoin.c runtime/src/coursepark.c \
-    runtime/src/amendrow.c runtime/src/amend.c runtime/src/handoff.c
+    runtime/src/amendrow.c runtime/src/amend.c runtime/src/handoff.c runtime/src/conform.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -64,7 +64,7 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
-.PHONY: test-amend test-amend-saga test-amend-python test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python test-handoff-python tsan-workflow
+.PHONY: test-conform test-amend test-amend-saga test-amend-python test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python test-handoff-python tsan-workflow
 .PHONY: test-requirements
 .PHONY: test-soname test-future test-cancel test-handoff test-process test-dusk tsan-process
 .PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-grpc-saga test-grpc-course test-grpc-saga-go test-grpc-saga-node test-grpc-edge test-grpc-handoff test-supervisor test-supervisor-watch tsan install uninstall clean
@@ -75,7 +75,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: test-course test-course-park test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-handoff test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-handoff-python test-course-saga test-course-python test-amend-saga test-amend-python tsan tsan-workflow tsan-process
+all: test-conform test-boundary test-course test-course-park test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-handoff test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-handoff-python test-course-saga test-course-python test-amend-saga test-amend-python tsan tsan-workflow tsan-process
 
 runtime: $(RT_SO)
 
@@ -451,6 +451,18 @@ test-signal: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_signal.c
 	    tests/runtime/test_signal.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_signal
 	./$(OUT)/test_signal
 
+# The checked boundary gate: every rule of the type table at a fulfillment
+# argument, the returns, remedies, signals, vow bindings, by reference
+# arguments, amends, and stored rows held to it, the registrar refusing a
+# table that does not hold up, a descriptor with no table behaving as it
+# always did, and park rows and wire encodings mutated byte by byte under a
+# fixed seed, every answer a status.
+test-conform: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_conform.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_conform.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_conform
+	./$(OUT)/test_conform
+
 # The workflow park gate: eligibility times, lapses, Ok values, signal
 # payloads, and remedy progress across a park into a fresh runtime, a pass
 # parked in the middle finishing after the resume, a row in the format that
@@ -536,6 +548,26 @@ test-course-saga: course-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/tes
 	    tests/runtime/test_course_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_saga
 	./$(OUT)/test_course_saga
 
+# The checked boundary end to end: the compiler builds skeleton/boundary.geas
+# and skeleton/boundary_host.geas, and a C host drives them with values built
+# wrong on purpose, at every argument, answer, signal, vow, remedy, course
+# call, and park row, each refused with GEAS_ERR_TYPE before a body runs and
+# each beside a conforming value that runs one. The runtime is built with its
+# registrar renamed so the test can count the compiled bodies, see the top of
+# the test.
+BOUNDARY_WRAP := -Dgeas_register_contract_sized=geas_register_contract_sized_real
+
+.PHONY: test-boundary boundary-modules
+boundary-modules: $(GEAS) $(RT_SO) skeleton/boundary.geas skeleton/boundary_host.geas
+	@mkdir -p $(OUT)
+	$(GEAS) build skeleton/boundary.geas
+	$(GEAS) build skeleton/boundary_host.geas
+
+test-boundary: boundary-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_boundary.c
+	$(CC) $(CFLAGS) $(WF_SAN) $(BOUNDARY_WRAP) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_boundary.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_boundary
+	./$(OUT)/test_boundary
+
 # Amendment end to end: the compiler builds skeleton/order_course.geas at
 # version 1 and skeleton/order_course_v2.geas at version 2, whose amends 1
 # block reads the recorded shape in skeleton/shapes, plus a version 2 with
@@ -603,7 +635,7 @@ test-amend-python: amend-saga-modules
 # The workflow gates under ThreadSanitizer: retries with the instance lock
 # released, remedy passes and signals across threads, user bindings, and
 # the courses, handwritten and compiled
-tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c tests/runtime/test_amend.c tests/runtime/test_amend_saga.c tests/runtime/test_handoff.c
+tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c tests/runtime/test_amend.c tests/runtime/test_amend_saga.c tests/runtime/test_handoff.c tests/runtime/test_conform.c
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
@@ -647,6 +679,9 @@ tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) t
 	$(CC) $(CFLAGS) -fsanitize=thread $(COURSE_SAGA_WRAP) -g -pthread -rdynamic $(RT_INC) \
 	    tests/runtime/test_amend_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_amend_saga_tsan
 	@for round in $$(seq 1 30); do ./$(OUT)/test_amend_saga_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_conform.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_conform_tsan
+	@for round in $$(seq 1 10); do ./$(OUT)/test_conform_tsan 200 || exit $$?; done
 
 # The threading gate under ASan: the pool, the per-instance serialization,
 # out-of-order waits, and the break race, with every allocation watched.
@@ -1255,11 +1290,21 @@ test-grpc-saga-node: $(RT_SO) $(GEAS)
 # with two reserved admits four sessions, answers a unary call with all
 # four live, refuses a fifth with RESOURCE_EXHAUSTED, and a pool that
 # leaves no session room refuses to start. NestedOption crosses None,
-# Some(None), and Some(Some(x)) both ways.
+# Some(None), and Some(Some(x)) both ways. skeleton/boundary.geas takes the
+# requests a proto client can send that are not the declared type, a string
+# that is not UTF-8, a message nested past the parser, a Char key outside
+# Unicode's scalar values, a map key sent twice, each INVALID_ARGUMENT, and
+# its supplied bodies answer outside their declared returns on cue, each
+# INTERNAL with nothing latched.
 BRIDGE_EDGE := interop/grpc/edge_client.py
 BRIDGE_CONTRACTS := interop/grpc/contracts
 grpc_edge_stub = $(GEAS) build $(BRIDGE_CONTRACTS)/$(1).geas || exit 1; \
 	$(GEAS) emit-proto $(BRIDGE_CONTRACTS)/$(1).geas || exit 1; \
+	mkdir -p $(GRPC_GEN); \
+	$$py -m grpc_tools.protoc -I $(OUT) --python_out=$(GRPC_GEN) \
+	    --grpc_python_out=$(GRPC_GEN) $(OUT)/$(1).proto || exit 1
+grpc_skeleton_stub = $(GEAS) build skeleton/$(1).geas || exit 1; \
+	$(GEAS) emit-proto skeleton/$(1).geas || exit 1; \
 	mkdir -p $(GRPC_GEN); \
 	$$py -m grpc_tools.protoc -I $(OUT) --python_out=$(GRPC_GEN) \
 	    --grpc_python_out=$(GRPC_GEN) $(OUT)/$(1).proto || exit 1
@@ -1273,6 +1318,7 @@ test-grpc-edge: $(RT_SO) $(GEAS)
 	fi; \
 	$(call grpc_edge_stub,stall); \
 	$(call grpc_edge_stub,nested_option); \
+	$(call grpc_skeleton_stub,boundary); \
 	if $$py $(BRIDGE_SERVER) --port 50265 --max-workers 2 --reserve-workers 2 \
 	        $(BRIDGE_STALL) >/dev/null; then \
 	    echo "[test-grpc-edge] a pool with no session room started"; \
@@ -1283,12 +1329,16 @@ test-grpc-edge: $(RT_SO) $(GEAS)
 	srv=$$!; \
 	$$py $(BRIDGE_SERVER) --port 50266 --max-workers 6 --reserve-workers 2 $(BRIDGE_STALL) & \
 	srvb=$$!; \
-	trap 'kill $$srv $$srvb 2>/dev/null; wait $$srv $$srvb 2>/dev/null' EXIT INT TERM; \
+	$$py $(BRIDGE_SERVER) --port 50267 --module $(OUT)/libboundary.geas.so \
+	    --handlers $(GRPC_HANDLERS)/boundary.py & \
+	srvc=$$!; \
+	trap 'kill $$srv $$srvb $$srvc 2>/dev/null; wait $$srv $$srvb $$srvc 2>/dev/null' EXIT INT TERM; \
 	$$py $(BRIDGE_EDGE) --port 50265 --stall-walk && \
 	$$py $(BRIDGE_EDGE) --port 50265 --nested-walk && \
+	$$py $(BRIDGE_EDGE) --port 50267 --boundary-walk && \
 	$$py $(BRIDGE_EDGE) --port 50266 --admission-walk 4; \
 	code=$$?; \
-	kill $$srv $$srvb 2>/dev/null; wait $$srv $$srvb 2>/dev/null; \
+	kill $$srv $$srvb $$srvc 2>/dev/null; wait $$srv $$srvb $$srvc 2>/dev/null; \
 	if [ $$code -eq 0 ]; then echo "[test-grpc-edge] ok"; fi; \
 	exit $$code
 

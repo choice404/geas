@@ -1,0 +1,10 @@
+// A contract instance never crosses the boundary, so it never reaches a
+// type table
+
+contract Inner {
+    pledge ping() -> Unit
+}
+
+contract Outer {
+    pledge hold(inner: Inner) -> Unit
+}

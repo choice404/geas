@@ -33,8 +33,9 @@ static int g_failures = 0;
 
 /* ---- little endian writers for hand built corpus bytes ---- */
 
+/* Room for the depth bomb, GEAS_WIRE_MAX_DEPTH + 1 eight byte headers */
 typedef struct Buf {
-    uint8_t b[640];
+    uint8_t b[8 * (GEAS_WIRE_MAX_DEPTH + 2)];
     size_t  n;
 } Buf;
 
@@ -666,6 +667,37 @@ static void test_encode_refusals(void) {
 
     CHECK(geas_wire_encode_value(NULL, NULL, 0, &need) == GEAS_ERR_TYPE,
           "encoder refuses a NULL value");
+
+    /* None carries no box; a box behind one is a value no boundary hands on */
+    GeasValue some_int = int_val(1);
+    GeasValue none = zeroed(GEAS_TY_OPTION);
+    none.as.box = &some_int;
+    CHECK(geas_wire_encode_value(&none, NULL, 0, &need) == GEAS_ERR_TYPE,
+          "encoder refuses a None with a box");
+}
+
+/* An Ok or Err of Unit with no box writes the boxed Unit it stands for, so
+ * the two spellings share one byte string and decode to the boxed one */
+static void test_unit_arm(GeasContract* dec) {
+    uint8_t bare[16];
+    uint8_t boxed[16];
+    size_t need_bare = 0;
+    size_t need_boxed = 0;
+    GeasValue unit = zeroed(GEAS_TY_UNIT);
+    GeasValue err = zeroed(GEAS_TY_RESULT);
+    err.tag = 1;
+    CHECK(geas_wire_encode_value(&err, bare, sizeof(bare), &need_bare) == GEAS_OK,
+          "an Err of Unit with no box encodes");
+    err.as.box = &unit;
+    CHECK(geas_wire_encode_value(&err, boxed, sizeof(boxed), &need_boxed) == GEAS_OK,
+          "an Err of Unit boxed encodes");
+    CHECK(need_bare == 16 && need_bare == need_boxed && memcmp(bare, boxed, 16) == 0,
+          "both spellings write the same bytes");
+    GeasValue out;
+    CHECK(geas_wire_decode_value(dec, bare, need_bare, &out, NULL) == GEAS_OK &&
+              out.ty == GEAS_TY_RESULT && out.tag == 1 && out.as.box &&
+              ((const GeasValue*)out.as.box)->ty == GEAS_TY_UNIT,
+          "and decode to the boxed Unit");
 }
 
 /* ---- the emit mode: regenerate the goldens ---- */
@@ -738,6 +770,7 @@ int main(int argc, char** argv) {
             test_negative(dec);
             test_depth(enc, dec);
             test_encode_refusals();
+            test_unit_arm(dec);
         }
     }
 

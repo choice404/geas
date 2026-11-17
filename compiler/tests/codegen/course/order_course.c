@@ -93,7 +93,7 @@ static GeasStatus __geas_ash_OrderSaga_reserve_164137f834809cbf_v2(void* ctx, co
     return GEAS_OK;
 }
 
-static uint32_t k_OrderSaga_course(void* ctx, GeasCourseFrame* f) {
+static uint32_t k9_OrderSaga_course(void* ctx, GeasCourseFrame* f) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
     switch (f->step) {
@@ -300,7 +300,7 @@ label_5:
     return GEAS_COURSE_DONE;
 }
 
-static const GeasVowDesc k_OrderSaga_vows[] = {
+static const GeasVowDesc k9_OrderSaga_vows[] = {
     { "card", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"4242", 4 } } } },
     { "amount", GEAS_TY_FLOAT, 1, { .ty = GEAS_TY_FLOAT, .tag = 0, .as = { .f = 99.5 } } },
     { "sku", GEAS_TY_STRING, 1, { .ty = GEAS_TY_STRING, .tag = 0, .as = { .s = { (uint8_t*)"SKU-1", 5 } } } },
@@ -308,7 +308,7 @@ static const GeasVowDesc k_OrderSaga_vows[] = {
     { "grace", GEAS_TY_INT, 1, { .ty = GEAS_TY_INT, .tag = 0, .as = { .i = 1800000 } } },
 };
 
-static const GeasPledgeDesc k_OrderSaga_pledges[] = {
+static const GeasPledgeDesc k9_OrderSaga_pledges[] = {
     { "authorize", "__geas_ash_OrderSaga_authorize_1df5f3f3885bf8d6_v2", 2, NULL, 0 },
     { "capture", "__geas_ash_OrderSaga_capture_5f7fe51731b3dd09_v2", 1, NULL, 0 },
     { "reserve", "__geas_ash_OrderSaga_reserve_164137f834809cbf_v2", 2, __geas_ash_OrderSaga_reserve_164137f834809cbf_v2, -1 },
@@ -316,18 +316,18 @@ static const GeasPledgeDesc k_OrderSaga_pledges[] = {
     { "delivered", NULL, 1, NULL, -1 },
 };
 
-static const char* const k_OrderSaga_subs[] = {
+static const char* const k9_OrderSaga_subs[] = {
     "Payment",
 };
 
-static const GeasReqAtom k_OrderSaga_atoms[] = {
+static const GeasReqAtom k9_OrderSaga_atoms[] = {
     { "Payment", GEAS_ATOM_FULFILLED, 0, -1 },
     { "reserve", GEAS_ATOM_FULFILLED, -1, 2 },
     { "ship", GEAS_ATOM_FULFILLED, -1, 3 },
     { "delivered", GEAS_ATOM_FULFILLED, -1, 4 },
 };
 
-static const GeasReqOp k_OrderSaga_rf[] = {
+static const GeasReqOp k9_OrderSaga_rf[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_AND, 0 },
@@ -337,13 +337,13 @@ static const GeasReqOp k_OrderSaga_rf[] = {
     { GEAS_REQ_AND, 0 },
 };
 
-static const GeasReqOp k_OrderSaga_rp[] = {
+static const GeasReqOp k9_OrderSaga_rp[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_ATOM, 1 },
     { GEAS_REQ_OR, 0 },
 };
 
-static const GeasReqOp k_OrderSaga_rb[] = {
+static const GeasReqOp k9_OrderSaga_rb[] = {
     { GEAS_REQ_ATOM, 0 },
     { GEAS_REQ_NOT, 0 },
     { GEAS_REQ_ATOM, 1 },
@@ -357,7 +357,7 @@ static const GeasReqOp k_OrderSaga_rb[] = {
     { GEAS_REQ_OR, 0 },
 };
 
-static const uint8_t k_OrderSaga_kinds[] = {
+static const uint8_t k9_OrderSaga_kinds[] = {
     GEAS_KIND_PLEDGE,
     GEAS_KIND_PLEDGE,
     GEAS_KIND_PLEDGE,
@@ -365,57 +365,135 @@ static const uint8_t k_OrderSaga_kinds[] = {
     GEAS_KIND_SIGNAL,
 };
 
-static const uint32_t k_OrderSaga_retry_on_0[] = {
+static const uint32_t k9_OrderSaga_retry_on_0[] = {
     1,
     2,
 };
 
-static const GeasItemRef k_OrderSaga_after_1[] = {
+static const GeasItemRef k9_OrderSaga_after_1[] = {
     { GEAS_REF_PLEDGE, 0 },
 };
 
-static const GeasItemRef k_OrderSaga_after_3[] = {
+static const GeasItemRef k9_OrderSaga_after_3[] = {
     { GEAS_REF_SUB, 0 },
     { GEAS_REF_PLEDGE, 2 },
 };
 
-static const GeasItemRef k_OrderSaga_after_4[] = {
+static const GeasItemRef k9_OrderSaga_after_4[] = {
     { GEAS_REF_PLEDGE, 3 },
 };
 
-static const GeasTermDesc k_OrderSaga_terms[] = {
-    { .within_ms = 30000, .retry_count = 3, .retry_every_ms = 2000, .retry_backoff = 2.0, .retry_cap_ms = 30000, .nretry_on = 2, .retry_on = k_OrderSaga_retry_on_0 },
-    { .within_ms = 60000, .nafter = 1, .after = k_OrderSaga_after_1 },
+static const GeasTermDesc k9_OrderSaga_terms[] = {
+    { .within_ms = 30000, .retry_count = 3, .retry_every_ms = 2000, .retry_backoff = 2.0, .retry_cap_ms = 30000, .nretry_on = 2, .retry_on = k9_OrderSaga_retry_on_0 },
+    { .within_ms = 60000, .nafter = 1, .after = k9_OrderSaga_after_1 },
     { 0 },
-    { .within_ms = 172800000, .nafter = 2, .after = k_OrderSaga_after_3 },
-    { .within_ms = 1209600000, .nafter = 1, .after = k_OrderSaga_after_4 },
+    { .within_ms = 172800000, .nafter = 2, .after = k9_OrderSaga_after_3 },
+    { .within_ms = 1209600000, .nafter = 1, .after = k9_OrderSaga_after_4 },
 };
 
-static const GeasRemedyDesc k_OrderSaga_remedies[] = {
+static const GeasRemedyDesc k9_OrderSaga_remedies[] = {
     { "refund", "__geas_ash_OrderSaga_refund_2a5cbc30109a1eac_v2", 1, 1, NULL, { .retry_count = 10, .retry_every_ms = 60000, .retry_backoff = 2.0, .retry_cap_ms = 3600000 } },
     { "release", "__geas_ash_OrderSaga_release_513c0d43b8fffd1b_v2", 2, 1, NULL, { 0 } },
 };
 
-static const GeasContractDesc k_OrderSaga = {
+static const uint32_t k9_OrderSaga_type_kids_3[] = { 0 };
+static const uint32_t k9_OrderSaga_type_kids_4[] = { 5, 6 };
+static const uint32_t k9_OrderSaga_type_kids_5[] = { 0 };
+static const uint32_t k9_OrderSaga_type_kids_7[] = { 8, 6 };
+static const uint32_t k9_OrderSaga_type_kids_8[] = { 0, 2 };
+static const uint32_t k9_OrderSaga_type_kids_9[] = { 10, 11 };
+static const uint32_t k9_OrderSaga_type_kids_10[] = { 0, 0, 2 };
+static const uint32_t k9_OrderSaga_type_kids_12[] = { 13, 14 };
+static const uint32_t k9_OrderSaga_type_kids_13[] = { 0, 0 };
+static const uint32_t k9_OrderSaga_type_kids_15[] = { 16, 6 };
+
+static const uint32_t k9_OrderSaga_type_fields_6_0[] = { 0 };
+static const uint32_t k9_OrderSaga_type_fields_6_2[] = { 2 };
+static const GeasTypeVariant k9_OrderSaga_type_variants_6[] = {
+    { "Declined", 1, k9_OrderSaga_type_fields_6_0 },
+    { "Timeout", 0, NULL },
+    { "Gateway", 1, k9_OrderSaga_type_fields_6_2 },
+};
+
+static const uint32_t k9_OrderSaga_type_fields_11_0[] = { 0 };
+static const GeasTypeVariant k9_OrderSaga_type_variants_11[] = {
+    { "OutOfStock", 1, k9_OrderSaga_type_fields_11_0 },
+    { "Unavailable", 0, NULL },
+};
+
+static const uint32_t k9_OrderSaga_type_fields_14_1[] = { 0 };
+static const GeasTypeVariant k9_OrderSaga_type_variants_14[] = {
+    { "NoCarrier", 0, NULL },
+    { "Refused", 1, k9_OrderSaga_type_fields_14_1 },
+};
+
+static const GeasTypeNode k9_OrderSaga_types[] = {
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_FLOAT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 1, k9_OrderSaga_type_kids_3, "Card", 0, NULL },
+    { GEAS_TY_RESULT, 2, k9_OrderSaga_type_kids_4, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 1, k9_OrderSaga_type_kids_5, "AuthId", 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "PayError", 3, k9_OrderSaga_type_variants_6 },
+    { GEAS_TY_RESULT, 2, k9_OrderSaga_type_kids_7, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 2, k9_OrderSaga_type_kids_8, "Receipt", 0, NULL },
+    { GEAS_TY_RESULT, 2, k9_OrderSaga_type_kids_9, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 3, k9_OrderSaga_type_kids_10, "Reservation", 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "StockError", 2, k9_OrderSaga_type_variants_11 },
+    { GEAS_TY_RESULT, 2, k9_OrderSaga_type_kids_12, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 2, k9_OrderSaga_type_kids_13, "Tracking", 0, NULL },
+    { GEAS_TY_SUM, 0, NULL, "ShipError", 2, k9_OrderSaga_type_variants_14 },
+    { GEAS_TY_RESULT, 2, k9_OrderSaga_type_kids_15, NULL, 0, NULL },
+    { GEAS_TY_UNIT, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k9_OrderSaga_item_params_0[] = { 3, 1 };
+static const uint32_t k9_OrderSaga_item_params_1[] = { 5 };
+static const uint32_t k9_OrderSaga_item_params_2[] = { 0, 2 };
+static const uint32_t k9_OrderSaga_item_params_3[] = { 10 };
+static const uint32_t k9_OrderSaga_item_params_4[] = { 13 };
+
+static const GeasItemTypes k9_OrderSaga_item_types[] = {
+    { 2, k9_OrderSaga_item_params_0, 4 },
+    { 1, k9_OrderSaga_item_params_1, 7 },
+    { 2, k9_OrderSaga_item_params_2, 9 },
+    { 1, k9_OrderSaga_item_params_3, 12 },
+    { 1, k9_OrderSaga_item_params_4, GEAS_NO_TYPE },
+};
+
+static const uint32_t k9_OrderSaga_vow_types[] = { 0, 1, 0, 2, 2 };
+
+static const uint32_t k9_OrderSaga_remedy_params_0[] = { 8 };
+static const uint32_t k9_OrderSaga_remedy_params_1[] = { 10 };
+
+static const GeasItemTypes k9_OrderSaga_remedy_types[] = {
+    { 1, k9_OrderSaga_remedy_params_0, 15 },
+    { 1, k9_OrderSaga_remedy_params_1, 16 },
+};
+
+static const GeasContractDesc k9_OrderSaga = {
     "OrderSaga", 0x34601efe4025953fULL,
-    2, 5, k_OrderSaga_pledges,
-    5, k_OrderSaga_vows,
-    1, k_OrderSaga_subs, 4,
-    k_OrderSaga_atoms, 1,
+    2, 5, k9_OrderSaga_pledges,
+    5, k9_OrderSaga_vows,
+    1, k9_OrderSaga_subs, 4,
+    k9_OrderSaga_atoms, 1,
     7, 3, 11,
-    k_OrderSaga_rf, k_OrderSaga_rp, k_OrderSaga_rb,
+    k9_OrderSaga_rf, k9_OrderSaga_rp, k9_OrderSaga_rb,
     0, NULL,
     NULL,
-    k_OrderSaga_kinds, k_OrderSaga_terms, NULL,
-    2, k_OrderSaga_remedies,
+    k9_OrderSaga_kinds, k9_OrderSaga_terms, NULL,
+    2, k9_OrderSaga_remedies,
     604800000,
-    .course_fn = k_OrderSaga_course, .course_nslots = 19, .course_hash = 0xdd0c1da76a06600aULL,
+    .course_fn = k9_OrderSaga_course, .course_nslots = 19, .course_hash = 0xdd0c1da76a06600aULL,
+    .ntypes = 17, .types = k9_OrderSaga_types,
+    .item_types = k9_OrderSaga_item_types, .vow_types = k9_OrderSaga_vow_types,
+    .remedy_types = k9_OrderSaga_remedy_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_OrderSaga);
+    st = geas_register_contract(rt, &k9_OrderSaga);
     if (st != GEAS_OK) return st;
     return st;
 }

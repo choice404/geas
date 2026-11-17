@@ -4,6 +4,44 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.9.3] the checked boundary
+
+Geas now holds every value that crosses into its code, or into the runtime's
+keeping, to the type the contract declared all the way down. The compiler
+describes those types once, the runtime checks them before code runs or state
+moves, and the wire codec holds the same nesting line, so a host, a bridge, and
+a parked row all meet one boundary and everything it accepts can be kept.
+
+- emit one type table on each contract descriptor tail, naming every distinct
+  type once and joining recursive types by index, with each pledge, signal,
+  vow, and remedy parameter and return tied to its declared type
+- add `geas dump-types`, validate the whole table when a contract registers,
+  and leave a descriptor with no table on the tag checks it carried before
+- check fulfillment arguments for synchronous, asynchronous, nested, course,
+  and together calls, every compiled or bound body answer, signal payload,
+  vow at sign, remedy argument and answer, by reference argument, vow computed
+  by an amends block, and value decoded at resume, claim, or amendment
+- walk every element, record field, variant tag and payload, option and result
+  box, map key and value, and tuple position, requiring the declared arity and
+  each map key once, Bool as 0 or 1, Char as a Unicode scalar value, String as
+  valid UTF-8, and nesting bounded at 256 levels
+- answer a value that does not conform with `GEAS_ERR_TYPE`, before a body runs
+  or anything is stored, and leave a bound body's malformed answer unlatched
+  so the call may be made again while a course halts on the same status
+- make deep copy and wire decode answer a status for malformed input, share the
+  depth limit between the check and codec, require None to carry no box, and
+  permit an Ok or Err of Unit to carry none
+- keep pledge types inside clauses and local bindings, and refuse one at every
+  pledge, signal, remedy, vow, record, or variant boundary position
+- answer a bridge request whose values do not conform with `INVALID_ARGUMENT`,
+  while a supplied body that raises or returns a malformed value answers
+  `INTERNAL`
+- put the contract name's length in every per contract C symbol, so names that
+  run together cannot produce the same emitted symbol within a module
+- add `skeleton/boundary.geas` and `skeleton/boundary_host.geas`, the
+  `test-conform` and `test-boundary` gates, and fuzz loops over both park row
+  bytes and wire bytes
+
 ## [v0.9.2] the bridge
 
 Geas now carries a contract across the process boundary on the surface the

@@ -1,0 +1,5 @@
+// A vow of pledge type: vows cross the boundary at sign time.
+
+contract Gate {
+    vow step: pledge(Int) -> Unit
+}

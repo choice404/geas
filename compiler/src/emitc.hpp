@@ -1,10 +1,10 @@
 // The module C emitter. Given a checked program it emits one C translation
 // unit: a static function per clause, a static thunk per compiled pledge
 // body in the uniform frame, a static resumable function per course, the
-// vow, pledge, schema, requirements, and amends tables, one contract descriptor
-// per public contract with its shape hash and version baked in, and the
-// single exported geas_module_register. The emitted C includes geas/geas.h
-// and nothing else defines a layout.
+// vow, pledge, schema, requirements, amends, and type tables, one contract
+// descriptor per public contract with its shape hash and version baked in,
+// and the single exported geas_module_register. The emitted C includes
+// geas/geas.h and nothing else defines a layout.
 //
 // One CEmitter rides through the module: the finished file, the body of the
 // thunk being lowered, a scope stack binding a local's name to the C
@@ -26,6 +26,7 @@
 #include "check.hpp"
 #include "diagnostics.hpp"
 #include "emitlookup.hpp"
+#include "typetable.hpp"
 
 namespace geas {
 
@@ -99,8 +100,20 @@ struct StoreOp {
 };
 
 /**
+ * The stem every static table of one contract is named from: k, the byte
+ * length of the contract's name, an underscore, then the name. The length
+ * marks where the name ends, so no contract's stem and suffix can spell
+ * another contract's symbol, whatever underscores the names carry.
+ * @params contract - the contract name
+ * @returns {std::string} - the stem, k5_Hello for contract Hello
+ */
+std::string contractStem(std::string_view contract);
+
+/**
  * The C name of a compiled clause. Clauses are contract private, so the
- * function is static and the name needs no hash or version.
+ * function is static and the name needs no hash or version; the contract's
+ * name rides length prefixed the way contractStem spells it, so a clause
+ * name can never run into the next contract's.
  * @params contract - the contract name, clause - the clause name
  * @returns {std::string} - the function name
  */
@@ -387,6 +400,15 @@ private:
                             std::string_view symbol);
     void genAmendVow(const ContractShape& shape, const AmendVow& item);
     std::optional<CValue> genPriorRead(const Expr& expr, const MemberExpr& member);
+
+    // The type table, emittypes.cpp
+    std::string emitTypeTables(const ContractShape& shape);
+    void emitTypeKids(std::string_view stem, const ContractTypes& types);
+    std::string emitTypeVariants(std::string_view stem, std::size_t index,
+                                 const TypeTableNode& node);
+    std::string emitTypeNodes(std::string_view stem, const ContractTypes& types);
+    std::string emitItemTypes(std::string_view stem, const std::vector<TypeTableItem>& items);
+    std::string emitVowTypes(std::string_view symbol, const std::vector<std::uint32_t>& vows);
 
     EmitLookup lookup_;
     std::vector<Diagnostic> scratch_;

@@ -5,7 +5,9 @@
 # tests/course with `geas dump-course`, and tests/shape with
 # `geas dump-shape`, the debug command that prints every
 # shape string, shape hash, and mangled name, while tests/shape/record
-# holds `geas record` to its goldens. Every NAME.geas with a
+# holds `geas record` to its goldens, and tests/types with
+# `geas dump-types`, the debug command that prints the type table of every
+# contract. Every NAME.geas with a
 # NAME.expect beside it must be accepted and its dump must match the golden
 # byte for byte; check writes nothing to stdout, so its goldens are a single
 # blank line guarding that silence. Every NAME.geas with a
@@ -293,6 +295,7 @@ run_suite typeck check
 run_suite shape dump-shape
 run_layout_pairs
 run_suite course dump-course
+run_suite types dump-types
 run_multi_suite check/mfa
 run_bin_suite
 run_record_suite

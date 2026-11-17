@@ -8,7 +8,8 @@
  * exactly.
  *
  * Nothing in an encoded payload is trusted. Every length is checked against the
- * buffer before it is read, decoding caps its nesting at 64 levels, and the two
+ * buffer before it is read, decoding caps its nesting at GEAS_VALUE_MAX_DEPTH
+ * levels, 256, the same line every boundary holds, and the two
  * tags that never cross, GEAS_TY_INSTANCE and GEAS_TY_PLEDGE_REF, are refused by
  * the encoder with GEAS_ERR_TYPE and read as malformed by the decoder. A
  * malformed payload reports GEAS_ERR_TYPE, the shape mismatch status the ABI
@@ -35,8 +36,9 @@ extern "C" {
 
 /* The decoder refuses a value nested deeper than this, so a hostile payload
  * cannot recurse the stack away. The encoder holds the same line: a value it
- * cannot encode within the cap could never cross anyway. */
-#define GEAS_WIRE_MAX_DEPTH    64
+ * cannot encode within the cap could never cross anyway. It is the boundary's
+ * own GEAS_VALUE_MAX_DEPTH, so a value a boundary accepted always encodes */
+#define GEAS_WIRE_MAX_DEPTH    GEAS_VALUE_MAX_DEPTH
 
 /* The thirteen message kinds, numbered on the wire. Requests flow client to
  * daemon, replies daemon to client, ERROR answers any request whose normal

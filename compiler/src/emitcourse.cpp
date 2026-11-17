@@ -70,7 +70,7 @@ std::string CEmitter::emitCourse(const ContractShape& shape) {
         return "";
     }
     const LoweredCourse& course = found->second;
-    const std::string function = joined("k_", shape.decl->name, "_course");
+    const std::string function = joined(contractStem(shape.decl->name), "_course");
     beginBody(TyId{}, shape.course->lo, shape.course->hi);
     course_ = &course;
     const std::unordered_set<std::int32_t> labels = referencedLabels(course);

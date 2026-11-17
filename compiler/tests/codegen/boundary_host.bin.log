@@ -1,0 +1,4 @@
+exit 1
+skeleton/boundary_host.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The checked boundary for the shapes only a host that links the module
+  ^

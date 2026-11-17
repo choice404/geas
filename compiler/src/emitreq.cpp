@@ -84,7 +84,7 @@ void CEmitter::emitSubNames(const ContractShape& shape) {
     if (shape.subs.empty()) {
         return;
     }
-    top(joined("static const char* const k_", shape.decl->name, "_subs[] = {"));
+    top(joined("static const char* const ", contractStem(shape.decl->name), "_subs[] = {"));
     for (const SubcontractDecl* sub : shape.subs) {
         top(sub->name ? joined("    \"", *sub->name, "\",") : std::string{"    NULL,"});
     }
@@ -106,7 +106,7 @@ void CEmitter::emitOps(std::string_view tag, const std::vector<RequirementOp>& o
     if (ops.empty()) {
         return;
     }
-    top(joined("static const GeasReqOp k_", shape_->decl->name, "_", tag, "[] = {"));
+    top(joined("static const GeasReqOp ", contractStem(shape_->decl->name), "_", tag, "[] = {"));
     for (const RequirementOp& op : ops) {
         top(joined("    { ", opName(op.op), ", ", decimal(op.atom), " },"));
     }
@@ -180,7 +180,7 @@ void CEmitter::emitSourceAtom(const ContractShape& shape, const std::string& nam
 RequirementCounts CEmitter::emitSourceBlock(const ContractShape& shape) {
     const auto atoms = static_cast<std::int64_t>(shape.requirementAtoms.size());
     if (atoms > 0) {
-        top(joined("static const GeasReqAtom k_", shape.decl->name, "_atoms[] = {"));
+        top(joined("static const GeasReqAtom ", contractStem(shape.decl->name), "_atoms[] = {"));
         for (const std::string& name : shape.requirementAtoms) {
             emitSourceAtom(shape, name);
         }
@@ -216,7 +216,7 @@ RequirementCounts CEmitter::emitSourceBlock(const ContractShape& shape) {
 // atoms
 void CEmitter::emitDefaultAtoms(const ContractShape& shape,
                                 const std::vector<std::int64_t>& loose) {
-    top(joined("static const GeasReqAtom k_", shape.decl->name, "_atoms[] = {"));
+    top(joined("static const GeasReqAtom ", contractStem(shape.decl->name), "_atoms[] = {"));
     for (const int kind : {atomFulfilled, atomBroken}) {
         for (std::size_t i = 0; i < shape.subs.size(); ++i) {
             const SubcontractDecl* sub = shape.subs[i];

@@ -76,8 +76,9 @@ in C++23 and emitting C, source files end in `.geas`, a compiled module ends in
   crosses a boundary, data passes by value in both directions, and a reference
   is copied on entry and written back on return, never held by Geas.
 - The runtime enforces the terms. A contract's shape, its vows, its fulfillment
-  policy, its terms, and its version are checked at the boundary, so a mismatch
-  is a descriptive error and never silent corruption.
+  policy, its terms, and its version are checked at the boundary, and every
+  value that crosses it is checked against its declared type all the way down,
+  so a mismatch is a descriptive error and never silent corruption.
 
 ---
 
@@ -896,6 +897,12 @@ inside a pledge body, never a value that crosses the boundary, so nothing a
 foreign host receives can carry an instance it cannot own. See
 [Cross Contract Calls](#cross-contract-calls).
 
+A pledge type, `pledge(Int) -> Unit`, is held to the same line. A pledge value
+is bound to the instance that made it and means nothing outside that process,
+so it is a value only inside the module, in a clause parameter, a clause
+return, and a local binding, and the checker refuses it at every position a
+contract type is refused.
+
 ---
 
 ## Statements and Expressions
@@ -1145,6 +1152,31 @@ layout is fixed and documented. Integers, floats, strings, lists, tuples, maps,
 records, sums, options, and results each have a pinned representation. A string
 is a fat value, a pointer and a byte length, UTF-8, no terminator. A list, a
 tuple, a record, and a map all ride one array arm with different rules.
+
+### The checked boundary
+
+Every value that crosses into a contract is checked to the bottom against its
+declared type: a fulfillment's arguments, by value and by reference, a body's
+answer, a signal's payload, a vow at sign, a remedy's argument and answer, and
+the values a course call carries. The check reaches every element of a list,
+every field of a record and a variant, every key and value of a map, and the
+payload of every `Option` and `Result`, so a `Bool` that is not 0 or 1, a
+`Char` that is not a Unicode scalar value, a `String` that is not UTF-8, a
+record a field short, a sum tag past its variants, a map with a key twice, or
+a list whose elements are not its element type never reaches the code that
+would read it. A value that does not conform is `GEAS_ERR_TYPE` and no body
+runs, nothing latches, and nothing of it is kept. A body's answer that does not
+conform fails that attempt with `GEAS_ERR_TYPE`, retried like any failed
+attempt and never latched, and a course whose call meets it halts with that
+status. A value nests at most 256 levels at any boundary, and anything that
+conforms can always be parked.
+
+The same check runs on a park row. A resume, a claim, and an amend hold the
+vows, the Ok values, the Err payloads, and the signal payloads a row brings
+back to the contract's declared types the same way, so a row edited in the
+store is `GEAS_ERR_TYPE` with no instance built, and a claim that refuses one
+leaves the row where it was. The ABI lays out every rule, see
+[docs/abi.md](docs/abi.md).
 
 ### Ownership
 

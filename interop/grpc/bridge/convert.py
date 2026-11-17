@@ -107,8 +107,16 @@ def _option_in(msg):
 
 
 def _map_in(msg):
+    """A map's entries in the order they came. A key that comes twice is
+    refused: the runtime holds a map to one entry per key at every boundary,
+    and the bridge does not pick which of two values the client meant"""
     entry = msg.DESCRIPTOR.fields[0].message_type
     key_field, value_field = entry.fields_by_name["key"], entry.fields_by_name["value"]
+    seen = set()
+    for e in msg.entries:
+        if e.key in seen:
+            raise ConversionError(f"{msg.DESCRIPTOR.name} carries the key {e.key!r} twice")
+        seen.add(e.key)
     pairs = [(_element_value(key_field, e.key), field_value(e, value_field))
              for e in msg.entries]
     return Typed(GEAS_TY_MAP, pairs, element_tag(key_field))

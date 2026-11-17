@@ -6,7 +6,7 @@
 // items gets a vows function that evaluates each value with prior.NAME read
 // from N's vows and writes an instance owned copy into this version's slot.
 // A contract without an amends block emits nothing here, and its
-// descriptor ends where it always did
+// descriptor names no amends field
 #include "emitc.hpp"
 #include "emittext.hpp"
 #include "hash.hpp"
@@ -193,7 +193,8 @@ std::optional<CValue> CEmitter::genPriorRead(const Expr& expr, const MemberExpr&
 // The GeasAmendDesc of one block, its tables emitted first
 std::string CEmitter::emitAmendEntry(const ContractShape& shape, const AmendsDecl& amends,
                                      const AmendPlan& plan) {
-    const std::string stem = joined("k_", shape.decl->name, "_amend", decimal(amends.version));
+    const std::string stem =
+        joined(contractStem(shape.decl->name), "_amend", decimal(amends.version));
     const RecordedShape& from = plan.from;
     const std::string vowsFn = emitAmendVows(shape, amends, plan, joined(stem, "_vows"));
     const std::string vows = emitAmendNames(joined(stem, "_old_vows"), vowNames(from));
@@ -241,7 +242,7 @@ std::string CEmitter::emitAmends(const ContractShape& shape) {
     if (entries.empty()) {
         return "";
     }
-    const std::string symbol = joined("k_", shape.decl->name, "_amends");
+    const std::string symbol = joined(contractStem(shape.decl->name), "_amends");
     top(joined("static const GeasAmendDesc ", symbol, "[] = {"));
     for (const std::string& entry : entries) {
         top(entry);

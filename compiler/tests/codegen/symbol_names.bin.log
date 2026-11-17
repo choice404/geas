@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/symbol_names.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Contract names that run into one another's table and clause names when the
+  ^

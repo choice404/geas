@@ -42,44 +42,61 @@ static GeasStatus __geas_ash_Sized_allocate_db846a825aeadfc2_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static const GeasVowDesc k_Sized_vows[] = {
+static const GeasVowDesc k5_Sized_vows[] = {
     { "capacity", GEAS_TY_INT, 1, { .ty = GEAS_TY_INT, .tag = 0, .as = { .i = 67108864 } } },
     { "debt", GEAS_TY_INT, 1, { .ty = GEAS_TY_INT, .tag = 0, .as = { .i = -524288 } } },
 };
 
-static const GeasPledgeDesc k_Sized_pledges[] = {
+static const GeasPledgeDesc k5_Sized_pledges[] = {
     { "allocate", "__geas_ash_Sized_allocate_db846a825aeadfc2_v1", 0, __geas_ash_Sized_allocate_db846a825aeadfc2_v1, -1 },
 };
 
-static const GeasReqAtom k_Sized_atoms[] = {
+static const GeasReqAtom k5_Sized_atoms[] = {
     { "allocate", GEAS_ATOM_FULFILLED, -1, 0 },
     { "allocate", GEAS_ATOM_BROKEN, -1, 0 },
 };
 
-static const GeasReqOp k_Sized_rf[] = {
+static const GeasReqOp k5_Sized_rf[] = {
     { GEAS_REQ_ATOM, 0 },
 };
 
-static const GeasReqOp k_Sized_rb[] = {
+static const GeasReqOp k5_Sized_rb[] = {
     { GEAS_REQ_ATOM, 1 },
 };
 
-static const GeasContractDesc k_Sized = {
+static const uint32_t k5_Sized_type_kids_1[] = { 0, 2 };
+
+static const GeasTypeNode k5_Sized_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k5_Sized_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+};
+
+static const GeasItemTypes k5_Sized_item_types[] = {
+    { 0, NULL, 1 },
+};
+
+static const uint32_t k5_Sized_vow_types[] = { 0, 0 };
+
+static const GeasContractDesc k5_Sized = {
     "Sized", 0xdfc1ca002d61c2e0ULL,
-    1, 1, k_Sized_pledges,
-    2, k_Sized_vows,
+    1, 1, k5_Sized_pledges,
+    2, k5_Sized_vows,
     0, NULL, 2,
-    k_Sized_atoms, 0,
+    k5_Sized_atoms, 0,
     1, 0, 1,
-    k_Sized_rf, NULL, k_Sized_rb,
+    k5_Sized_rf, NULL, k5_Sized_rb,
     0, NULL,
     NULL,
+    .ntypes = 3, .types = k5_Sized_types,
+    .item_types = k5_Sized_item_types, .vow_types = k5_Sized_vow_types,
+    .remedy_types = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
-    st = geas_register_contract(rt, &k_Sized);
+    st = geas_register_contract(rt, &k5_Sized);
     if (st != GEAS_OK) return st;
     return st;
 }

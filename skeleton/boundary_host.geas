@@ -1,0 +1,25 @@
+// The checked boundary for the shapes only a host that links the module
+// carries: a Char, a Byte, and a Result handed in as an argument, none of
+// which the gRPC surface spells. boundary.geas holds everything else. The
+// body reads each value as declared, so a Char that is a surrogate, a Byte
+// past its range, or a Result whose tag is neither Ok nor Err would be read
+// that way if it ever got in; the runtime refuses it at the boundary first.
+
+contract BoundaryHost [version: 1] {
+    vow mark: Char = 'b'
+    vow small: Byte = 7
+
+    pledge mark_with(letter: Char, size: Byte, choice: Result<Int, String>) -> Result<Int, String> {
+        let base = match choice {
+            Ok(n) -> n
+            Err(why) -> 0 - 1
+        }
+        if base < 0 || letter == mark {
+            return Err("refused")
+        }
+        if size == small {
+            return Ok(base + 1)
+        }
+        return Ok(base)
+    }
+}

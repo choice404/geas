@@ -32,5 +32,5 @@ contract Ledger [version: 4] {
     }
 
     pledge close() -> Unit
-    pledge hand(next: pledge(Int) -> Unit) -> Unit
+    pledge hand(next: Int) -> Unit
 }

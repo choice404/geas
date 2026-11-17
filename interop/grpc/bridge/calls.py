@@ -12,9 +12,10 @@ built while the call is admitted, so nothing a reply reads outlives the
 instance it came from.
 """
 
-from geas import STATE_NAMES, GeasError
+from geas import GEAS_ERR_TYPE, STATE_NAMES, GeasError
 
 from .convert import ConversionError, error_code, fill_message, request_args
+from .handlers import ANSWERS
 from .sessions import break_quietly, cancel_quietly
 from .status import abort_argument, abort_reply, abort_status, abort_unknown
 from .surface import BREAK, COURSE, PARTIAL, PLEDGE, SIGNAL
@@ -59,10 +60,21 @@ class Calls:
         """The reply is decoded inside the gate, so the value it reads off
         the instance heap is copied out before an ending can reclaim it."""
         args = self._args(method, request, context)
+        name = f"{surface.contract}.{method.target}"
 
         def fulfill_and_fill(contract):
             reply = method.reply()
-            fill_message(reply, contract.fulfill_sync(method.target, *args))
+            with ANSWERS.watching(contract, name) as ran:
+                try:
+                    value = contract.fulfill_sync(method.target, *args)
+                except GeasError as e:
+                    # A supplied body ran, so the arguments conformed and
+                    # the body's own answer did not
+                    if e.status == GEAS_ERR_TYPE and ran[0]:
+                        raise ConversionError("the runtime refused the supplied "
+                                              "body's answer, GEAS_ERR_TYPE") from e
+                    raise
+            fill_message(reply, value)
             return reply
         try:
             return self._run(surface, request, context,

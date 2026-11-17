@@ -139,7 +139,10 @@ GeasStatus geas_module_load(GeasRuntime* rt, const char* so_path);
 /* Called by a module's registrar. The runtime keeps the descriptor pointer,
  * it does not copy the tables. Registering also fills the iname table: one
  * entry for the contract itself and one per pledge, each keyed by its
- * mangled name. GEAS_ERR_STATE once the runtime is frozen. */
+ * mangled name. GEAS_ERR_STATE once the runtime is frozen. A descriptor
+ * that carries a type table has the whole table checked here, every index in
+ * range and every node's kids of the count its tag carries, and one that
+ * does not hold up is GEAS_ERR_TYPE. */
 GeasStatus geas_register_contract(GeasRuntime* rt, const GeasContractDesc* desc);
 
 /* The sized registrar. desc_size is the byte size of the GeasContractDesc the
@@ -401,7 +404,9 @@ GeasStatus geas_iname_dump(GeasRuntime* rt, char* buf, size_t cap, size_t* need)
  * nonzero, applies the vow overrides over the declared defaults, and returns
  * a signed instance. An override naming no vow is GEAS_ERR_NAME, an override
  * of the wrong type is GEAS_ERR_TYPE, and a vow with no default and no
- * override is GEAS_ERR_UNBOUND. Pass NULL and 0 to sign on defaults alone. */
+ * override is GEAS_ERR_UNBOUND. When the descriptor carries a type table,
+ * every vow, default or override, is held to its declared type all the way
+ * down, and one that does not conform is GEAS_ERR_TYPE. Pass NULL and 0 to sign on defaults alone. */
 GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
                             const GeasVowBinding* vows, size_t nvows,
                             uint64_t expected_hash, GeasContract** out);
@@ -668,7 +673,8 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
  * and a nonzero expected_hash must match as well, else GEAS_ERR_VERSION, the
  * same skew rule sign enforces. A key with no row, or a recorded contract
  * this runtime does not register, is GEAS_ERR_NAME; a row whose payload will
- * not decode against the descriptor is GEAS_ERR_TYPE; NULL arguments are
+ * not decode against the descriptor, or whose values do not conform to its
+ * type table when it carries one, is GEAS_ERR_TYPE; NULL arguments are
  * GEAS_ERR_TYPE; a backend failure is GEAS_ERR_STORE. */
 GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
                               uint64_t expected_hash, GeasContract** out);
@@ -770,7 +776,15 @@ GeasStatus geas_pledge_bind_user(GeasRuntime* rt, const char* pledge_name,
  * attempt's outcome latches and is delivered. Fulfilling a signal is
  * GEAS_ERR_TYPE; a signal is delivered, see geas_signal. A contract with a
  * course runs its own pledges, so fulfilling one of them is GEAS_ERR_STATE,
- * here and through geas_pledge_fulfill_sync. */
+ * here and through geas_pledge_fulfill_sync.
+ *
+ * When the descriptor carries a type table the instance's copy of every
+ * argument, by reference ones included, is held to the pledge's declared
+ * parameter types all the way down, and a frame that does not conform is
+ * GEAS_ERR_TYPE with the body never run. The body's answer is held to the
+ * declared return the same way, on every attempt; one that does not conform
+ * is that attempt's GEAS_ERR_TYPE, retried like any failed attempt and never
+ * latched. */
 GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
                               const GeasValue* args, size_t nargs,
                               const GeasRef* refs, size_t nrefs);
@@ -826,7 +840,10 @@ GeasStatus geas_pledge_fulfill_sync(GeasContract* c, const char* pledge_name,
  * first one's. A signal whose after has not landed, a signal that lapsed,
  * and any delivery to a contract that is not Signed, Partial, or Fulfilled
  * are GEAS_ERR_STATE. A name that is a pledge is GEAS_ERR_TYPE, an unknown
- * name GEAS_ERR_NAME, a wrong argument count GEAS_ERR_TYPE. */
+ * name GEAS_ERR_NAME, a wrong argument count GEAS_ERR_TYPE. When the
+ * descriptor carries a type table the payload is held to the signal's
+ * declared parameters all the way down, and one that does not conform is
+ * GEAS_ERR_TYPE with nothing latched or stored. */
 GeasStatus geas_signal(GeasContract* c, const char* name,
                      const GeasValue* args, size_t nargs);
 
@@ -960,7 +977,10 @@ GeasStatus geas_tuple_new(GeasContract* c, uint64_t count, GeasValue* out);
 /* Recursively copies src into instance owned memory: scalars by value,
  * string bytes copied, list, map, tuple, record, and sum payloads copied
  * element by element, Option and Result payloads reboxed. After it returns,
- * nothing in dst aliases memory the instance does not own. */
+ * nothing in dst aliases memory the instance does not own. A source that
+ * claims a length with no data behind it, a list longer than its capacity,
+ * or nesting deeper than 4096 levels, a cyclic value among them, is
+ * GEAS_ERR_TYPE; None copies with no box whatever its box held. */
 GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
                               GeasValue* dst);
 

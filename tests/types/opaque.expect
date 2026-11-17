@@ -1,0 +1,6 @@
+// types Holding: 3 nodes
+0 INT
+1 RESULT(0, 2)
+2 STRING
+pledge take(none, none, none, 0) -> none
+pledge plain(0) -> 1

@@ -61,7 +61,12 @@ GeasStatus geas_signal(GeasContract* c, const char* name,
     /* Already delivered: the latch and the payload are the first one's. */
     if (st == GEAS_OK && c->pledge_state[pidx] == PLEDGE_PENDING) {
         GeasValue payload;
+        GeasBlock* mark = geas_rt_heap_mark(c);
         st = build_payload(c, args, nargs, &payload);
+        /* The instance's copy is held to the declared parameters; a payload
+         * that does not conform lands nothing and leaves nothing behind */
+        if (st == GEAS_OK) st = geas_rt_check_payload(c, pidx, &payload);
+        if (st != GEAS_OK) geas_rt_heap_release(c, mark);
         if (st == GEAS_OK) {
             c->pledge_state[pidx] = PLEDGE_FULFILLED;
             geas_rt_latched(c, pidx, &payload);

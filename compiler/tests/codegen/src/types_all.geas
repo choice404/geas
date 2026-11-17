@@ -1,0 +1,71 @@
+// The type table over every shape a boundary carries: scalars and the
+// Duration and Time that cross as Int, Bytes, nested records, a sum with
+// payload and bare variants, List, Map, Option, Result, and Tuple, a record
+// that reaches itself through a List and one through an Option, a sum that
+// reaches itself, a signal with several parameters, a remedy handed its
+// target's Ok value and one handed nothing, and a vow of every type a
+// compiled descriptor carries
+
+record Address {
+    street: String
+    zip: UInt
+}
+
+record Customer {
+    name: String
+    address: Address
+    tags: List<String>
+}
+
+record Category {
+    title: String
+    children: List<Category>
+}
+
+record Chain {
+    value: Int
+    next: Option<Chain>
+}
+
+Shape is either Empty or Circle(radius: Float) or Group(parts: List<Shape>, label: Char)
+
+FetchError is either Missing or Refused(code: Int, note: String)
+
+contract Catalog [version: 2] {
+    vow count: Int = 1
+    vow limit: UInt
+    vow ratio: Float = 0.5
+    vow live: Bool = true
+    vow mark: Byte
+    vow initial: Char
+    vow label: String = "catalog"
+    vow seed: Bytes
+    vow grace: Duration = 30s
+    vow since: Time
+
+    pledge register(customer: Customer, at: Time) -> Result<Address, FetchError>
+
+    pledge browse(root: Category, depth: Int) -> Option<List<Category>>
+
+    pledge chain(head: Chain) -> Result<Chain, FetchError>
+
+    pledge draw(shape: Shape, scale: Map<String, Float>) -> Result<Tuple<Shape, Bool>, String>
+
+    pledge pack(data: Bytes, wait: Duration) -> Bytes
+
+    pledge route(steps: List<Option<Int>>, retries: Byte) -> Unit
+
+    pledge clear() -> Result<Unit, FetchError>
+
+    pledge tally(extra: Int) -> Result<Int, String> {
+        return Ok(extra + count)
+    }
+
+    signal arrived(customer: Customer, at: Time, codes: Map<Int, List<Byte>>)
+
+    signal pinged()
+
+    remedy unregister for register(address: Address) -> Result<Unit, FetchError>
+
+    remedy unclear for clear() -> Unit
+}
