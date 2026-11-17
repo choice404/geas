@@ -1,0 +1,6 @@
+// Version 1 of the MultiBilling contract tests/check/mfa/vers/billing.geas
+// amends from
+contract MultiBilling {
+    vow account: String
+    pledge charge() -> Unit
+}

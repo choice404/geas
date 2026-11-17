@@ -1,0 +1,4 @@
+subcontract 'Shipping' of version 1 is not in version 2; cover it with rename Shipping -> NEW or retire Shipping
+subcontract 'Legacy' of version 1 is not in version 2; cover it with rename Legacy -> NEW or retire Legacy
+remedy 'refund' undoes 'charge' in version 1 and 'reserve' in version 2; retire 'refund' and declare the remedy under a new name
+remedy 'release' of version 1 is not in version 2; cover it with rename release -> NEW or retire release

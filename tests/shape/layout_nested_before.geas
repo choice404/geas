@@ -1,0 +1,15 @@
+// The layout pair for a record inside a record: the pledge names Order,
+// and Order holds a Card, so a field Card gains moves the hash of a
+// signature that never spells Card, see layout_nested_after.geas
+record Card {
+    number: String
+}
+
+record Order {
+    id: String
+    card: Card
+}
+
+contract Orders {
+    pledge place(order: Order) -> Result<String, Int>
+}

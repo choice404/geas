@@ -50,7 +50,11 @@ typedef enum GeasEventKind {
     GEAS_EVENT_COURSE_RESUMED = 17,
     GEAS_EVENT_COURSE_FINISHED = 18,
     GEAS_EVENT_COURSE_HALTED = 19,
-    GEAS_EVENT_COURSE_CANCELLED = 20
+    GEAS_EVENT_COURSE_CANCELLED = 20,
+    /* A resume through an amends block, before RESUMED, item NULL, old_state
+     * the version the row was written under and new_state the version it
+     * resumed as */
+    GEAS_EVENT_AMENDED = 21
 } GeasEventKind;
 
 /* The prefix through seq is permanent, later fields append after it
@@ -414,6 +418,10 @@ GeasStatus geas_instance_tick(GeasContract* c);
  * the Unix time the signing happened. */
 uint64_t geas_contract_hash(const GeasContract* c);
 int64_t  geas_contract_signed_at(const GeasContract* c);
+
+/* The version a resumed instance was amended from, 0 for an instance that
+ * was signed, resumed under its own version, or is NULL. */
+uint32_t geas_contract_amended_from(GeasContract* c);
 
 /* The runtime the instance was signed against, or NULL for a NULL instance.
  * This is how a pledge body reaches the runtime to sign another contract:

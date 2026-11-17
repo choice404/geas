@@ -129,6 +129,9 @@ GEAS_EVENT_COURSE_RESUMED = 17
 GEAS_EVENT_COURSE_FINISHED = 18
 GEAS_EVENT_COURSE_HALTED = 19
 GEAS_EVENT_COURSE_CANCELLED = 20
+# A resume through an amends block, before RESUMED, old_state the version
+# the row was written under and new_state the version it resumed as
+GEAS_EVENT_AMENDED = 21
 
 # Where an engine driven course stands, docs/abi.md, The course. NONE is a
 # contract with no course, RUNNING one scheduled, running, or delivering the
@@ -605,6 +608,8 @@ class Runtime:
         lib.geas_contract_hash.restype = C.c_uint64
         lib.geas_contract_signed_at.argtypes = [v]
         lib.geas_contract_signed_at.restype = C.c_int64
+        lib.geas_contract_amended_from.argtypes = [v]
+        lib.geas_contract_amended_from.restype = C.c_uint32
         lib.geas_contract_break.argtypes = [v]
         lib.geas_contract_break.restype = i
         lib.geas_cancel_requested.argtypes = [v]
@@ -1147,6 +1152,10 @@ class Contract:
 
     def signed_at(self):
         return self._rt._lib.geas_contract_signed_at(self._ptr)
+
+    def amended_from(self):
+        """The version a resumed instance was amended from, 0 when it was not."""
+        return self._rt._lib.geas_contract_amended_from(self._ptr)
 
     def break_(self):
         _check(self._rt._lib.geas_contract_break(self._ptr),

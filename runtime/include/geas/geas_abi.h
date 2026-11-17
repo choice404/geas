@@ -409,6 +409,69 @@ typedef struct GeasCourseCall {
     size_t           nargs;
 } GeasCourseCall;
 
+/* ---- amendment ---- */
+
+/* A contract at version M resumes a park row written under an earlier
+ * version N through one GeasAmendDesc that names N. Blocks do not chain: each
+ * maps N straight to the version that carries it. The old name lists give
+ * N's counts, the park row is positional over them, and each map holds one
+ * entry per old name: this version's index for it, or -1 when it is dropped.
+ * old_items lists N's pledges then its signals in N's descriptor order,
+ * old_subs uses a NULL entry for an anonymous subcontract.
+ *
+ * latches seeds the items this version adds, each by its pledges table index,
+ * with one GEAS_AMEND_* state; an added item without a seed starts pending.
+ * A seeded fulfilled item carries no Ok value.
+ *
+ * vows_fn, NULL when the block sets no vow, is called once on the resuming
+ * thread with no lock held, ctx the new instance, prior_vows N's vows in N's
+ * order, and vows this version's vow array, already holding every carried
+ * and defaulted value and zero in every other slot. It writes the slots its
+ * block names, values it builds on ctx or constants; the runtime copies
+ * whatever it wrote onto the instance. A status other than GEAS_OK fails the
+ * resume with that status and leaves the row as it was. A slot still zero
+ * after it returns is GEAS_ERR_UNBOUND, a slot of the wrong type
+ * GEAS_ERR_TYPE.
+ *
+ * from_course_hash is the course hash version N carried, 0 when it had
+ * none. restart_course 1 drops a parked course frame and enters this
+ * version's course at step 0 with a fresh one. */
+typedef GeasStatus (*GeasAmendVowsFn)(void* ctx, const GeasValue* prior_vows, size_t nprior,
+                                      GeasValue* vows, size_t nvows);
+
+enum {
+    GEAS_AMEND_PENDING   = 0,
+    GEAS_AMEND_FULFILLED = 1,
+    GEAS_AMEND_BROKEN    = 2
+};
+
+typedef struct GeasAmendLatch {
+    uint32_t item;     /* pledges table index of an item this version adds */
+    uint32_t state;    /* GEAS_AMEND_* */
+} GeasAmendLatch;
+
+typedef struct GeasAmendDesc {
+    uint32_t                from_version;
+    uint32_t                restart_course;
+    uint64_t                from_shape_hash;
+    uint64_t                from_course_hash;
+    uint32_t                nold_vows;
+    const char* const*      old_vows;
+    uint32_t                nold_items;
+    const char* const*      old_items;
+    uint32_t                nold_subs;
+    const char* const*      old_subs;
+    uint32_t                nold_remedies;
+    const char* const*      old_remedies;
+    const int32_t*          vow_map;
+    const int32_t*          item_map;
+    const int32_t*          sub_map;
+    const int32_t*          remedy_map;
+    uint32_t                nlatches;
+    const GeasAmendLatch*   latches;
+    GeasAmendVowsFn         vows_fn;
+} GeasAmendDesc;
+
 /* The requirements surface rides at the tail of the contract descriptor so a
  * zero-filled handwritten descriptor stays valid: no atoms and no lines means
  * the runtime applies the structural default policy over subs and loose
@@ -480,6 +543,11 @@ typedef struct GeasContractDesc {
     GeasCourseFn          course_fn;
     uint32_t              course_nslots;
     uint64_t              course_hash;
+    /* The amends blocks, one per earlier version this one resumes, absent
+     * when namends is zero. A descriptor whose reported size ends before
+     * amends carries none. */
+    uint32_t              namends;
+    const GeasAmendDesc*  amends;
 } GeasContractDesc;
 
 /* The byte size of the descriptor every module built before the workflow
@@ -495,6 +563,10 @@ typedef struct GeasContractDesc {
 /* The descriptor with declared attributes and no course */
 #define GEAS_CONTRACT_DESC_V3_SIZE \
     (offsetof(GeasContractDesc, attrs) + sizeof(const GeasAttrDesc*))
+
+/* The descriptor with the course and no amends */
+#define GEAS_CONTRACT_DESC_V4_SIZE \
+    (offsetof(GeasContractDesc, course_hash) + sizeof(uint64_t))
 
 /* A vow override a host supplies at sign. The value is copied onto the
  * instance, string bytes included; the runtime keeps nothing the host owns. */

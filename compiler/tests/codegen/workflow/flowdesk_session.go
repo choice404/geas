@@ -18,7 +18,7 @@ import (
 // CourierShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const CourierShapeHash uint64 = 0x2684f2c8439cd5ca
+const CourierShapeHash uint64 = 0xa75e59e7dac071df
 
 // CourierSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

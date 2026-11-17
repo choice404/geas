@@ -1,0 +1,7 @@
+geas shape 1
+contract AmendStale
+version 1
+hash 0x2550ddbde6061a94
+course 0x0000000000000000
+shape contract AmendStale;pledge step:()->V;
+pledge step ()->V V

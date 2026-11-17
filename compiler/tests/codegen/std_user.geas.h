@@ -11,16 +11,16 @@
 #define GEAS_MANGLED_IntGate_double_pos "__geas_ash_IntGate_double_pos_a7c9229487606e8b_v1"
 
 /* contract StdUser, version 1 */
-#define GEAS_HASH_StdUser 0xff920d047d909132ULL
+#define GEAS_HASH_StdUser 0x38c56172b5eea80aULL
 
 /* pledge sort3(a: Int, b: Int, c: Int) -> Result<List<Int>, Int> */
 #define GEAS_MANGLED_StdUser_sort3 "__geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1"
 
 /* pledge check_positive(n: Int) -> Result<Int, CommonError> */
-#define GEAS_MANGLED_StdUser_check_positive "__geas_ash_StdUser_check_positive_32bae2fcd33cc271_v1"
+#define GEAS_MANGLED_StdUser_check_positive "__geas_ash_StdUser_check_positive_e48419e7eb8dd411_v1"
 
 /* pledge describe(n: Int) -> Result<String, CommonError> */
-#define GEAS_MANGLED_StdUser_describe "__geas_ash_StdUser_describe_3fd9a34e1a2d3fb3_v1"
+#define GEAS_MANGLED_StdUser_describe "__geas_ash_StdUser_describe_bbf075dd95f7a80f_v1"
 
 /* pledge compute(x: Int) -> Result<Int, Int> */
 #define GEAS_MANGLED_StdUser_compute "__geas_ash_StdUser_compute_a7c9229487606e8b_v1"
@@ -28,52 +28,52 @@
 /* contract MathOps, version 1
  * vow epsilon: Float (default)
  */
-#define GEAS_HASH_MathOps 0x5cea56c248f9b040ULL
+#define GEAS_HASH_MathOps 0xd4c2a79230a9be2bULL
 
 /* pledge abs(n: Int) -> Result<Int, GeasMathError> */
-#define GEAS_MANGLED_MathOps_abs "__geas_ash_MathOps_abs_c9fed415a521619e_v1"
+#define GEAS_MANGLED_MathOps_abs "__geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1"
 
 /* pledge sign(n: Int) -> Result<Int, GeasMathError> */
-#define GEAS_MANGLED_MathOps_sign "__geas_ash_MathOps_sign_c9fed415a521619e_v1"
+#define GEAS_MANGLED_MathOps_sign "__geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1"
 
 /* pledge min(a: Int, b: Int) -> Result<Int, GeasMathError> */
-#define GEAS_MANGLED_MathOps_min "__geas_ash_MathOps_min_b1c7cd6fca6e6dd1_v1"
+#define GEAS_MANGLED_MathOps_min "__geas_ash_MathOps_min_5f090dc695f53dde_v1"
 
 /* pledge max(a: Int, b: Int) -> Result<Int, GeasMathError> */
-#define GEAS_MANGLED_MathOps_max "__geas_ash_MathOps_max_b1c7cd6fca6e6dd1_v1"
+#define GEAS_MANGLED_MathOps_max "__geas_ash_MathOps_max_5f090dc695f53dde_v1"
 
 /* pledge clamp(x: Int, lo: Int, hi: Int) -> Result<Int, GeasMathError> */
-#define GEAS_MANGLED_MathOps_clamp "__geas_ash_MathOps_clamp_6a9c32947d56022e_v1"
+#define GEAS_MANGLED_MathOps_clamp "__geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1"
 
 /* pledge pow_int(base: Int, exp: Int) -> Result<Int, GeasMathError> */
-#define GEAS_MANGLED_MathOps_pow_int "__geas_ash_MathOps_pow_int_b1c7cd6fca6e6dd1_v1"
+#define GEAS_MANGLED_MathOps_pow_int "__geas_ash_MathOps_pow_int_5f090dc695f53dde_v1"
 
 /* pledge abs_f(x: Float) -> Result<Float, GeasMathError> */
-#define GEAS_MANGLED_MathOps_abs_f "__geas_ash_MathOps_abs_f_c6af658fe9f0f6e2_v1"
+#define GEAS_MANGLED_MathOps_abs_f "__geas_ash_MathOps_abs_f_bbe6048dc2677789_v1"
 
 /* pledge sign_f(x: Float) -> Result<Float, GeasMathError> */
-#define GEAS_MANGLED_MathOps_sign_f "__geas_ash_MathOps_sign_f_c6af658fe9f0f6e2_v1"
+#define GEAS_MANGLED_MathOps_sign_f "__geas_ash_MathOps_sign_f_bbe6048dc2677789_v1"
 
 /* pledge min_f(a: Float, b: Float) -> Result<Float, GeasMathError> */
-#define GEAS_MANGLED_MathOps_min_f "__geas_ash_MathOps_min_f_9d53a3d15721ece8_v1"
+#define GEAS_MANGLED_MathOps_min_f "__geas_ash_MathOps_min_f_5e73eefa4d11d063_v1"
 
 /* pledge max_f(a: Float, b: Float) -> Result<Float, GeasMathError> */
-#define GEAS_MANGLED_MathOps_max_f "__geas_ash_MathOps_max_f_9d53a3d15721ece8_v1"
+#define GEAS_MANGLED_MathOps_max_f "__geas_ash_MathOps_max_f_5e73eefa4d11d063_v1"
 
 /* pledge clamp_f(x: Float, lo: Float, hi: Float) -> Result<Float, GeasMathError> */
-#define GEAS_MANGLED_MathOps_clamp_f "__geas_ash_MathOps_clamp_f_c19c2944a7934c42_v1"
+#define GEAS_MANGLED_MathOps_clamp_f "__geas_ash_MathOps_clamp_f_3233404172772e69_v1"
 
 /* pledge approx_eq(a: Float, b: Float) -> Result<Bool, GeasMathError> */
-#define GEAS_MANGLED_MathOps_approx_eq "__geas_ash_MathOps_approx_eq_52f29ef79478267c_v1"
+#define GEAS_MANGLED_MathOps_approx_eq "__geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1"
 
 /* contract ListOps, version 1 */
-#define GEAS_HASH_ListOps 0xd1fa13d356232e92ULL
+#define GEAS_HASH_ListOps 0x8929b04c369b38eaULL
 
 /* pledge sum(xs: List<Int>) -> Result<Int, CommonError> */
-#define GEAS_MANGLED_ListOps_sum "__geas_ash_ListOps_sum_043fb8a354b4b67e_v1"
+#define GEAS_MANGLED_ListOps_sum "__geas_ash_ListOps_sum_03dd8f77689df9be_v1"
 
 /* pledge product(xs: List<Int>) -> Result<Int, CommonError> */
-#define GEAS_MANGLED_ListOps_product "__geas_ash_ListOps_product_043fb8a354b4b67e_v1"
+#define GEAS_MANGLED_ListOps_product "__geas_ash_ListOps_product_03dd8f77689df9be_v1"
 
 /* pledge min_of(xs: List<Int>) -> Option<Int> */
 #define GEAS_MANGLED_ListOps_min_of "__geas_ash_ListOps_min_of_a4953c25fab4fe16_v1"
@@ -82,15 +82,15 @@
 #define GEAS_MANGLED_ListOps_max_of "__geas_ash_ListOps_max_of_a4953c25fab4fe16_v1"
 
 /* pledge contains(xs: List<Int>, want: Int) -> Result<Bool, CommonError> */
-#define GEAS_MANGLED_ListOps_contains "__geas_ash_ListOps_contains_d65f3b6c375948d4_v1"
+#define GEAS_MANGLED_ListOps_contains "__geas_ash_ListOps_contains_5b6985d7961e0de8_v1"
 
 /* pledge count_of(xs: List<Int>, want: Int) -> Result<Int, CommonError> */
-#define GEAS_MANGLED_ListOps_count_of "__geas_ash_ListOps_count_of_fd04302d77c9e91d_v1"
+#define GEAS_MANGLED_ListOps_count_of "__geas_ash_ListOps_count_of_12a3a603b2cf5d65_v1"
 
 /* pledge index_of(xs: List<Int>, want: Int) -> Option<Int> */
 #define GEAS_MANGLED_ListOps_index_of "__geas_ash_ListOps_index_of_18ac3672ca25b51f_v1"
 
 /* pledge all_eq(xs: List<Int>, want: Int) -> Result<Bool, CommonError> */
-#define GEAS_MANGLED_ListOps_all_eq "__geas_ash_ListOps_all_eq_d65f3b6c375948d4_v1"
+#define GEAS_MANGLED_ListOps_all_eq "__geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1"
 
 #endif /* GEAS_HEADER_STD_USER */

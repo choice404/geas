@@ -1,0 +1,10 @@
+// The layout pair for a record, the second half: Card gains expiry, see
+// layout_card_before.geas
+record Card {
+    number: String
+    expiry: Int
+}
+
+contract C {
+    pledge pay(card: Card) -> Result<Unit, Int>
+}

@@ -1,6 +1,7 @@
-// A contract with none of the workflow surface. Its shape string, shape
-// hash, and mangled names are the ones every release has given this
-// source, so this golden guards every older contract's identity
+// A contract with none of the workflow surface. Its shape string ends in
+// the layouts of Card and PayError, the declared types its pledges reach,
+// and close and hand, which reach none, keep the mangled names every
+// release has given them
 record Card {
     number: String
     expiry: String

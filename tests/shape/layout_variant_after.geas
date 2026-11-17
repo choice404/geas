@@ -1,0 +1,8 @@
+// The layout pair for a sum, the second half: PayError gains Gateway, see
+// layout_variant_before.geas
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Checkout {
+    pledge charge(amount: Float) -> Result<Unit, PayError>
+    pledge ping() -> Unit
+}

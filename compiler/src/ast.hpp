@@ -219,7 +219,10 @@ struct AmendLatch {
     LatchState state;
 };
 
-using AmendItem = std::variant<AmendVow, AmendRename, AmendRetire, AmendLatch>;
+// restart course, the resumed instance enters this version's course at step 0
+struct AmendRestart {};
+
+using AmendItem = std::variant<AmendVow, AmendRename, AmendRetire, AmendLatch, AmendRestart>;
 
 struct AmendsDecl {
     std::int64_t lo;

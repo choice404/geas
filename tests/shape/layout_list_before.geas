@@ -1,0 +1,10 @@
+// The layout pair for a record reached through a type argument: the pledge
+// takes a List of Item and returns a Map of them, see layout_list_after.geas
+record Item {
+    sku: String
+    quantity: Int
+}
+
+contract Stock {
+    pledge reserve(items: List<Item>) -> Option<Map<String, Item>>
+}

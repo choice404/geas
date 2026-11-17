@@ -23,7 +23,7 @@ export interface SessionStream {
 // SidekickShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const SidekickShapeHash: bigint = 0x3095e2440e1e9100n;
+export const SidekickShapeHash: bigint = 0xb4324b39e6ea588an;
 
 export interface SidekickSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
@@ -108,7 +108,7 @@ export function resumeSidekickSession(
 // MainShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const MainShapeHash: bigint = 0x5aba182af590ab32n;
+export const MainShapeHash: bigint = 0xa55394f654fdaec4n;
 
 export interface MainSignRequest {
   greeting?: string;  // the vow; unset takes the declared default

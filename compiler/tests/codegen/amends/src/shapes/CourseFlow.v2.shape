@@ -1,0 +1,10 @@
+geas shape 2
+contract CourseFlow
+version 2
+hash 0x9fb217616a51c67b
+course 0xb2b1948a9046f314
+shape contract CourseFlow;vow target:I;pledge first:(I)->R(I,S);pledge second:(I)->R(I,S);signal ready:(S)->V;course;
+vow target I
+pledge first (I)->R(I,S) I
+pledge second (I)->R(I,S) I
+signal ready (S)

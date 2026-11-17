@@ -361,7 +361,7 @@ static const GeasVowDesc k_Flow_vows[] = {
 };
 
 static const GeasPledgeDesc k_Flow_pledges[] = {
-    { "first", "__geas_ash_Flow_first_078b45426fc5a3ac_v1", 1, NULL, 0 },
+    { "first", "__geas_ash_Flow_first_e91432aef8c897b2_v1", 1, NULL, 0 },
     { "second", "__geas_ash_Flow_second_1da73ef4d721fbeb_v1", 1, NULL, -1 },
     { "third", "__geas_ash_Flow_third_0e2ba22315b89a85_v1", 0, NULL, -1 },
     { "approved", NULL, 1, NULL, -1 },
@@ -430,7 +430,7 @@ static const uint8_t k_Flow_kinds[] = {
 };
 
 static const GeasContractDesc k_Flow = {
-    "Flow", 0x1dd9569d3b76ea36ULL,
+    "Flow", 0xb421a32f1492afa4ULL,
     1, 6, k_Flow_pledges,
     1, k_Flow_vows,
     1, k_Flow_subs, 12,

@@ -1,0 +1,160 @@
+// The order saga, version 2. This is the same OrderCourse contract as
+// skeleton/order_course.geas, the next version of it, and a saga signed
+// under version 1 and parked somewhere in its course resumes as this one.
+// The two files declare one contract at two versions, so a runtime loads one
+// of them, never both.
+//
+// Version 2 moves the saga along the way a real one moves. The warehouse
+// calls the step that hands the parcel over dispatch now, so ship is renamed
+// and every saga that already shipped keeps its latch and its tracking under
+// the new name. The customer is told the tracking code the moment the parcel
+// leaves, through notify, a step version 1 never had. The carrier chases its
+// own quiet parcels now, so chase is gone, and the course waits on delivered
+// alone, its three day window still the one deciding whether it lands. The
+// order is counted in cents, so the amount vow is gone and cents takes its
+// place with no default: a host signing version 2 names what it charges. A
+// parcel already out when the saga breaks is recalled through a remedy of its
+// own.
+//
+// The amends 1 block is how a version 1 saga becomes a version 2 one, and
+// every difference between the two versions is covered by exactly one item:
+//
+//   vow cents       version 1 had no cents, and with no default the block
+//                   works it out from the amount version 1 was signed with
+//   rename          ship's latch, its error, its tracking, and its eligibility
+//                   carry over to dispatch, so the recall remedy undoes a
+//                   parcel version 1 shipped
+//   retire chase    the latch of a step version 2 no longer has is dropped
+//   latch notify    a saga that shipped under version 1 never told the
+//                   customer anything, so notify starts pending and the
+//                   course gets to it
+//   restart course  the course changed, so a resumed saga enters it at step
+//                   0 with a fresh frame; every step that already latched
+//                   runs again at least once and keeps the latch it had
+//
+// The terms, the requirements, and the contract's week change freely and
+// need no item. The shape of version 1 the block is checked against lives in
+// skeleton/shapes, written by geas record from version 1's source.
+
+record Card {
+    number: String
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+    amount: Int
+}
+
+record Reservation {
+    id: String
+    sku: String
+    hold: Duration
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderCourse [version: 2, term: 7d] {
+    vow card: String = "4111"
+    vow cents: Int
+    vow sku: String = "sku-1"
+    vow hold: Duration = 1h
+    vow grace: Duration = 30m
+
+    subcontract Payment {
+        pledge authorize(card: Card) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    // The stock is held for what the vow asks plus the grace, and a hold
+    // longer than a day is more than the warehouse gives
+    pledge plan(asked: Duration) -> Result<Duration, StockError> {
+        let total = asked + grace
+        if total > 1d {
+            return Err(Unavailable)
+        }
+        return Ok(total)
+    }
+
+    pledge reserve(sku: String, hold: Duration) -> Result<Reservation, StockError>
+
+    pledge dispatch(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+
+    // Tells the customer the tracking code of the parcel that just left
+    pledge notify(tracking: Tracking) -> Result<Unit, ShipError>
+        after dispatch
+
+    signal delivered(tracking: Tracking) after dispatch within 3d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 2 every 1m
+
+    // A reservation that is not the one this saga asked for is not this
+    // saga's to release
+    remedy release for reserve(res: Reservation) -> Result<Unit, StockError> {
+        if res.sku != sku || res.hold < grace {
+            return Err(Unavailable)
+        }
+        return Ok(released())
+    }
+
+    // A parcel already out comes back to the warehouse
+    remedy recall for dispatch(tracking: Tracking) -> Result<Unit, ShipError>
+
+    clause released() -> Unit {
+        return
+    }
+
+    requirements {
+        fulfill: Payment && reserve && dispatch && notify && delivered
+        partial: Payment || reserve
+        break: !Payment || !reserve || !dispatch || !notify || !delivered
+    }
+
+    amends 1 {
+        // Version 1 counted the order in whole units
+        vow cents = prior.amount * 100
+        rename ship -> dispatch
+        retire chase
+        latch notify as pending
+        restart course
+    }
+
+    // Every step below is a durable step: a parked saga resumes at the one
+    // it stopped on, with every binding it had made
+    course {
+        // An order of nothing has nothing to run
+        if cents <= 0 {
+            return
+        }
+        let window = plan(hold)?
+        let auth = authorize(Card { number: card })?
+        // Both calls run at once, and the bindings are visible after
+        together {
+            let receipt = capture(auth)?
+            let held = reserve(sku, window)?
+        }
+        let tracking = dispatch(held)?
+        notify(tracking)?
+        // The parcel; the delivered signal's own three days decide whether
+        // it ever lands
+        await delivered
+    }
+}

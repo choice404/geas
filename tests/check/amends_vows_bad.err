@@ -1,0 +1,9 @@
+vow 'count' is 'Int' in version 1 and 'Float' in version 2; supply it with vow count = expr
+vow 'fresh' is new in version 2 and has no default; supply it with vow fresh = expr
+rename 'url' -> 'address': the vow is 'String' in version 1 and 'Int' in version 2; set 'address' with vow address = expr, reading prior.url
+retire names the vow 'legacy'; a vow version 2 lacks is dropped with no item
+prior.items is 'List<Int>' in version 1, a type version 2 no longer declares
+version 1 has no vow 'missing' to read through prior
+amends vow 'note' is set twice
+prior is the instance of the amended version, not a value; read one of its vows as prior.NAME
+rename names 'ghost', which version 1 never had

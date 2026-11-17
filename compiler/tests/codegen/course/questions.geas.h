@@ -5,9 +5,9 @@
 #define GEAS_HEADER_QUESTIONS
 
 /* contract Flow, version 1 */
-#define GEAS_HASH_Flow 0x1981c57b6bfbfb49ULL
+#define GEAS_HASH_Flow 0xa52a98e6eef86695ULL
 
 /* pledge value() -> Result<Int, Problem>, abstract */
-#define GEAS_MANGLED_Flow_value "__geas_ash_Flow_value_2239093df2007542_v1"
+#define GEAS_MANGLED_Flow_value "__geas_ash_Flow_value_bb9b2465b4ec69ea_v1"
 
 #endif /* GEAS_HEADER_QUESTIONS */

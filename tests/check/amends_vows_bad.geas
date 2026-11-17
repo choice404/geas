@@ -1,0 +1,19 @@
+// Every vow difference of version 1 against version 2 left uncovered or
+// covered the wrong way
+contract AmendVows [version: 2] {
+    vow keep: String
+    vow count: Float
+    vow fresh: Int
+    vow address: Int
+    vow items: List<String>
+    vow note: String
+
+    amends 1 {
+        rename url -> address
+        retire legacy
+        vow items = prior.items
+        vow note = prior.missing
+        vow note = prior
+        rename ghost -> keep
+    }
+}

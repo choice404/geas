@@ -3,10 +3,12 @@
 
 #include <array>
 #include <charconv>
+#include <set>
 #include <unordered_set>
 #include <utility>
 
 #include "hash.hpp"
+#include "layout.hpp"
 
 namespace geas {
 
@@ -100,7 +102,7 @@ class ShapeBuilder {
 public:
     ShapeBuilder(const Ast& ast, const Sigs& sigs, const TypeArena& types,
                  const CheckTables& tables)
-        : ast_{ast}, sigs_{sigs}, types_{types}, tables_{tables} {}
+        : ast_{ast}, sigs_{sigs}, types_{types}, tables_{tables}, layouts_{ast, sigs, types} {}
 
     ContractShape build(const ContractDecl& contract);
 
@@ -110,6 +112,8 @@ private:
     void addPledge(const PledgeDecl& pledge, int subOrdinal, ContractShape& shape);
     void addRemedy(const RemedyDecl& remedy, ContractShape& shape);
     void collectAtoms(ReqId id, ContractShape& shape, std::unordered_set<std::string>& seen);
+    std::uint64_t signatureHash(const std::string& signature, const CallableSig& sig) const;
+    std::vector<TypeLayout> contractLayouts(const ContractShape& shape) const;
     std::string shapeString(const ContractShape& shape) const;
     std::string classicSegments(const ContractShape& shape) const;
     std::string workflowSegments(const ContractShape& shape) const;
@@ -119,19 +123,54 @@ private:
     const Sigs& sigs_;
     const TypeArena& types_;
     const CheckTables& tables_;
+    LayoutIndex layouts_;
 };
 
+// The hash a mangled name carries: the signature spelling, then the layout
+// of every declared type the signature reaches, so a signature that reaches
+// none hashes as its spelling alone
+std::uint64_t ShapeBuilder::signatureHash(const std::string& signature,
+                                          const CallableSig& sig) const {
+    std::set<std::string> names;
+    layouts_.reachSignature(sig, names);
+    return fnv1a64(signature + layoutSegments(layouts_.layoutsOf(names)));
+}
+
+// The layouts of every declared type the boundary reaches: the vows, the
+// pledge and signal signatures, and the remedy signatures
+std::vector<TypeLayout> ShapeBuilder::contractLayouts(const ContractShape& shape) const {
+    std::set<std::string> names;
+    for (const VowDecl* vow : shape.vows) {
+        const auto sig = sigs_.vows.find(vow);
+        if (sig != sigs_.vows.end()) {
+            layouts_.reach(sig->second.type, names);
+        }
+    }
+    for (const PledgeShape& pledge : shape.pledges) {
+        layouts_.reachSignature(sigOr(sigs_.pledges, pledge.decl), names);
+    }
+    for (const SignalShape& signal : shape.signals) {
+        layouts_.reachSignature(sigOr(sigs_.signals, signal.decl), names);
+    }
+    for (const RemedyShape& remedy : shape.remedies) {
+        layouts_.reachSignature(sigOr(sigs_.remedies, remedy.decl), names);
+    }
+    return layouts_.layoutsOf(names);
+}
+
 void ShapeBuilder::addPledge(const PledgeDecl& pledge, int subOrdinal, ContractShape& shape) {
-    std::string signature = signatureCanon(types_, sigOr(sigs_.pledges, &pledge));
-    const std::uint64_t sigHash = fnv1a64(signature);
+    const CallableSig sig = sigOr(sigs_.pledges, &pledge);
+    std::string signature = signatureCanon(types_, sig);
+    const std::uint64_t sigHash = signatureHash(signature, sig);
     std::string mangled = mangleSymbol(shape.decl->name, pledge.name, sigHash, shape.version);
     shape.pledges.push_back(
         PledgeShape{&pledge, subOrdinal, std::move(signature), sigHash, std::move(mangled)});
 }
 
 void ShapeBuilder::addRemedy(const RemedyDecl& remedy, ContractShape& shape) {
-    std::string signature = signatureCanon(types_, sigOr(sigs_.remedies, &remedy));
-    const std::uint64_t sigHash = fnv1a64(signature);
+    const CallableSig sig = sigOr(sigs_.remedies, &remedy);
+    std::string signature = signatureCanon(types_, sig);
+    const std::uint64_t sigHash = signatureHash(signature, sig);
     std::string mangled = mangleSymbol(shape.decl->name, remedy.name, sigHash, shape.version);
     const auto target = tables_.remedyTargets.find(&remedy);
     const PledgeDecl* pledge = target == tables_.remedyTargets.end() ? nullptr : target->second;
@@ -268,8 +307,10 @@ std::string ShapeBuilder::workflowSegments(const ContractShape& shape) const {
     return out;
 }
 
+// The layout segments go last, so a contract that reaches no declared
+// record or sum keeps the string it had before layouts were spelled
 std::string ShapeBuilder::shapeString(const ContractShape& shape) const {
-    return classicSegments(shape) + workflowSegments(shape);
+    return classicSegments(shape) + workflowSegments(shape) + layoutSegments(shape.layouts);
 }
 
 ContractShape ShapeBuilder::build(const ContractDecl& contract) {
@@ -287,6 +328,7 @@ ContractShape ShapeBuilder::build(const ContractDecl& contract) {
             }
         }
     }
+    shape.layouts = contractLayouts(shape);
     shape.shape = shapeString(shape);
     shape.shapeHash = fnv1a64(shape.shape);
     return shape;
@@ -318,6 +360,11 @@ std::optional<std::int64_t> contractTerm(const Ast& ast, const ContractDecl& con
         }
     }
     return std::nullopt;
+}
+
+ContractShape buildContractShape(const Ast& ast, const Sigs& sigs, const TypeArena& types,
+                                 const CheckTables& tables, const ContractDecl& contract) {
+    return ShapeBuilder{ast, sigs, types, tables}.build(contract);
 }
 
 std::vector<ContractShape> buildContractShapes(const Program& program, const Sigs& sigs,

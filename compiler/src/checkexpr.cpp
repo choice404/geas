@@ -124,7 +124,10 @@ TyId Checker::inferInt(const Expr& expr, const IntLiteral& literal, TyId want) {
 TyId Checker::inferMemberIdent(const Expr& expr, const std::string& name,
                                const MemberEntry& member) {
     switch (member.kind()) {
-        case MemberKind::Vow: markUse(expr, ExprUse::Vow); return vowType(*member.vow());
+        case MemberKind::Vow:
+            markUse(expr, ExprUse::Vow);
+            checkAmendVowRead(expr, name);
+            return vowType(*member.vow());
         case MemberKind::Clause:
             emitAt(expr, "clause " + quoted(name) + " is not a value; call it");
             return unknown();
@@ -150,11 +153,12 @@ TyId Checker::inferMemberIdent(const Expr& expr, const std::string& name,
 }
 
 // A bare name nothing declares. Inside an amends value prior stands for the
-// older instance, whose vows are not known at this stage, so a read through
-// it takes any type
+// older instance, read one vow at a time as prior.NAME and never whole
 TyId Checker::inferUndeclaredIdent(const Expr& expr, const std::string& name) {
     if (isInAmends_ && name == "prior") {
         markUse(expr, ExprUse::PriorInstance);
+        emitAt(expr, "prior is the instance of the amended version, not a value; read one of its "
+                     "vows as prior.NAME");
         return unknown();
     }
     if (isInCourse_ && resolved_.findPledge(contract_, name) != nullptr) {

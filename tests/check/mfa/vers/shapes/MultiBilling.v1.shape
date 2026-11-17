@@ -1,0 +1,8 @@
+geas shape 2
+contract MultiBilling
+version 1
+hash 0x04efdd4a8d8bb5eb
+course 0x0000000000000000
+shape contract MultiBilling;vow account:S;pledge charge:()->V;
+vow account S
+pledge charge ()->V V

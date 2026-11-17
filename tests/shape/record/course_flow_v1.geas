@@ -1,0 +1,11 @@
+// Version 1 of the CourseFlow contract compiler/tests/codegen/amends/src/amend_course.geas
+// amends from, its course shorter than the one version 3 runs
+contract CourseFlow {
+    vow target: Int
+    pledge first(n: Int) -> Result<Int, String>
+    signal ready(value: String)
+    course {
+        let a = first(target)?
+        await ready
+    }
+}

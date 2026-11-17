@@ -14,7 +14,7 @@
  * vow title: String (default)
  * vow bare: Int (no default)
  */
-#define GEAS_HASH_Values 0xc3f37ba8eb06249fULL
+#define GEAS_HASH_Values 0x5a27209888a4035eULL
 
 /* pledge maps(key: String) -> Result<Int, Int> */
 #define GEAS_MANGLED_Values_maps "__geas_ash_Values_maps_029bb8b0d37e9f59_v3"
@@ -32,7 +32,7 @@
 #define GEAS_MANGLED_Values_shapes "__geas_ash_Values_shapes_c99ed8be3812f8ec_v3"
 
 /* pledge nested(w: Result<Option<Shape>, String>) -> Option<Float> */
-#define GEAS_MANGLED_Values_nested "__geas_ash_Values_nested_49ebaa617904fe86_v3"
+#define GEAS_MANGLED_Values_nested "__geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3"
 
 /* pledge lists(xs: List<String>) -> Result<Int, Int> */
 #define GEAS_MANGLED_Values_lists "__geas_ash_Values_lists_508db3df2a0e7d18_v3"

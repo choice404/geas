@@ -1,0 +1,8 @@
+vow 'card' is 'Card' in both versions, but the layout of 'Card' changed between version 1 and version 2; supply it with vow card = expr
+vow 'wallet' is 'Wallet' in both versions, but the layout of 'Card' changed between version 1 and version 2; supply it with vow wallet = expr
+prior.spare is 'Card' in version 1, but the layout of 'Card' changed between version 1 and version 2; prior reads a declared type only when its layout is the same in both versions
+rename 'moved' -> 'renamed': the vow is 'Card' in both versions, but the layout of 'Card' changed between version 1 and version 2; set 'renamed' with vow renamed = expr
+rename 'stale' -> 'fresh': 'stale' yields 'Card' in both versions, but the layout of 'Card' changed between version 1 and version 2; a stored value cannot change layout, so retire 'stale' instead
+pledge 'charge' yields 'Card' in both versions, but the layout of 'Card' changed between version 1 and version 2; its stored value cannot carry, so retire 'charge' and declare the pledge under a new name
+pledge 'settle' yields 'Outcome' in both versions, but the layout of 'Outcome' changed between version 1 and version 2; its stored value cannot carry, so retire 'settle' and declare the pledge under a new name
+signal 'tapped' carries '(Card)' in both versions, but the layout of 'Card' changed between version 1 and version 2; its stored value cannot carry, so retire 'tapped' and declare the signal under a new name

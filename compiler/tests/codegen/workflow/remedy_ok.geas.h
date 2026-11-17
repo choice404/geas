@@ -5,34 +5,34 @@
 #define GEAS_HEADER_REMEDY_OK
 
 /* contract Shop, version 1 */
-#define GEAS_HASH_Shop 0xdcb6bee302ea74bcULL
+#define GEAS_HASH_Shop 0x4f1dafc2484cec0bULL
 
 /* pledge capture() -> Result<Receipt, PayError>, abstract */
-#define GEAS_MANGLED_Shop_capture "__geas_ash_Shop_capture_2f8266c0d461b976_v1"
+#define GEAS_MANGLED_Shop_capture "__geas_ash_Shop_capture_c37f34d629cfee53_v1"
 
 /* pledge reserve() -> Result<Item, PayError>, abstract */
-#define GEAS_MANGLED_Shop_reserve "__geas_ash_Shop_reserve_7f6298d05e2d5c65_v1"
+#define GEAS_MANGLED_Shop_reserve "__geas_ash_Shop_reserve_eee45d11777d8dad_v1"
 
 /* pledge notify() -> Unit, abstract */
 #define GEAS_MANGLED_Shop_notify "__geas_ash_Shop_notify_0e2ba22315b89a85_v1"
 
 /* pledge lookup() -> Option<Item>, abstract */
-#define GEAS_MANGLED_Shop_lookup "__geas_ash_Shop_lookup_d493820ada14c9da_v1"
+#define GEAS_MANGLED_Shop_lookup "__geas_ash_Shop_lookup_7c2eacb945e01ae8_v1"
 
 /* pledge log() -> Result<Unit, PayError>, abstract */
-#define GEAS_MANGLED_Shop_log "__geas_ash_Shop_log_3ecc30ca1824269c_v1"
+#define GEAS_MANGLED_Shop_log "__geas_ash_Shop_log_c218b655ee1b7462_v1"
 
 /* remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>, abstract */
-#define GEAS_MANGLED_Shop_refund "__geas_ash_Shop_refund_73b89f044b14c286_v1"
+#define GEAS_MANGLED_Shop_refund "__geas_ash_Shop_refund_476b7004a9825223_v1"
 
 /* remedy release for reserve(item: Item) -> Unit */
-#define GEAS_MANGLED_Shop_release "__geas_ash_Shop_release_6ffc3376f1af4e1a_v1"
+#define GEAS_MANGLED_Shop_release "__geas_ash_Shop_release_7048d1fc295d5aa8_v1"
 
 /* remedy retract for notify() -> Unit, abstract */
 #define GEAS_MANGLED_Shop_retract "__geas_ash_Shop_retract_0e2ba22315b89a85_v1"
 
 /* remedy forget for lookup() -> Result<Unit, PayError> */
-#define GEAS_MANGLED_Shop_forget "__geas_ash_Shop_forget_3ecc30ca1824269c_v1"
+#define GEAS_MANGLED_Shop_forget "__geas_ash_Shop_forget_c218b655ee1b7462_v1"
 
 /* remedy erase for log() -> Unit, abstract */
 #define GEAS_MANGLED_Shop_erase "__geas_ash_Shop_erase_0e2ba22315b89a85_v1"

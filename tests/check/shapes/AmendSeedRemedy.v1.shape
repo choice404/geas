@@ -1,0 +1,7 @@
+geas shape 2
+contract AmendSeedRemedy
+version 1
+hash 0x9192a7c3d18f58b5
+course 0x0000000000000000
+shape contract AmendSeedRemedy;pledge ship:()->R(I,S);
+pledge ship ()->R(I,S) I

@@ -1,0 +1,19 @@
+// Subcontracts and remedies of version 1 left uncovered, and a carried
+// remedy that undoes another pledge than it did
+contract AmendParts [version: 2] {
+    subcontract Billing {
+        pledge charge() -> Result<Int, String>
+    }
+    subcontract {
+        pledge log() -> Unit
+    }
+    pledge reserve() -> Result<Int, String>
+    pledge pack() -> Unit
+    pledge old() -> Unit
+
+    remedy refund for reserve(id: Int) -> Unit
+    remedy unpack for pack() -> Unit
+
+    amends 1 {
+    }
+}

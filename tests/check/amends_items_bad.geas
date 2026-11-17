@@ -1,0 +1,30 @@
+// Every pledge and signal difference of version 1 against version 2 left
+// uncovered or covered the wrong way
+contract AmendItems [version: 2] {
+    pledge reserve() -> Result<Float, String>
+    signal arrived(code: Int)
+    signal notify()
+    pledge ship() -> Result<Int, String>
+    pledge pinged() -> Unit
+    pledge score() -> Result<Int, String>
+    pledge extra() -> Unit
+    pledge other() -> Unit
+    pledge wrapped() -> Unit
+    signal flag(n: Int)
+
+    amends 1 {
+        rename dispatch -> ship
+        rename wrap -> wrapped
+        latch wrapped as fulfilled
+        latch score as fulfilled
+        retire ghost
+        retire flag
+        latch extra as pending
+        latch extra as broken
+        rename score -> extra
+        rename spare -> score
+        rename bell -> other
+        restart course
+        restart course
+    }
+}

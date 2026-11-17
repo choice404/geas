@@ -2,10 +2,10 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k_Shop_pledges[] = {
-    { "authorize", "__geas_ash_Shop_authorize_7d96b8d6baea6752_v1", 1, NULL, 0 },
-    { "capture", "__geas_ash_Shop_capture_f0456cfc1359aa3c_v1", 1, NULL, 0 },
-    { "reserve", "__geas_ash_Shop_reserve_b261820576bfbfc8_v1", 1, NULL, -1 },
-    { "ship", "__geas_ash_Shop_ship_3ecc30ca1824269c_v1", 0, NULL, -1 },
+    { "authorize", "__geas_ash_Shop_authorize_6b898bccc14bc9bf_v1", 1, NULL, 0 },
+    { "capture", "__geas_ash_Shop_capture_bb54dfb8b90dc41d_v1", 1, NULL, 0 },
+    { "reserve", "__geas_ash_Shop_reserve_8d0d444673e235b8_v1", 1, NULL, -1 },
+    { "ship", "__geas_ash_Shop_ship_c218b655ee1b7462_v1", 0, NULL, -1 },
     { "review", "__geas_ash_Shop_review_0e2ba22315b89a85_v1", 0, NULL, 1 },
     { "delivered", NULL, 0, NULL, -1 },
 };
@@ -108,11 +108,11 @@ static const uint32_t k_Shop_retry_on_remedy_0[] = {
 };
 
 static const GeasRemedyDesc k_Shop_remedies[] = {
-    { "refund", "__geas_ash_Shop_refund_73b89f044b14c286_v1", 1, 1, NULL, { .within_ms = 3600000, .retry_count = 10, .retry_every_ms = 60000, .retry_backoff = 1.0, .retry_cap_ms = 3600000, .nretry_on = 1, .retry_on = k_Shop_retry_on_remedy_0 } },
+    { "refund", "__geas_ash_Shop_refund_476b7004a9825223_v1", 1, 1, NULL, { .within_ms = 3600000, .retry_count = 10, .retry_every_ms = 60000, .retry_backoff = 1.0, .retry_cap_ms = 3600000, .nretry_on = 1, .retry_on = k_Shop_retry_on_remedy_0 } },
 };
 
 static const GeasContractDesc k_Shop = {
-    "Shop", 0x56ffd26c158bbe14ULL,
+    "Shop", 0xb1480b46753cb1a3ULL,
     1, 6, k_Shop_pledges,
     0, NULL,
     2, k_Shop_subs, 10,

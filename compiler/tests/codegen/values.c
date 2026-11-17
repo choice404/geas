@@ -929,7 +929,7 @@ static GeasStatus __geas_ash_Values_shapes_c99ed8be3812f8ec_v3(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_nested_49ebaa617904fe86_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1269,7 +1269,7 @@ static const GeasPledgeDesc k_Values_pledges[] = {
     { "tuples", "__geas_ash_Values_tuples_5076f6479396a250_v3", 2, __geas_ash_Values_tuples_5076f6479396a250_v3, -1 },
     { "scalars", "__geas_ash_Values_scalars_ea37b8ae2217b8a8_v3", 4, __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3, -1 },
     { "shapes", "__geas_ash_Values_shapes_c99ed8be3812f8ec_v3", 1, __geas_ash_Values_shapes_c99ed8be3812f8ec_v3, -1 },
-    { "nested", "__geas_ash_Values_nested_49ebaa617904fe86_v3", 1, __geas_ash_Values_nested_49ebaa617904fe86_v3, -1 },
+    { "nested", "__geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3", 1, __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3, -1 },
     { "lists", "__geas_ash_Values_lists_508db3df2a0e7d18_v3", 1, __geas_ash_Values_lists_508db3df2a0e7d18_v3, -1 },
     { "silent", "__geas_ash_Values_silent_38a3aab7fdf5db00_v3", 1, __geas_ash_Values_silent_38a3aab7fdf5db00_v3, -1 },
     { "abstract_one", "__geas_ash_Values_abstract_one_a7c9229487606e8b_v3", 1, NULL, -1 },
@@ -1337,7 +1337,7 @@ static const GeasReqOp k_Values_rb[] = {
 };
 
 static const GeasContractDesc k_Values = {
-    "Values", 0xc3f37ba8eb06249fULL,
+    "Values", 0x5a27209888a4035eULL,
     3, 9, k_Values_pledges,
     8, k_Values_vows,
     0, NULL, 18,

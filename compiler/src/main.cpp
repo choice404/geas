@@ -1,7 +1,8 @@
 // The geas command line: version, the front end commands lex, parse, and
-// check, and the artifact commands build, emit-header, and emit-proto. The
-// exit codes and the messages are part of the surface, the golden suites
-// pin both
+// check, the artifact commands build, emit-header, and emit-proto, and
+// record, which writes the recorded shapes an amends block is checked
+// against. The exit codes and the messages are part of the surface, the
+// golden suites pin both
 #include <cstdio>
 #include <span>
 #include <string>
@@ -15,12 +16,13 @@
 #include "lexdump.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
+#include "record.hpp"
 #include "reqselftest.hpp"
 #include "source.hpp"
 
 namespace {
 
-constexpr std::string_view versionString = "geas 0.9.0";
+constexpr std::string_view versionString = "geas 0.9.1";
 constexpr int exitSuccess = 0;
 constexpr int exitFailure = 1;
 
@@ -45,6 +47,8 @@ void printUsage() {
     printError("  emit-header <file>  write the C header naming the module's hashes and symbols");
     printError(
         "  emit-proto <file>   write the gRPC .proto and the Go and TypeScript session wrappers");
+    printError(
+        "  record <file> [--force]  write shapes/<Contract>.v<version>.shape beside the file");
 }
 
 void printDiagnostics(std::string_view path, std::string_view text,
@@ -160,6 +164,29 @@ int runBuildCommand(std::span<char*> args) {
     return geas::runBuild(args[3], true);
 }
 
+// record takes its file and an optional --force on either side of it
+int runRecordCommand(std::span<char*> args) {
+    constexpr std::string_view forceFlag = "--force";
+    const std::span<char*> rest = args.subspan(2);
+    std::string_view path;
+    bool isForced = false;
+    for (const char* arg : rest) {
+        const std::string_view text{arg};
+        if (text == forceFlag && !isForced) {
+            isForced = true;
+        } else if (path.empty()) {
+            path = text;
+        } else {
+            printError("geas: record takes one file and an optional --force");
+            return exitFailure;
+        }
+    }
+    if (path.empty()) {
+        return missingFile("record");
+    }
+    return geas::runRecord(path, isForced);
+}
+
 // Runs the command that needs a file argument, or explains it is missing
 int runFileCommand(std::span<char*> args, std::string_view command) {
     if (args.size() < 3) {
@@ -186,6 +213,9 @@ int runFileCommand(std::span<char*> args, std::string_view command) {
     if (command == "dump-course") {
         return runDumpCourse(args[2]);
     }
+    if (command == "record") {
+        return runRecordCommand(args);
+    }
     return runLex(args[2]);
 }
 
@@ -209,8 +239,8 @@ int main(int argc, char** argv) {
     const bool isFrontEnd =
         command == "lex" || command == "parse" || command == "check" ||
         command == "dump-shape" || command == "dump-course";
-    const bool isArtifact =
-        command == "build" || command == "emit-header" || command == "emit-proto";
+    const bool isArtifact = command == "build" || command == "emit-header" ||
+                            command == "emit-proto" || command == "record";
     if (isFrontEnd || isArtifact) {
         return runFileCommand(args, command);
     }

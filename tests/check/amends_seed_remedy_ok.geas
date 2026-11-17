@@ -1,0 +1,16 @@
+// An item version 2 adds may be seeded fulfilled when no remedy for it
+// takes its Ok value, and a remedy that takes one is fine for an item that
+// starts pending
+contract AmendSeedRemedy [version: 2] {
+    pledge ship() -> Result<Int, String>
+    pledge notify() -> Result<String, String>
+    pledge audit() -> Result<Int, String>
+
+    remedy recall for notify() -> Unit
+    remedy undo for audit(entry: Int) -> Unit
+
+    amends 1 {
+        latch notify as fulfilled
+        latch audit as pending
+    }
+}

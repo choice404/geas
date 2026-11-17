@@ -1,6 +1,7 @@
 // Every workflow construct that joins the shape: signals, remedies, terms on
 // each kind of declaration, the course, and the term attribute. Each adds
-// its own segment after the segments an older contract already had
+// its own segment after the segments an older contract already had, and
+// the layouts of Receipt and PayError, which the boundary reaches, close it
 record Receipt {
     id: String
 }

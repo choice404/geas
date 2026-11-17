@@ -1,0 +1,42 @@
+// A host driven contract at version 3 amending versions 1 and 2: vows set
+// from prior reads and from this version's own vows, a renamed subcontract,
+// pledge, and remedy, a retired pledge, an anonymous subcontract paired
+// across versions, and latch seeds for the items version 3 adds
+contract HostLedger [version: 3] {
+    vow account: String
+    vow limit: Int = 100
+    vow ratio: Float = 0.5
+    vow owner: String
+    vow strict: Bool = false
+
+    subcontract Payment {
+        pledge capture(amount: Int) -> Result<Int, String>
+    }
+    subcontract {
+        pledge log() -> Unit
+    }
+    pledge reserve() -> Result<Int, String>
+    pledge ship() -> Unit
+    signal approved(by: String)
+    signal cancelled()
+
+    remedy refund for capture(id: Int) -> Unit
+    remedy free for reserve(id: Int) -> Unit
+
+    amends 1 {
+        vow owner = prior.note + "@" + prior.account
+        vow limit = prior.limit * 2
+        rename Billing -> Payment
+        rename charge -> capture
+        retire legacy
+        rename release -> free
+        latch ship as fulfilled
+        latch cancelled as pending
+    }
+
+    amends 2 {
+        vow owner = account
+        vow strict = prior.ratio > 0.75
+        latch ship as broken
+    }
+}

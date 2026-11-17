@@ -1,0 +1,15 @@
+// The layout pair for a record inside a record, the second half: Card
+// gains expiry, see layout_nested_before.geas
+record Card {
+    number: String
+    expiry: Int
+}
+
+record Order {
+    id: String
+    card: Card
+}
+
+contract Orders {
+    pledge place(order: Order) -> Result<String, Int>
+}

@@ -23,7 +23,7 @@ export interface SessionStream {
 // LedgerShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const LedgerShapeHash: bigint = 0x513b853655ba4957n;
+export const LedgerShapeHash: bigint = 0x91e8dbbfad45dc44n;
 
 export interface LedgerSignRequest {
   dsn?: string;  // the vow; unset takes the declared default

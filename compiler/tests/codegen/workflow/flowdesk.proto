@@ -12,7 +12,7 @@ package geas.flowdesk;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/flowdeskpb";
 
-// contract Courier, version 1, shape 0x2684f2c8439cd5ca.
+// contract Courier, version 1, shape 0xa75e59e7dac071df.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message CourierSignRequest {

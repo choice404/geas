@@ -1,0 +1,7 @@
+amends 1 needs the recorded shape of 'AmendNoShape' version 1 at 'tests/check/shapes/AmendNoShape.v1.shape'; run geas record on the source of version 1
+amends 1 cannot use the recorded shape 'tests/check/shapes/AmendCorrupt.v1.shape': the hash is not the hash of the shape line, so the file was edited
+amends 1 cannot use the recorded shape 'tests/check/shapes/AmendFormat.v1.shape': line 1: format version '9' is not one this compiler reads; it reads version 2
+amends 1 finds the recorded shape of 'AmendOther' version 1 at 'tests/check/shapes/AmendMismatch.v1.shape', not 'AmendMismatch' version 1
+amends 1 cannot use the recorded shape 'tests/check/shapes/AmendStale.v1.shape': line 1: format version '1' records no type layouts, so this compiler no longer reads it; run geas record on the source of that version again
+amends 1 cannot use the recorded shape 'tests/check/shapes/AmendRetyped.v1.shape': the type records are not the layouts the shape line spells, so the file was edited
+contract 'AmendHidden' is internal and never parks under a version of its own, so it takes no amends block

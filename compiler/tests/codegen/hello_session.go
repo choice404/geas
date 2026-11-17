@@ -18,7 +18,7 @@ import (
 // GreeterShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const GreeterShapeHash uint64 = 0x80464bf23398ab38
+const GreeterShapeHash uint64 = 0x8b67a53d561ff526
 
 // GreeterSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

@@ -1,0 +1,4 @@
+exit 1
+tests/check/amends_layout_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The layout changes of version 1 against version 2 covered: Card gains
+  ^

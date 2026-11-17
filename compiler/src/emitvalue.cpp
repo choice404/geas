@@ -202,6 +202,9 @@ CValue CEmitter::genVariant(const Expr& expr, std::string_view name,
 // a vow reads through the instance that carries it. A pledge read off an
 // instance, the first class pledge value, has no lowering
 CValue CEmitter::genMember(const Expr& expr, const MemberExpr& member) {
+    if (std::optional<CValue> prior = genPriorRead(expr, member)) {
+        return *prior;
+    }
     const CValue base = genExpr(member.base, TyId{});
     std::optional<FieldSlot> field;
     if (lookup_.namedKind(base.type) == GlobalKind::Record) {

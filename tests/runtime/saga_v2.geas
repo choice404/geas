@@ -1,0 +1,104 @@
+// The host driven order saga at version 2, the fixture test_amend_saga.c
+// resumes a version 1 row of skeleton/saga.geas through. It has no course,
+// so the amendment is the latches, the vows, and the remedies alone: ship is
+// renamed dispatch, the customer is told the tracking code through notify,
+// and the order is counted in cents. tests/runtime/shapes holds the recorded
+// shape of skeleton/saga.geas the block is checked against.
+
+record Card {
+    number: String
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+    amount: Int
+}
+
+record Reservation {
+    id: String
+    sku: String
+    hold: Duration
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderSaga [version: 2, term: 7d] {
+    vow cents: Int
+    vow grace: Duration = 30m
+
+    subcontract Payment {
+        pledge authorize(card: Card) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    // The stock is held for what the host asked plus the grace, and a hold
+    // longer than a day is more than the warehouse gives
+    pledge reserve(sku: String, hold: Duration) -> Result<Reservation, StockError> {
+        if sku == "" {
+            return Err(OutOfStock(sku))
+        }
+        let total = hold + grace
+        if total > 1d {
+            return Err(Unavailable)
+        }
+        return Ok(Reservation { id: "R-" + sku, sku: sku, hold: total })
+    }
+
+    pledge dispatch(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+
+    // Tells the customer the tracking code of the parcel that just left
+    pledge notify(tracking: Tracking) -> Result<Unit, ShipError>
+        after dispatch
+
+    signal delivered(tracking: Tracking) after dispatch within 3d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 2 every 1m
+
+    // A reservation that is not the one reserve produced is not this
+    // saga's to release
+    remedy release for reserve(res: Reservation) -> Result<Unit, StockError> {
+        if res.id != "R-" + res.sku || res.hold < grace {
+            return Err(Unavailable)
+        }
+        return Ok(released())
+    }
+
+    // A parcel already out comes back to the warehouse
+    remedy recall for dispatch(tracking: Tracking) -> Result<Unit, ShipError>
+
+    clause released() -> Unit {
+        return
+    }
+
+    requirements {
+        fulfill: Payment && reserve && dispatch && notify && delivered
+        partial: Payment || reserve
+        break: !Payment || !reserve || !dispatch || !notify || !delivered
+    }
+
+    amends 1 {
+        // Version 1 counted the order in whole units
+        vow cents = prior.amount * 100
+        rename ship -> dispatch
+        latch notify as pending
+    }
+}

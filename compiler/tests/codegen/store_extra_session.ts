@@ -23,7 +23,7 @@ export interface SessionStream {
 // StockShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const StockShapeHash: bigint = 0xbb41a8d512125365n;
+export const StockShapeHash: bigint = 0x538a2f7c02693f8bn;
 
 export interface StockSignRequest {
   dsn?: string;  // the vow; unset takes the declared default

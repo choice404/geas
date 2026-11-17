@@ -1,0 +1,10 @@
+// A module whose contract amends version 1, the recorded shape found in
+// shapes/ beside this file rather than beside the root that imports it
+contract MultiBilling [version: 2] {
+    vow account: String
+    pledge capture() -> Unit
+
+    amends 1 {
+        rename charge -> capture
+    }
+}

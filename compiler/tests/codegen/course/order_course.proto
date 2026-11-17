@@ -12,7 +12,7 @@ package geas.order_course;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/order_coursepb";
 
-// contract OrderSaga, version 2, shape 0x090aa559e8ee6470.
+// contract OrderSaga, version 2, shape 0x34601efe4025953f.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

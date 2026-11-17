@@ -23,7 +23,7 @@ export interface SessionStream {
 // JobShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const JobShapeHash: bigint = 0xb5ffbd595a96f63an;
+export const JobShapeHash: bigint = 0x66062d3a7ee8cbb3n;
 
 export interface JobSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins

@@ -83,6 +83,7 @@ foreign "C" {
     func geas_contract_state(c: int64) -> int32
     func geas_contract_hash(c: int64) -> uint64
     func geas_contract_signed_at(c: int64) -> int64
+    func geas_contract_amended_from(c: int64) -> uint32
     func geas_contract_break(c: int64) -> int32
     func geas_cancel_requested(c: int64) -> int32
     func geas_instance_tick(c: int64) -> int32
@@ -502,6 +503,11 @@ export func contract_hash(c: Contract) -> uint64 {
 
 export func contract_signed_at(c: Contract) -> int64 {
     return geas_contract_signed_at(c.h)
+}
+
+/** The version a resumed instance was amended from, 0 when it was not */
+export func contract_amended_from(c: Contract) -> int64 {
+    return int64(geas_contract_amended_from(c.h))
 }
 
 /** Breaks the instance, cancel included: remedies run for a contract still

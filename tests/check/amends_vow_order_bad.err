@@ -1,0 +1,2 @@
+14:21: error: vow 'rate' is read before this amends 1 block sets it; it is not carried from version 1 and has no default, so only a vow item after the one that sets it may read it
+15:20: error: vow 'rate' is read before this amends 1 block sets it

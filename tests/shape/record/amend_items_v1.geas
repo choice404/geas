@@ -1,0 +1,15 @@
+// Version 1 of the AmendItems contract the pledge and signal cases of
+// tests/check amend from
+contract AmendItems {
+    pledge reserve() -> Result<Int, String>
+    pledge dispatch() -> Result<String, String>
+    pledge notify() -> Unit
+    pledge legacy() -> Unit
+    pledge score() -> Result<Int, String>
+    pledge spare() -> Unit
+    pledge wrap() -> Unit
+    signal arrived(code: String)
+    signal pinged()
+    signal flag(n: Int)
+    signal bell()
+}

@@ -1,8 +1,8 @@
 // The commands that write artifacts: build, build --bin, emit-header, and
 // emit-proto. Each runs the whole front end over the program rooted at a
-// file, refuses a program that uses the workflow surface, hands the checked
-// tree to its emitter, and writes into target/geas-out under the working
-// directory, every file named after the root file's stem. build then links
+// file, hands the checked tree to its emitter, and writes into
+// target/geas-out under the working directory, every file named after the
+// root file's stem. build then links
 // with cc: the module C into a shared library, or with --bin the module and
 // its entry wrapper into an executable against libgeasrt.
 //

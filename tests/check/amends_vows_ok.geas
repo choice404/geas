@@ -1,0 +1,31 @@
+// The vows of version 1 against version 2: a vow that stays carries, one
+// whose type changed or that is new with no default is set, a new one with
+// a default takes it, a renamed one keeps its value, a dropped one needs no
+// item, and prior reads a scalar, a type equal to this version's vow of the
+// same name, or the type of the vow being set
+record Order {
+    id: String
+    total: Float
+}
+
+contract AmendVows [version: 2] {
+    vow keep: String
+    vow count: Float
+    vow address: String
+    vow region: String = "eu"
+    vow owner: String
+    vow order: Order
+    vow total: Float
+    vow items: List<Int>
+    vow first: List<Int>
+    vow stamp: Duration
+
+    amends 1 {
+        vow count = 1.5
+        rename url -> address
+        vow owner = prior.keep + prior.url
+        vow total = prior.order.total
+        vow first = prior.items
+        vow stamp = prior.stamp + 1m
+    }
+}

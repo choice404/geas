@@ -91,6 +91,9 @@ void CEmitter::emitContract(const ContractShape& shape) {
     if (std::string line = emitCourseTail(shape, course); !line.empty()) {
         tail.push_back(std::move(line));
     }
+    if (std::string line = emitAmends(shape); !line.empty()) {
+        tail.push_back(std::move(line));
+    }
     emitDescriptor(shape, counts, subFlagsRef, tail);
 }
 

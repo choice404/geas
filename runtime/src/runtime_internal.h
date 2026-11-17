@@ -8,7 +8,8 @@
  *
  * course.c drives the course of an engine driven contract over the same
  * structs, coursejoin.c runs a together's calls on the pool at once, and
- * coursepark.c writes the autopark row.
+ * coursepark.c writes the autopark row. amendrow.c reads a row written
+ * under an earlier version and amend.c resumes it as the registered one.
  *
  * The lock order is the one runtime.c audits and nothing here adds to it:
  * instance above runtime above future, with the pool's queue lock, a course's
@@ -195,6 +196,10 @@ struct GeasContract {
     char*                  autopark_key;
     uint8_t                autopark_dirty;
     uint8_t                autopark_flushing;
+
+    /* The version an amended resume read the row under, 0 otherwise. Written
+     * once before the instance publishes and never again */
+    uint32_t               amended_from;
 };
 
 /* A future is the receipt of one fulfillment. Between the fulfill and the
@@ -506,6 +511,12 @@ GEAS_INTERNAL void geas_rt_event_cancel(GeasContract* c);
 GEAS_INTERNAL void geas_rt_event_queue(GeasContract* c, uint32_t kind,
                                      const char* item, uint32_t old_state);
 
+/* The same with new_state given instead of read off the contract, for an
+ * event whose pair is not a contract state, AMENDED's two versions */
+GEAS_INTERNAL void geas_rt_event_queue_pair(GeasContract* c, uint32_t kind,
+                                          const char* item, uint32_t old_state,
+                                          uint32_t new_state);
+
 /* Whether this thread holds an instance lock, delivers events, or runs a
  * hook, the states in which it must not block on another thread's work */
 GEAS_INTERNAL int geas_rt_thread_busy(void);
@@ -524,6 +535,12 @@ static inline void geas_rt_event(GeasContract* c, uint32_t kind,
                                  const char* item, uint32_t old_state) {
     if (__atomic_load_n(&c->rt->event_fn, __ATOMIC_ACQUIRE))
         geas_rt_event_queue(c, kind, item, old_state);
+}
+
+static inline void geas_rt_event_pair(GeasContract* c, uint32_t kind, const char* item,
+                                      uint32_t old_state, uint32_t new_state) {
+    if (__atomic_load_n(&c->rt->event_fn, __ATOMIC_ACQUIRE))
+        geas_rt_event_queue_pair(c, kind, item, old_state, new_state);
 }
 
 /* Marks a change an armed autopark writes at the next durable point: a
@@ -658,6 +675,12 @@ GEAS_INTERNAL void geas_rt_flow_free(GeasContract* c);
 /* Stamps every item whose after has landed and that carries no stamp yet. */
 GEAS_INTERNAL void geas_rt_refresh_eligible(GeasContract* c, int64_t now);
 
+/* The eligibility of an amended instance under its new terms: a pending
+ * item, or a subcontract with something pending, whose after under these
+ * terms has not landed loses the stamp it carried, then every item whose
+ * after has landed and that carries no stamp is stamped now. */
+GEAS_INTERNAL void geas_rt_recheck_eligible(GeasContract* c, int64_t now);
+
 /* Bookkeeping for a latch that just moved to fulfilled: the value kept
  * beside it, the latch order, and the eligibility of whatever waited on it. */
 GEAS_INTERNAL void geas_rt_latched(GeasContract* c, uint32_t pidx,
@@ -720,5 +743,91 @@ GEAS_INTERNAL GeasStatus geas_rt_flow_encode(const GeasContract* c,
                                            uint8_t** buf_out, size_t* len_out);
 GEAS_INTERNAL GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf,
                                            size_t len, int64_t now);
+
+/* ---- amendrow.c and amend.c ---- */
+
+/* The columns of one park row as the resume read them. The blobs borrow the
+ * query's arena, which outlives the decode. */
+typedef struct GeasParkRow {
+    int64_t    version;
+    uint64_t   shape_hash;
+    int64_t    state;
+    int64_t    signed_at;
+    GeasString vows;
+    GeasString latches;
+    GeasString errs;
+    GeasString subtxn;
+    GeasString flow;
+} GeasParkRow;
+
+/* One call of a together a row caught in flight, by N's item index */
+typedef struct GeasAmendCall {
+    uint32_t   item;
+    uint8_t    has_outcome;
+    GeasStatus status;
+    GeasValue  value;
+} GeasAmendCall;
+
+/* A row written under version N, decoded against the counts of an amends
+ * block and indexed the way N indexed it: vows by N's vow, the item arrays
+ * by N's item, the sub arrays by N's subcontract, the remedy arrays by N's
+ * remedy. Values live on the new instance's heap; the arrays are plain heap
+ * that geas_rt_amend_image_free releases. has_flow is 0 for a row with no
+ * workflow blob, whose flow fields are then absent. has_frame marks a course
+ * frame, whose slots array holds frame.nslots values */
+typedef struct GeasAmendImage {
+    GeasValue*      vows;
+    const uint8_t*  latches;
+    GeasValue*      errs;
+    const uint8_t*  subtxn;
+    uint8_t         has_flow;
+    int64_t         signed_ms;
+    uint8_t         term_lapsed;
+    uint32_t        next_seq;
+    int64_t*        eligible_ms;
+    uint8_t*        lapsed;
+    uint32_t*       latch_seq;
+    GeasValue*      ok;
+    uint8_t*        ok_set;
+    uint32_t*       retry_attempts;
+    int64_t*        retry_due_ms;
+    int64_t*        sub_eligible_ms;
+    uint8_t*        remedy_state;
+    int32_t*        remedy_status;
+    uint8_t*        remedy_lapsed;
+    GeasValue*      remedy_err;
+    uint8_t         has_frame;
+    uint64_t        course_hash;
+    uint8_t         course_state;
+    GeasCourseFrame frame;
+    uint32_t        join_step;
+    uint32_t        njoin;
+    GeasAmendCall*  join;
+} GeasAmendImage;
+
+/* Decodes a row onto c's heap against a's old name lists. GEAS_ERR_TYPE for
+ * a row whose counts or bytes disagree with them. No lock, c unpublished */
+GEAS_INTERNAL GeasStatus geas_rt_amend_decode(GeasContract* c, const GeasAmendDesc* a,
+                                            const GeasParkRow* row, GeasAmendImage* img);
+GEAS_INTERNAL void geas_rt_amend_image_free(GeasAmendImage* img);
+
+/* Checks the amends tables of a descriptor at registration: names present,
+ * every map entry -1 or inside this version's table and no two old names
+ * mapped to one index, every seed an added item with a known state, and no
+ * two blocks for one version and hash. GEAS_ERR_TYPE otherwise */
+GEAS_INTERNAL GeasStatus geas_rt_validate_amends(const GeasContractDesc* d);
+
+/* The amends block for a row's version and shape hash, NULL when none */
+GEAS_INTERNAL const GeasAmendDesc* geas_rt_amend_find(const GeasContractDesc* d,
+                                                    int64_t version, uint64_t hash);
+
+/* Applies a to a fresh instance whose latch, transaction, flow, and course
+ * storage are allocated for the registered version and whose signed_at
+ * holds the row's: decodes the row, maps it, runs vows_fn, seeds the added
+ * items, and settles eligibility and the course frame. All or nothing: on
+ * any status but GEAS_OK the caller discards the instance. No lock, c
+ * unpublished */
+GEAS_INTERNAL GeasStatus geas_rt_amend_apply(GeasContract* c, const GeasAmendDesc* a,
+                                           const GeasParkRow* row, int64_t now);
 
 #endif /* GEAS_RUNTIME_INTERNAL_H */

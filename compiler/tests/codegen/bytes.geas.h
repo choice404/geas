@@ -7,7 +7,7 @@
 /* contract Buffer, version 1
  * vow seed: Bytes (no default)
  */
-#define GEAS_HASH_Buffer 0x4b1f1cc71457d4dfULL
+#define GEAS_HASH_Buffer 0xca6ae330d37473e0ULL
 
 /* pledge raw(data: Bytes) -> Bytes */
 #define GEAS_MANGLED_Buffer_raw "__geas_ash_Buffer_raw_dc5b8728a2ad90ad_v1"
@@ -28,10 +28,10 @@
 #define GEAS_MANGLED_Buffer_compare "__geas_ash_Buffer_compare_9ed2428630730bb1_v1"
 
 /* pledge containers(data: Bytes) -> Result<Tuple<Packet, List<Bytes>, Map<String, Bytes>>, Int> */
-#define GEAS_MANGLED_Buffer_containers "__geas_ash_Buffer_containers_969e771c89273602_v1"
+#define GEAS_MANGLED_Buffer_containers "__geas_ash_Buffer_containers_d5ed29b78b7a4c31_v1"
 
 /* pledge payload(data: Bytes) -> Result<PacketPayload, Bytes> */
-#define GEAS_MANGLED_Buffer_payload "__geas_ash_Buffer_payload_8c1d8d4da2460908_v1"
+#define GEAS_MANGLED_Buffer_payload "__geas_ash_Buffer_payload_7e21f2d6edfdfcb0_v1"
 
 /* remedy observe_raw for raw(data: Bytes) -> Unit */
 #define GEAS_MANGLED_Buffer_observe_raw "__geas_ash_Buffer_observe_raw_dc5b7928a2ad78e3_v1"

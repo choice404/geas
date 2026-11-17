@@ -1,0 +1,10 @@
+exit 1
+tests/check/amends_vows_ok.geas: 17:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow order: Order
+      ^~~~~~~~~
+tests/check/amends_vows_ok.geas: 19:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow items: List<Int>
+      ^~~~~~~~~
+tests/check/amends_vows_ok.geas: 20:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow first: List<Int>
+      ^~~~~~~~~

@@ -10,6 +10,7 @@
 #include <variant>
 #include <vector>
 
+#include "amenddiff.hpp"
 #include "ast.hpp"
 #include "course.hpp"
 #include "types.hpp"
@@ -39,6 +40,7 @@ enum class ExprUse : std::uint8_t {
     InstanceVow,
     InstancePledgeValue,
     RecordField,
+    PriorVow,
 };
 
 // An item an after term waits on
@@ -53,6 +55,8 @@ struct CheckTables {
     std::unordered_map<const ContractDecl*, LoweredCourse> courses;
     std::unordered_map<const RemedyDecl*, const PledgeDecl*> remedyTargets;
     std::unordered_map<const Term*, std::vector<OrderTarget>> afterTargets;
+    // The plan of every amends block whose recorded shape loaded
+    std::unordered_map<const AmendsDecl*, AmendPlan> amends;
 };
 
 }  // namespace geas

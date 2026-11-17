@@ -12,7 +12,7 @@ package geas.main_demo;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/main_demopb";
 
-// contract Sidekick, version 1, shape 0x3095e2440e1e9100.
+// contract Sidekick, version 1, shape 0xb4324b39e6ea588a.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SidekickSignRequest {
@@ -74,7 +74,7 @@ message SidekickDoubleRequest {
   int64 x = 2;
 }
 
-// contract Main, version 1, shape 0x5aba182af590ab32.
+// contract Main, version 1, shape 0xa55394f654fdaec4.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message MainSignRequest {

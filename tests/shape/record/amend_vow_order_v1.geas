@@ -1,0 +1,10 @@
+// Version 1 of the AmendVowOrder contract the vow order cases of tests/check
+// amend from
+
+contract AmendVowOrder {
+    vow base: Int = 10
+    vow note: String = "x"
+
+    pledge ship() -> Unit
+    pledge notify() -> Result<String, Unit>
+}

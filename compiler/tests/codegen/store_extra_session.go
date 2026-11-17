@@ -18,7 +18,7 @@ import (
 // StockShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const StockShapeHash uint64 = 0xbb41a8d512125365
+const StockShapeHash uint64 = 0x538a2f7c02693f8b
 
 // StockSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

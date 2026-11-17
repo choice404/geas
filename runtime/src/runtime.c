@@ -570,7 +570,13 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
         own->course_nslots = 0;
         own->course_hash = 0;
     }
+    /* A partial amends tail carries no amends block */
+    if (desc_size < offsetof(GeasContractDesc, amends) + sizeof(own->amends)) {
+        own->namends = 0;
+        own->amends = NULL;
+    }
     GeasStatus attr_status = geas_rt_validate_attrs(own);
+    if (attr_status == GEAS_OK) attr_status = geas_rt_validate_amends(own);
     if (attr_status != GEAS_OK) {
         free(own);
         return attr_status;
@@ -3450,128 +3456,21 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
     return st;
 }
 
-GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
-                              uint64_t expected_hash, GeasContract** out) {
-    if (!rt || !dsn || !key || !out) return GEAS_ERR_TYPE;
-    *out = NULL;
-
-    GeasStore* s = NULL;
-    GeasStatus st = geas_store_open(dsn, &s);
-    if (st != GEAS_OK) return st;
-    st = park_ensure_table(s);
-    ParkChunk* arena = NULL;
-    GeasValue rows;
-    memset(&rows, 0, sizeof(rows));
-    if (st == GEAS_OK) {
-        GeasValue kv = park_str_param((const uint8_t*)key, strlen(key));
-        static const uint32_t cols[10] = {
-            GEAS_TY_STRING, GEAS_TY_INT, GEAS_TY_UINT, GEAS_TY_INT, GEAS_TY_INT,
-            GEAS_TY_STRING, GEAS_TY_STRING, GEAS_TY_STRING, GEAS_TY_STRING,
-            GEAS_TY_STRING
-        };
-        GeasStoreAlloc alloc = { park_arena_bytes, &arena };
-        st = geas_store_query(s,
-            "SELECT contract, version, shape_hash, state, signed_at, "
-            "vows, latches, errs, subtxn, flow FROM geas_park WHERE pkey = ?1",
-            &kv, 1, cols, NULL, 10, &alloc, &rows);
-    }
-    geas_store_close(s);
-    if (st != GEAS_OK) {
-        park_arena_free(arena);
-        return st;
-    }
-    if (rows.as.list.len == 0) {
-        park_arena_free(arena);
-        return GEAS_ERR_NAME;
-    }
-    const GeasValue* f = (const GeasValue*)((const GeasValue*)rows.as.list.data)[0]
-                            .as.list.data;
-    const GeasString rname   = f[0].as.s;
-    const int64_t   rver    = f[1].as.i;
-    const uint64_t  rshape  = f[2].as.u;
-    const int64_t   rstate  = f[3].as.i;
-    const int64_t   rsigned = f[4].as.i;
-    const GeasString bvows   = f[5].as.s;
-    const GeasString blatch  = f[6].as.s;
-    const GeasString berrs   = f[7].as.s;
-    const GeasString bsubtxn = f[8].as.s;
-    const GeasString bflow   = f[9].as.s;
-
-    if (rstate < (int64_t)GEAS_SIGNED || rstate > (int64_t)GEAS_REMEDYING) {
-        park_arena_free(arena);
-        return GEAS_ERR_TYPE;
-    }
-    char* name = malloc(rname.len + 1);
-    if (!name) {
-        park_arena_free(arena);
-        return GEAS_ERR_OOM;
-    }
-    memcpy(name, rname.ptr, rname.len);
-    name[rname.len] = 0;
-
-    pthread_mutex_lock(&rt->lock);
-    const GeasContractDesc* desc = find_desc(rt, name);
-    free(name);
-    if (!desc) {
-        pthread_mutex_unlock(&rt->lock);
-        park_arena_free(arena);
-        return GEAS_ERR_NAME;
-    }
-    /* The row must describe the module this runtime registered, and a caller
-     * pinning a hash must agree with both, the same skew rule sign runs. */
-    if ((int64_t)desc->version != rver || desc->shape_hash != rshape ||
-        (expected_hash != 0 && expected_hash != desc->shape_hash)) {
-        pthread_mutex_unlock(&rt->lock);
-        park_arena_free(arena);
-        return GEAS_ERR_VERSION;
-    }
-    GeasPledgeFn* fns = NULL;
-    GeasPledgeFn* remedy_fns = NULL;
-    GeasBinding* bindings = NULL;
-    st = geas_rt_validate_desc(desc);
-    if (st == GEAS_OK) st = resolve_dispatch(rt, desc, &fns);
-    if (st == GEAS_OK) st = geas_rt_resolve_remedies(rt, desc, &remedy_fns);
-    if (st == GEAS_OK) st = snapshot_bindings(rt, &bindings);
-    pthread_mutex_unlock(&rt->lock);
-    if (st != GEAS_OK) {
-        free(remedy_fns);
-        free(bindings);
-        free(fns);
-        park_arena_free(arena);
-        return st;
-    }
-
-    GeasContract* c = calloc(1, sizeof(GeasContract));
-    if (!c) {
-        free(fns);
-        free(remedy_fns);
-        free(bindings);
-        park_arena_free(arena);
-        return GEAS_ERR_OOM;
-    }
-    if (mutex_init_recursive(&c->mu) != 0) {
-        free(c);
-        free(fns);
-        free(remedy_fns);
-        free(bindings);
-        park_arena_free(arena);
-        return GEAS_ERR_OOM;
-    }
-    c->rt = rt;
-    c->desc = desc;
-    c->flow.remedy_fns = remedy_fns;
-    c->bindings = bindings;
-    if (desc->npledges > 0) {
-        c->fns = (GeasPledgeFn*)geas_bytes(c, desc->npledges * sizeof(GeasPledgeFn));
-        if (!c->fns) st = GEAS_ERR_OOM;
-        else memcpy(c->fns, fns, desc->npledges * sizeof(GeasPledgeFn));
-    }
-    free(fns);
+/* A row written under the registered version decoded onto the fresh
+ * instance, column by column. Nothing else can reach the instance, so no
+ * lock is taken */
+static GeasStatus resume_plain(GeasContract* c, const GeasParkRow* row) {
+    const GeasContractDesc* desc = c->desc;
+    const GeasString bvows = row->vows;
+    const GeasString blatch = row->latches;
+    const GeasString berrs = row->errs;
+    const GeasString bsubtxn = row->subtxn;
+    GeasStatus st = GEAS_OK;
 
     /* The vows decode straight onto the new instance in declaration order,
      * each checked against its declared type, and the blob must hold exactly
      * the declared count, no more and no less. */
-    if (st == GEAS_OK && desc->nvows > 0) {
+    if (desc->nvows > 0) {
         c->vow_vals = (GeasValue*)geas_bytes(c, desc->nvows * sizeof(GeasValue));
         if (!c->vow_vals) st = GEAS_ERR_OOM;
         else memset(c->vow_vals, 0, desc->nvows * sizeof(GeasValue));
@@ -3586,7 +3485,7 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
             off += used;
         }
         if (st == GEAS_OK && off != bvows.len) st = GEAS_ERR_TYPE;
-    } else if (st == GEAS_OK && bvows.len != 0) {
+    } else if (bvows.len != 0) {
         st = GEAS_ERR_TYPE;
     }
 
@@ -3645,9 +3544,163 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
     if (st == GEAS_OK) st = geas_rt_flow_init(c);
     if (st == GEAS_OK) st = geas_rt_course_init(c);
     if (st == GEAS_OK) {
-        c->signed_at = rsigned;
-        st = geas_rt_flow_decode(c, bflow.ptr, bflow.len, geas_rt_now(rt));
+        c->signed_at = row->signed_at;
+        st = geas_rt_flow_decode(c, row->flow.ptr, row->flow.len, geas_rt_now(c->rt));
     }
+    return st;
+}
+
+/* A row written under an earlier version, resumed through the amends block
+ * that names it. The latch, transaction, workflow, and course storage are
+ * built for the registered version first, then amend.c decodes the row
+ * against the old name lists and maps it in. The store tables reconcile
+ * last, since the dsn vow they open is one the mapping fills. No lock, as
+ * above */
+static GeasStatus resume_amended(GeasContract* c, const GeasAmendDesc* amend,
+                                const GeasParkRow* row) {
+    const GeasContractDesc* desc = c->desc;
+    GeasStatus st = GEAS_OK;
+    if (desc->npledges > 0) {
+        c->pledge_state = calloc(desc->npledges, sizeof(uint8_t));
+        c->pledge_err = calloc(desc->npledges, sizeof(GeasValue));
+        if (!c->pledge_state || !c->pledge_err) st = GEAS_ERR_OOM;
+    }
+    if (st == GEAS_OK && desc->nsubs > 0) {
+        c->sub_txn = calloc(desc->nsubs, sizeof(uint8_t));
+        if (!c->sub_txn) st = GEAS_ERR_OOM;
+    }
+    if (st == GEAS_OK) st = geas_rt_flow_init(c);
+    if (st == GEAS_OK) st = geas_rt_course_init(c);
+    if (st == GEAS_OK) {
+        c->signed_at = row->signed_at;
+        st = geas_rt_amend_apply(c, amend, row, geas_rt_now(c->rt));
+    }
+    if (st == GEAS_OK) st = store_sign_reconcile(c);
+    return st;
+}
+
+GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
+                              uint64_t expected_hash, GeasContract** out) {
+    if (!rt || !dsn || !key || !out) return GEAS_ERR_TYPE;
+    *out = NULL;
+
+    GeasStore* s = NULL;
+    GeasStatus st = geas_store_open(dsn, &s);
+    if (st != GEAS_OK) return st;
+    st = park_ensure_table(s);
+    ParkChunk* arena = NULL;
+    GeasValue rows;
+    memset(&rows, 0, sizeof(rows));
+    if (st == GEAS_OK) {
+        GeasValue kv = park_str_param((const uint8_t*)key, strlen(key));
+        static const uint32_t cols[10] = {
+            GEAS_TY_STRING, GEAS_TY_INT, GEAS_TY_UINT, GEAS_TY_INT, GEAS_TY_INT,
+            GEAS_TY_STRING, GEAS_TY_STRING, GEAS_TY_STRING, GEAS_TY_STRING,
+            GEAS_TY_STRING
+        };
+        GeasStoreAlloc alloc = { park_arena_bytes, &arena };
+        st = geas_store_query(s,
+            "SELECT contract, version, shape_hash, state, signed_at, "
+            "vows, latches, errs, subtxn, flow FROM geas_park WHERE pkey = ?1",
+            &kv, 1, cols, NULL, 10, &alloc, &rows);
+    }
+    geas_store_close(s);
+    if (st != GEAS_OK) {
+        park_arena_free(arena);
+        return st;
+    }
+    if (rows.as.list.len == 0) {
+        park_arena_free(arena);
+        return GEAS_ERR_NAME;
+    }
+    const GeasValue* f = (const GeasValue*)((const GeasValue*)rows.as.list.data)[0]
+                            .as.list.data;
+    const GeasString rname = f[0].as.s;
+    const GeasParkRow row = {
+        .version = f[1].as.i, .shape_hash = f[2].as.u, .state = f[3].as.i,
+        .signed_at = f[4].as.i, .vows = f[5].as.s, .latches = f[6].as.s,
+        .errs = f[7].as.s, .subtxn = f[8].as.s, .flow = f[9].as.s,
+    };
+    const int64_t rstate = row.state;
+
+    if (rstate < (int64_t)GEAS_SIGNED || rstate > (int64_t)GEAS_REMEDYING) {
+        park_arena_free(arena);
+        return GEAS_ERR_TYPE;
+    }
+    char* name = malloc(rname.len + 1);
+    if (!name) {
+        park_arena_free(arena);
+        return GEAS_ERR_OOM;
+    }
+    memcpy(name, rname.ptr, rname.len);
+    name[rname.len] = 0;
+
+    pthread_mutex_lock(&rt->lock);
+    const GeasContractDesc* desc = find_desc(rt, name);
+    free(name);
+    if (!desc) {
+        pthread_mutex_unlock(&rt->lock);
+        park_arena_free(arena);
+        return GEAS_ERR_NAME;
+    }
+    /* The row must describe the module this runtime registered, or a version
+     * one of its amends blocks names with the same shape hash, and a caller
+     * pinning a hash must agree with the registered one, the same skew rule
+     * sign runs. */
+    const GeasAmendDesc* amend = NULL;
+    int is_current = (int64_t)desc->version == row.version &&
+                     desc->shape_hash == row.shape_hash;
+    if (!is_current) amend = geas_rt_amend_find(desc, row.version, row.shape_hash);
+    if ((!is_current && !amend) ||
+        (expected_hash != 0 && expected_hash != desc->shape_hash)) {
+        pthread_mutex_unlock(&rt->lock);
+        park_arena_free(arena);
+        return GEAS_ERR_VERSION;
+    }
+    GeasPledgeFn* fns = NULL;
+    GeasPledgeFn* remedy_fns = NULL;
+    GeasBinding* bindings = NULL;
+    st = geas_rt_validate_desc(desc);
+    if (st == GEAS_OK) st = resolve_dispatch(rt, desc, &fns);
+    if (st == GEAS_OK) st = geas_rt_resolve_remedies(rt, desc, &remedy_fns);
+    if (st == GEAS_OK) st = snapshot_bindings(rt, &bindings);
+    pthread_mutex_unlock(&rt->lock);
+    if (st != GEAS_OK) {
+        free(remedy_fns);
+        free(bindings);
+        free(fns);
+        park_arena_free(arena);
+        return st;
+    }
+
+    GeasContract* c = calloc(1, sizeof(GeasContract));
+    if (!c) {
+        free(fns);
+        free(remedy_fns);
+        free(bindings);
+        park_arena_free(arena);
+        return GEAS_ERR_OOM;
+    }
+    if (mutex_init_recursive(&c->mu) != 0) {
+        free(c);
+        free(fns);
+        free(remedy_fns);
+        free(bindings);
+        park_arena_free(arena);
+        return GEAS_ERR_OOM;
+    }
+    c->rt = rt;
+    c->desc = desc;
+    c->flow.remedy_fns = remedy_fns;
+    c->bindings = bindings;
+    if (desc->npledges > 0) {
+        c->fns = (GeasPledgeFn*)geas_bytes(c, desc->npledges * sizeof(GeasPledgeFn));
+        if (!c->fns) st = GEAS_ERR_OOM;
+        else memcpy(c->fns, fns, desc->npledges * sizeof(GeasPledgeFn));
+    }
+    free(fns);
+
+    if (st == GEAS_OK) st = amend ? resume_amended(c, amend, &row) : resume_plain(c, &row);
     if (st == GEAS_OK) {
         c->state = (GeasContractState)rstate;
         c->shape_hash = desc->shape_hash;
@@ -3661,7 +3714,16 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
         pthread_mutex_unlock(&rt->lock);
         if (st == GEAS_OK) {
             *out = c;
+            /* An amended instance announces the two versions first, then the
+             * resume, then whatever the policy of the version it now stands
+             * as makes of its latches; a break decided there runs its
+             * remedies at the first tick, as a row resumed Remedying does */
+            if (amend) {
+                geas_rt_event_pair(c, GEAS_EVENT_AMENDED, NULL, (uint32_t)row.version,
+                                   desc->version);
+            }
             geas_rt_event(c, GEAS_EVENT_RESUMED, NULL, c->state);
+            if (amend) geas_rt_eval_policy(c);
             geas_rt_course_start(c);
         }
         geas_rt_unlock(c);

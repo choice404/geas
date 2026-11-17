@@ -69,13 +69,21 @@ add_executable(geas
     src/coursedump.cpp
     src/checkterms.cpp
     src/checkworkflow.cpp
+    src/checkamends.cpp
+    src/checkamendcourse.cpp
+    src/amendshape.cpp
+    src/amenddiff.cpp
+    src/amendmap.cpp
+    src/typecode.cpp
     src/reqsolve.cpp
     src/reqsat.cpp
     src/reqselftest.cpp
     src/hash.cpp
     src/shape.cpp
+    src/shaperecord.cpp
+    src/layout.cpp
+    src/layoutcode.cpp
     src/check.cpp
-    src/workflowgate.cpp
     src/emittext.cpp
     src/emitlookup.cpp
     src/emitc.cpp
@@ -94,6 +102,7 @@ add_executable(geas
     src/emitmatch.cpp
     src/emitworkflow.cpp
     src/emitcourse.cpp
+    src/emitamends.cpp
     src/emitcoursestep.cpp
     src/emitcoursematch.cpp
     src/emitheader.cpp
@@ -105,6 +114,7 @@ add_executable(geas
     src/emitprotomsg.cpp
     src/emitsession.cpp
     src/build.cpp
+    src/record.cpp
 )
 
 target_compile_options(geas PRIVATE

@@ -12,7 +12,7 @@ package geas.time_ok;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/time_okpb";
 
-// contract Clock, version 1, shape 0x6497245b3f9019b1.
+// contract Clock, version 1, shape 0xdad59f3912ecbc45.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

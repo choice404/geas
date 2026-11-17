@@ -296,13 +296,31 @@ private:
                      std::unordered_map<const PledgeDecl*, const RemedyDecl*>& taken);
     void checkRemedyParam(const RemedyDecl& remedy, const PledgeDecl& target);
     void checkRemedyBody(const RemedyDecl& remedy);
+
+    // Amends blocks, checkamends.cpp
     void checkAmendsVersions(const ContractDecl& contract);
+    std::string recordedPathOf(const ContractDecl& contract, std::int64_t version) const;
+    std::optional<RecordedShape> loadAmendShape(const ContractDecl& contract,
+                                                const AmendsDecl& amends);
+    void diffAmendShape(const ContractDecl& contract, const AmendsDecl& amends,
+                        RecordedShape from);
     void checkAmends(const ContractDecl& contract, const AmendsDecl& amends);
     void checkAmendVow(const ContractDecl& contract, const AmendsDecl& amends,
                        const AmendVow& item);
     void checkAmendName(const ContractDecl& contract, const AmendsDecl& amends,
                         const AmendItem& item);
+    std::unordered_set<std::string> unsetAmendVows(const ContractDecl& contract,
+                                                   const AmendPlan& plan) const;
+    void checkAmendVowRead(const Expr& expr, const std::string& name);
+    void checkFulfilledSeed(const ContractDecl& contract, const AmendsDecl& amends,
+                            const AmendLatch& latch);
+    bool isPriorBase(ExprId base) const;
+    TyId inferPriorRead(const Expr& expr, const MemberExpr& member);
+    TyId priorVowType(const Expr& expr, const MemberExpr& member, const RecordedVow& vow);
+    TyId priorLayoutType(const Expr& expr, const MemberExpr& member, const RecordedVow& vow,
+                         TyId type);
 
+    const Program& program_;
     const Ast& ast_;
     const Resolved& resolved_;
     const Sigs& sigs_;
@@ -318,6 +336,10 @@ private:
     int loopDepth_ = 0;
     bool isInCourse_ = false;
     bool isInAmends_ = false;
+    const AmendPlan* amendPlan_ = nullptr;
+    TyId amendVowType_;
+    std::unordered_set<std::string> amendUnsetVows_;
+    std::unordered_set<const AmendsDecl*> amendable_;
     std::size_t suspensionCount_ = 0;
 };
 

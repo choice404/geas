@@ -1,0 +1,81 @@
+// Version 1 of the OrderSaga contract tests/check/order_saga.geas and
+// tests/course/order_saga.geas amend from: the shipping pledge under its old
+// name, no delivery signal, and a course that ends at the dispatch
+
+record Card {
+    number: String
+    expiry: String
+}
+
+record Item {
+    sku: String
+    quantity: Int
+}
+
+record Order {
+    card: Card
+    total: Float
+    items: List<Item>
+}
+
+record AuthId {
+    token: String
+}
+
+record Receipt {
+    id: String
+}
+
+record Reservation {
+    id: String
+}
+
+record Tracking {
+    carrier: String
+    code: String
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+StockError is either OutOfStock(sku: String) or Unavailable
+
+ShipError is either NoCarrier or Refused(reason: String)
+
+contract OrderSaga [version: 1, term: 7d] {
+    vow order: Order
+    vow store_url: String
+
+    subcontract Payment {
+        pledge authorize(card: Card, amount: Float) -> Result<AuthId, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.0 cap 30s on Timeout, Gateway
+        pledge capture(auth: AuthId) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+    }
+
+    pledge reserve(items: List<Item>) -> Result<Reservation, StockError>
+        within 5m
+    pledge dispatch(res: Reservation) -> Result<Tracking, ShipError>
+        after Payment, reserve
+        within 48h
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        retry 10 every 1m backoff 2.0 cap 1h
+    remedy release for reserve(r: Reservation) -> Unit
+
+    requirements {
+        fulfill: Payment && reserve && dispatch
+        partial: Payment || reserve
+        break: !Payment || !reserve || !dispatch
+    }
+
+    course {
+        let auth = authorize(order.card, order.total)?
+        together {
+            let receipt = capture(auth)?
+            let res = reserve(order.items)?
+        }
+        dispatch(res)?
+    }
+}

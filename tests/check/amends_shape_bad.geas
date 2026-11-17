@@ -1,0 +1,51 @@
+// The recorded shape an amends block needs: missing, edited after it was
+// written, in a format version this compiler does not read, in the first
+// format, which records no type layouts, with a type record edited away
+// from the layout its shape line spells, recording another contract than
+// its name says, and asked for by an internal contract, which is never
+// recorded
+record Ticket {
+    id: String
+}
+
+contract AmendNoShape [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}
+
+contract AmendCorrupt [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}
+
+contract AmendFormat [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}
+
+contract AmendMismatch [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}
+
+contract AmendStale [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}
+
+contract AmendRetyped [version: 2] {
+    pledge step() -> Result<Ticket, String>
+    amends 1 {
+    }
+}
+
+internal contract AmendHidden [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}

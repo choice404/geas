@@ -85,7 +85,7 @@ func (s *IntGateSession) Close() { s.cancel() }
 // StdUserShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const StdUserShapeHash uint64 = 0xff920d047d909132
+const StdUserShapeHash uint64 = 0x38c56172b5eea80a
 
 // StdUserSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server
@@ -152,7 +152,7 @@ func (s *StdUserSession) Close() { s.cancel() }
 // MathOpsShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const MathOpsShapeHash uint64 = 0x5cea56c248f9b040
+const MathOpsShapeHash uint64 = 0xd4c2a79230a9be2b
 
 // MathOpsSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server
@@ -219,7 +219,7 @@ func (s *MathOpsSession) Close() { s.cancel() }
 // ListOpsShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const ListOpsShapeHash uint64 = 0xd1fa13d356232e92
+const ListOpsShapeHash uint64 = 0x8929b04c369b38ea
 
 // ListOpsSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

@@ -7,12 +7,12 @@
 /* contract Greeter, version 1
  * vow prefix: String (default)
  */
-#define GEAS_HASH_Greeter 0x80464bf23398ab38ULL
+#define GEAS_HASH_Greeter 0x8b67a53d561ff526ULL
 
 /* pledge greet(name: String) -> Result<String, GreetError> */
-#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_17cef80f14421b9b_v1"
+#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
 
 /* pledge shout(name: String) -> Result<String, GreetError>, abstract */
-#define GEAS_MANGLED_Greeter_shout "__geas_ash_Greeter_shout_17cef80f14421b9b_v1"
+#define GEAS_MANGLED_Greeter_shout "__geas_ash_Greeter_shout_5155c52e95ed821d_v1"
 
 #endif /* GEAS_HEADER_HELLO */

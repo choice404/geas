@@ -21,7 +21,8 @@ const CallableSig& sigIn(const Map& map, const Key* key) {
 
 Checker::Checker(const Program& program, const Resolved& resolved, const Sigs& sigs,
                  TypeArena& types, TypeLowering& lowering, std::vector<Diagnostic>& diagnostics)
-    : ast_{program.ast},
+    : program_{program},
+      ast_{program.ast},
       resolved_{resolved},
       sigs_{sigs},
       types_{types},

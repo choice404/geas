@@ -892,7 +892,8 @@ typedef enum GeasEventKind {
     GEAS_EVENT_COURSE_RESUMED = 17,
     GEAS_EVENT_COURSE_FINISHED = 18,
     GEAS_EVENT_COURSE_HALTED = 19,
-    GEAS_EVENT_COURSE_CANCELLED = 20
+    GEAS_EVENT_COURSE_CANCELLED = 20,
+    GEAS_EVENT_AMENDED = 21
 } GeasEventKind;
 
 typedef struct GeasEvent {
@@ -929,7 +930,7 @@ This reservation refuses host work instead of waiting on a callback. A hook may 
 
 A contract term emits `TERM_LAPSED` before its state transition. A break with remedies enters Remedying, then each remedy emits `REMEDY_STARTED` and one `REMEDY_DONE` or `REMEDY_FAILED`, newest fulfilled pledge first, and the pass emits the transition to Broken. Retry attempts have no separate event. Open transactions roll back before the remedy pass and the delivery boundary, so the callback sees their resolved fate.
 
-Explicit cancel emits `CANCELLED` once when the request enters the locked lifecycle, followed by the transitions, remedies, and `RECLAIMED` it causes. A request seen by a running body is recorded on that body's thread when the runtime carries it into the lifecycle; a deferred break inside a body is recorded there and its reclaim follows the outermost body. A cancel accepted just before another thread reserves delivery returns without waiting for that callback; the producing thread carries it into the lifecycle after the captured queue drains. If a deferred cancellation fails after callbacks, a break call still waiting receives that status; with no break call waiting, the runtime writes the status to stderr with its `[libgeasrt]` prefix. Delivery continues. Repeated break calls emit no second cancellation or reclaim. An automatic break keeps the heap and emits no reclaim. A successful park emits `PARKED` after its row is written and leaves the live instance's state unchanged. A successful resume emits only `RESUMED` for the restored state, without replaying latches or remedy history. Its later tick applies elapsed deadlines and unfinished remedies normally. Shutdown releases storage without synthesizing contract transitions.
+Explicit cancel emits `CANCELLED` once when the request enters the locked lifecycle, followed by the transitions, remedies, and `RECLAIMED` it causes. A request seen by a running body is recorded on that body's thread when the runtime carries it into the lifecycle; a deferred break inside a body is recorded there and its reclaim follows the outermost body. A cancel accepted just before another thread reserves delivery returns without waiting for that callback; the producing thread carries it into the lifecycle after the captured queue drains. If a deferred cancellation fails after callbacks, a break call still waiting receives that status; with no break call waiting, the runtime writes the status to stderr with its `[libgeasrt]` prefix. Delivery continues. Repeated break calls emit no second cancellation or reclaim. An automatic break keeps the heap and emits no reclaim. A successful park emits `PARKED` after its row is written and leaves the live instance's state unchanged. A successful resume emits only `RESUMED` for the restored state, without replaying latches or remedy history; a resume through an amends block emits `AMENDED` 21 just before it, `old_state` and `new_state` the two versions, see Amendment. Its later tick applies elapsed deadlines and unfinished remedies normally. Shutdown releases storage without synthesizing contract transitions.
 
 Python exposes `rt.on_event(callback)`, or `rt.on_event(None)` to clear. The callback receives an `Event` with `kind`, `instance`, `contract`, `item`, `old_state`, `new_state`, `at_ms`, and `seq`. Names and scalar fields are copied into Python; `instance` is a borrowed `Contract` handle with the read rules above. The runtime wrapper anchors replaced callbacks until shutdown. A Python callback exception prints its traceback and delivery continues.
 
@@ -1017,6 +1018,111 @@ A signal's payload is its `ok` value, so it needs no field of its own. A blob wi
 
 **Resuming a format 1 row.** The row holds the latches and the signing second, and the workflow state is rebuilt from them. The signing second stands for the millisecond stamp. An item with no `after` is stamped eligible at that signing time, so its deadline counts from the one time the row kept. An item whose `after` has landed is stamped with the time of the resume, the first moment this runtime can vouch for. The fulfilled latches are ordered by declaration. No latch reads as a lapse and no Ok value exists, so a remedy that takes its pledge's Ok value has none to be handed after such a resume and is recorded failed with `GEAS_ERR_TYPE`, its body never run, while a remedy that takes no argument runs as usual.
 
+## Amendment
+
+A park row names the version and shape hash it was written under, and a contract at version M can resume a row written under an earlier version N through an amends table the module carries at the tail of its descriptor, one `GeasAmendDesc` per `amends N` block. A contract without a block emits nothing new, and its descriptor ends where it always did.
+
+```c
+typedef GeasStatus (*GeasAmendVowsFn)(void* ctx, const GeasValue* prior_vows, size_t nprior,
+                                      GeasValue* vows, size_t nvows);
+
+enum {
+    GEAS_AMEND_PENDING   = 0,
+    GEAS_AMEND_FULFILLED = 1,
+    GEAS_AMEND_BROKEN    = 2
+};
+
+typedef struct GeasAmendLatch {
+    uint32_t item;     /* pledges table index of an item this version adds */
+    uint32_t state;    /* GEAS_AMEND_* */
+} GeasAmendLatch;
+
+typedef struct GeasAmendDesc {
+    uint32_t                from_version;
+    uint32_t                restart_course;
+    uint64_t                from_shape_hash;
+    uint64_t                from_course_hash;
+    uint32_t                nold_vows;
+    const char* const*      old_vows;
+    uint32_t                nold_items;
+    const char* const*      old_items;
+    uint32_t                nold_subs;
+    const char* const*      old_subs;
+    uint32_t                nold_remedies;
+    const char* const*      old_remedies;
+    const int32_t*          vow_map;
+    const int32_t*          item_map;
+    const int32_t*          sub_map;
+    const int32_t*          remedy_map;
+    uint32_t                nlatches;
+    const GeasAmendLatch*   latches;
+    GeasAmendVowsFn         vows_fn;
+} GeasAmendDesc;
+
+/* The tail of GeasContractDesc, after course_hash */
+uint32_t              namends;
+const GeasAmendDesc*  amends;
+```
+
+`GEAS_CONTRACT_DESC_V4_SIZE` is the descriptor through `course_hash`, the course and no amends, and a descriptor whose reported size ends before `amends` carries no table, so every module built before the table existed loads as it did.
+
+**The fields.** `from_version` and `from_shape_hash` are the version N and the shape hash a row has to carry for this block to take it. `from_course_hash` is the course hash version N carried, 0 when it had none, and `restart_course` is 1 when the block drops a parked frame and enters this version's course at step 0. The four old name lists are version N's tables in N's order, and the row is positional over them, so their lengths are N's counts: `old_vows` the vows, `old_items` the pledges then the signals in N's descriptor order, `old_subs` the subcontracts with a NULL entry for an anonymous one, and `old_remedies` the remedies. A list with a count of 0 may be NULL.
+
+**The maps.** Each map holds one entry per old name, the index of this version's vow, pledges table entry, subcontract, or remedy it lands on, or -1 when it is dropped. A map entry is -1 or inside this version's table, no two entries name one index, and an item map entry that names a signal for an old pledge or the other way round is the compiler's to refuse, the runtime carries what it is told. A renamed member is a map entry to its new index, a retired one is -1, a member both versions share is a map entry to its own new index, and a member this version adds is the target of no entry.
+
+**The seeds.** `latches` sets the starting state of items this version adds, each by its pledges table index: an index no item map entry names, at most once, with one `GEAS_AMEND_*` state. An added item without a seed starts pending. A fulfilled seed latches after every carried latch and carries no `Ok` value, so a remedy that takes one would record `GEAS_REMEDY_FAILED` with `GEAS_ERR_TYPE` without its body running; the compiler refuses that seed, and a handwritten table should too. A broken seed is a broken latch with no `Err` payload and no lapse mark.
+
+**The vows function.** `vows_fn` is NULL when the block sets no vow. Otherwise it is called once, on the resuming thread with no lock held, `ctx` the fresh instance, `prior_vows` version N's vows decoded from the row in N's order with `nprior` their count, and `vows` this version's vow array with `nvows` its count, already holding every carried value and every default and zero in every other slot. It writes the slots its block names, with values built on `ctx` through the allocation helpers or constants, and may read any slot already filled; the runtime deep copies whatever changed onto the instance. A status other than `GEAS_OK` fails the resume with that status. After it returns a slot still zero is `GEAS_ERR_UNBOUND`, and a slot of another type than the vow declares is `GEAS_ERR_TYPE`. The compiled function checks `nprior` and `nvows` against the counts it was built for and answers `GEAS_ERR_TYPE` when they differ.
+
+**The registrar.** `geas_register_contract` and its sized form validate the table before the contract is registered, and a table that fails is `GEAS_ERR_TYPE` with nothing registered: a nonzero `namends` with a NULL `amends`, a block whose version and hash are the contract's own, a NULL old name other than an anonymous subcontract, a map entry out of range or taken twice, a seed out of range, on an item a map entry already names, named twice, or with an unknown state, and two blocks for one version and hash, which would leave the resume guessing.
+
+**The resume.** `geas_instance_resume` reads the row and compares its version and shape hash with the registered descriptor's. When they agree it is a plain resume. When they do not, the runtime looks for the block whose `from_version` and `from_shape_hash` are the row's, and when there is none the resume is `GEAS_ERR_VERSION` and the row stays as it was, so a module that does carry the block still resumes it later. A nonzero expected hash is checked against the registered hash, the version the instance resumes as. Through a block the runtime builds a fresh instance of this version and applies the block to it, all or nothing:
+
+1. the row is decoded against the old counts, and a row whose counts disagree with the old name lists is `GEAS_ERR_TYPE`;
+2. a row frame whose course hash is not `from_course_hash` is `GEAS_ERR_VERSION`, and so is a frame kept without `restart_course` for a course whose hash is not the registered one;
+3. the vows are carried through `vow_map`, defaulted, and handed to `vows_fn`;
+4. the sign time, the term lapse, and the latch counter cross, then each old item through `item_map`: its latch, its `Err` payload, its eligibility stamp, its lapse, its place in the latch order, its `Ok` value or signal payload, and its retry progress held to this version's retry budget;
+5. each old subcontract's transactional fate and eligibility through `sub_map`, each old remedy's state, status, lapse, and `Err` payload through `remedy_map`;
+6. the seeds, then eligibility under this version's terms;
+7. the course frame kept at its step, dropped, or left for a fresh start at step 0.
+
+Whatever maps to -1 is dropped. A failure at any step discards the instance, writes nothing, and answers its status, `GEAS_ERR_OOM` included, and the row is left for another try. A store backed contract reconciles its tables after the apply, since the `dsn` vow it opens is one the mapping fills.
+
+**After the apply.** The runtime emits `GEAS_EVENT_AMENDED` with `item` NULL, `old_state` the row's version and `new_state` the registered one, then `GEAS_EVENT_RESUMED`, then evaluates this version's policy once over the mapped latches, and then starts the course, `COURSE_STARTED` for a fresh or restarted one and `COURSE_RESUMED` for a kept frame. A policy that breaks the instance there leaves it Remedying with no remedy run inside the resume, and its first tick runs the pass, the rule a row resumed Remedying already follows. The instance is an ordinary instance of the registered version from then on, and its next park writes a row of that version.
+
+```c
+uint32_t geas_contract_amended_from(GeasContract* c);
+```
+
+answers the version an instance was amended from, and 0 for an instance signed or resumed without a block, or a NULL handle. In Python it is `inst.amended_from()` and the event kind `GEAS_EVENT_AMENDED`; in dusk it is `contract_amended_from(c)`.
+
+**The recorded shape.** `geas record FILE [--force]` writes `shapes/<Contract>.v<version>.shape` beside the source for every public contract the file declares, and a block is checked against that file. It is plain text, one record a line, every line ending in a newline:
+
+```text
+geas shape 2
+contract NAME
+version N
+hash 0x<16 hex digits>          the shape hash
+course 0x<16 hex digits>        the course hash, all zero when there is none
+shape <canonical shape string>
+vow NAME TYPE                   one per vow, declaration order
+pledge NAME SIGNATURE OK        one per pledge, descriptor order
+signal NAME PAYLOAD             one per signal, after every pledge
+sub NAME                        one per subcontract, a bare "sub" when anonymous
+remedy NAME TARGET              one per remedy, declaration order
+type NAME DEFINITION            one per declared record or sum the boundary reaches, name order
+```
+
+Types are canonical type codes. A pledge's `OK` is the code of what a fulfilled pledge stores, the `T` of a `Result<T, E>` or the whole return otherwise, and a signal's `PAYLOAD` is its parameter codes in parentheses. A `type` record spells a record as `{field:code,...}` and a sum as `=Variant(field:code)|Variant`, the layout segments the shape line ends in. The first line names the format version and a reader refuses one it does not know, and the shape line has to hash to the recorded hash, so an edited file is refused rather than trusted. The vow, item, sub, and remedy lines are the old name lists of the `GeasAmendDesc` the compiler emits, in order. The head of the recorded shape of `skeleton/order_course.geas`:
+
+```text
+geas shape 2
+contract OrderCourse
+version 1
+hash 0x4861f0a9753d79d4
+course 0xd0e7aba0f862d5a6
+```
+
 ## Threading
 
 The runtime owns a worker pool. `geas_runtime_init` takes an `GeasRuntimeConfig` whose `max_threads` sizes it, 0 or a NULL config selecting the default of 4 workers; a request beyond 256 is refused with `GEAS_ERR_TYPE`. The pool drains one unbounded queue, intrusive through the future itself so queuing allocates nothing. `geas_runtime_shutdown` stops intake, drains what is queued, joins every worker, and only then frees instances, futures, and modules; nothing else may be calling into the runtime by then.
@@ -1053,7 +1159,11 @@ Every pledge a module compiles gets a mangled symbol:
 __geas_ash_{contract}_{pledge}_{sighash}_v{version}
 ```
 
-`{contract}` and `{pledge}` are the declared names, which are identifiers and therefore valid symbol fragments. `{sighash}` is the 16 lowercase hex digits of the FNV-1a 64 hash of the pledge's canonical signature spelling. `{version}` is the contract's `version` attribute, 1 when the declaration carries none. The sig hash keeps two revisions of a pledge apart even when nothing about the surrounding contract moved; the version keeps two shipped generations apart on purpose.
+`{contract}` and `{pledge}` are the declared names, which are identifiers and therefore valid symbol fragments. `{sighash}` is the 16 lowercase hex digits of the FNV-1a 64 hash of the pledge's canonical signature spelling followed by the layout segment of every declared record and sum that signature reaches, in name order, the same segments the shape string ends in, see The shape hash. `{version}` is the contract's `version` attribute, 1 when the declaration carries none. The sig hash keeps two revisions of a pledge apart even when nothing about the surrounding contract moved, a field added to a record it takes included; the version keeps two shipped generations apart on purpose. A remedy's mangled name is built the same way over the remedy's own signature.
+
+`Greeter.greet` takes a `String` and answers `Result<String, GreetError>`, and `GreetError` is a sum with the one variant `Empty`, so its signature hash is taken over `(S)->R(S,NGreetError)type GreetError=Empty;`, which is `5155c52e95ed821d`. A signature that reaches no declared type, scalars and builtin composites of scalars only, hashes as its spelling alone, so its hash and its mangled name are the ones it had before layouts joined the hash.
+
+A schema row type is the one exception to the reach: a schema names a record the store owns, and a pledge that takes or answers a row spells it as an opaque name whose columns do not enter that pledge's signature hash. The schema's columns are a segment of the contract's shape string, `schema Accounts:id:I,balance:F,owner:S;`, so the layout of a schema row type is covered by the shape hash: a changed column moves the contract's hash, a host signing with the old hash gets `GEAS_ERR_VERSION`, and a row parked under the old schema no longer resumes as the current version.
 
 The mangled name appears twice on purpose: as the thunk's C identifier inside the module and as the `mangled` string in the pledge descriptor, so a debugger and the runtime agree about what they are looking at.
 
@@ -1108,11 +1218,11 @@ Lookup is exact: the whole mangled name or `GEAS_ERR_NAME`. A host holding yeste
 `{kind}` is spelled `contract` or `pledge`, `{shape_hash}` is 16 lowercase hex digits. The text is byte stable for a given set of registered contracts. `*need` receives the full size including the terminating NUL; when `cap` is at least that, the text and its NUL are written to `buf` and the call returns `GEAS_OK`, otherwise nothing is written and the call returns `GEAS_ERR_OOM`, so a NULL `buf` with `cap` 0 sizes the buffer. Loading the two skeleton modules dumps:
 
 ```text
-__geas_ash_Greeter2__26a068304bf801f2_v2 contract 26a068304bf801f2 v2
-__geas_ash_Greeter2_greet_8d9bbc95f1afbbec_v2 pledge 26a068304bf801f2 v2
-__geas_ash_Greeter__80464bf23398ab38_v1 contract 80464bf23398ab38 v1
-__geas_ash_Greeter_greet_17cef80f14421b9b_v1 pledge 80464bf23398ab38 v1
-__geas_ash_Greeter_shout_17cef80f14421b9b_v1 pledge 80464bf23398ab38 v1
+__geas_ash_Greeter2__ed0ccb47c5176d84_v2 contract ed0ccb47c5176d84 v2
+__geas_ash_Greeter2_greet_0b2357619b406722_v2 pledge ed0ccb47c5176d84 v2
+__geas_ash_Greeter__8b67a53d561ff526_v1 contract 8b67a53d561ff526 v1
+__geas_ash_Greeter_greet_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
+__geas_ash_Greeter_shout_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
 ```
 
 ## The freeze
@@ -1129,7 +1239,26 @@ contract {name};vow {name}:{type};...pledge {name}:{sig};...
 
 Bytes has canonical type code `X`, distinct from String's `S`. A contract with no Bytes retains its canonical shape, hash, and mangled names byte for byte. Proto spells Bytes as `bytes`, with `BytesOption` and the usual result wrapper names, and a bare Bytes RPC result uses `BytesValue`. The generated Go message fields are `[]byte`; TypeScript session fields are `Uint8Array`, which accepts the Buffer values delivered by `@grpc/proto-loader`.
 
-Vows first, then pledges, each in declaration order, each type spelled in the checker's canonical form, the same spelling signature comparison uses. The string is deterministic by construction, no table iteration order touches it, so two builds of the same header agree byte for byte and any change to a vow type or a pledge signature moves the hash.
+Vows first, then pledges, each in declaration order, each type spelled in the checker's canonical form, the same spelling signature comparison uses. Schemas, the workflow segments, the course, and the contract term follow. The string is deterministic by construction, no table iteration order touches it, so two builds of the same header agree byte for byte and any change to a vow type or a pledge signature moves the hash.
+
+**Layouts.** A canonical type code names a declared record or sum, `NCard`, and nothing more, so after every other segment the string carries one layout segment per declared record and sum the boundary reaches, in name order. The boundary is every vow, every pledge, signal, and remedy signature, and a type reaches the types of its own fields and variant payloads and the type arguments of `List`, `Map`, `Option`, `Result`, and `Tuple`. A record is spelled with its fields in declaration order and a sum with its variants in declaration order, a variant with no payload as its bare name:
+
+```text
+type Name{field:code,field:code};
+type Name=Variant(field:code,field:code)|Variant;
+```
+
+A type reached twice, a recursive one included, is spelled once. A contract whose boundary reaches no declared record or sum has no layout segment, so its shape, its hash, and its mangled names are the ones it had before layouts joined the string. `geas dump-shape`, the debug command the shape goldens run, prints the string, the hash, and every mangled name:
+
+```text
+$ geas dump-shape skeleton/hello.geas
+// shape Greeter v1: contract Greeter;vow prefix:S;pledge greet:(S)->R(S,NGreetError);pledge shout:(S)->R(S,NGreetError);type GreetError=Empty;
+#define GEAS_HASH_Greeter 0x8b67a53d561ff526ULL
+#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
+#define GEAS_MANGLED_Greeter_shout "__geas_ash_Greeter_shout_5155c52e95ed821d_v1"
+```
+
+Adding a field to a record a pledge takes therefore moves the contract's shape hash and that pledge's mangled name, and a park row written before the change belongs to another shape, which an amends block covers, see Amendment.
 
 A host that passes the expected hash to `geas_contract_sign` gets `GEAS_ERR_VERSION` when the loaded module's shape disagrees, which is the whole defense against fulfilling yesterday's contract through today's module. Passing 0 skips the check.
 
@@ -1153,10 +1282,10 @@ The instance is broken and the runtime shut down on every path, so the sanitizer
 /* contract Greeter, version 1
  * vow prefix: String (default)
  */
-#define GEAS_HASH_Greeter 0x80464bf23398ab38ULL
+#define GEAS_HASH_Greeter 0x8b67a53d561ff526ULL
 
 /* pledge greet(name: String) -> Result<String, GreetError> */
-#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_17cef80f14421b9b_v1"
+#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
 ```
 
 One `GEAS_HASH_{Contract}` per public contract, the shape hash `geas_contract_sign` checks, and one `GEAS_MANGLED_{Contract}_{pledge}` per pledge, the exact string the iname table keys, each under a comment spelling the signature the way the source wrote it, an abstract pledge marked so the host knows to bind before signing. Internal contracts publish no descriptor and appear in no header. The hashes and mangled names come from the same canonical spellings the module emitter hashes, so a header and its module cannot disagree, and the text is byte stable for a given source, which is what lets `tests/golden/hello.geas.h` pin it.
@@ -1172,7 +1301,7 @@ The numbers are part of the wire: `GEAS_OK` is 0 and the rest count up in the or
 | `GEAS_OK` | the operation ran; a pledge's Err is still `GEAS_OK` |
 | `GEAS_ERR_STATE` | illegal in the contract's current state, a second wait, a future a break forfeited, load, register, and bind after the freeze, a fulfillment or signal before its `after` landed or after its `within` lapsed, or anything but a read while the contract is Remedying |
 | `GEAS_ERR_TYPE` | argument count or type mismatch, at a thunk, at sign, at a ref, an oversized pool request, a pledge call on a signal or a signal call on a pledge, or a workflow table the sign refuses |
-| `GEAS_ERR_VERSION` | shape hash disagreed at sign |
+| `GEAS_ERR_VERSION` | shape hash disagreed at sign, or a park row whose version and shape hash neither the registered contract nor one of its amends blocks accounts for |
 | `GEAS_ERR_UNBOUND` | an abstract pledge, an abstract remedy, or an unsupplied vow at sign |
 | `GEAS_ERR_NAME` | no contract, pledge, vow, or iname entry under that name |
 | `GEAS_ERR_DEADLOCK` | reserved; v1 constructs no lock cycles and ships no detector |

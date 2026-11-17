@@ -18,7 +18,7 @@ import (
 // MainShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const MainShapeHash uint64 = 0xd9ff6780dd4c1263
+const MainShapeHash uint64 = 0x999a08f81701d140
 
 // MainSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

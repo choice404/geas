@@ -134,7 +134,22 @@ Engine driven is the mode of a contract with a `course`, like the one in the tas
 
 The course ending is not the contract's state, that stays with the requirements. A step that answers `Err` ends the course at its `?`, and it is the break line that breaks the contract and runs the remedies, exactly as in host driven mode.
 
-Next to it on the roadmap is amendment. A contract at version 2 carries an `amends 1` block that says exactly how a parked version 1 instance comes back as version 2, a vow supplied, a pledge renamed, a member retired, a new signal latched pending, and the design is that the checker refuses the build when the mapping misses a difference between the two shapes. That parses and checks today too, against what the new version alone can verify.
+## Amendment
+
+A saga waiting three days on a parcel will see a deploy or two, so a contract says how an instance parked under an older version comes back as this one. `skeleton/order_course_v2.geas` is the order saga at version 2, ship renamed dispatch, a notify step added, chase gone, the order counted in cents, and a course changed to match, and its `amends 1` block covers every one of those differences:
+
+```text
+amends 1 {
+    // Version 1 counted the order in whole units
+    vow cents = prior.amount * 100
+    rename ship -> dispatch
+    retire chase
+    latch notify as pending
+    restart course
+}
+```
+
+`geas record skeleton/order_course.geas` writes the shape of version 1 to `skeleton/shapes/OrderCourse.v1.shape`, and the checker diffs that recorded shape against version 2, so a block that misses a difference, or covers one that is not there, fails the build. The runtime that loads version 2 resumes a version 1 row through the block: the vow is worked out from `prior.amount`, ship's latch and tracking carry over to dispatch, the course starts again at step 0 with every latch where it was, and from then on it is an ordinary version 2 instance. `tests/runtime/test_amend_saga.c` and `interop/python/demo_amend.py` park a version 1 saga and finish it under version 2.
 
 ## How it works
 
@@ -175,7 +190,7 @@ An installed `geas` needs no environment variables. It probes for a repository c
 
 ## Usage
 
-New to Geas, start with [docs/tutorial.md](docs/tutorial.md): it walks the whole language, drives one contract from C and from Python with no generated bindings, and then walks the order saga, host driven and then engine driven. [spec.md](spec.md) is the language reference, [docs/grammar.md](docs/grammar.md) is the normative grammar, [docs/abi.md](docs/abi.md) is the C surface a host compiles against, and [CHANGELOG.md](CHANGELOG.md) carries the history version by version.
+New to Geas, start with [docs/tutorial.md](docs/tutorial.md): it walks the whole language, drives one contract from C and from Python with no generated bindings, and then walks the order saga, host driven, engine driven, and across a deploy from one version to the next. [spec.md](spec.md) is the language reference, [docs/grammar.md](docs/grammar.md) is the normative grammar, [docs/abi.md](docs/abi.md) is the C surface a host compiles against, and [CHANGELOG.md](CHANGELOG.md) carries the history version by version.
 
 The whole pipeline runs end to end, and one target runs every gate:
 
@@ -198,7 +213,10 @@ target/bin/geas build skeleton/hello.geas
 target/bin/geas build --bin skeleton/main_demo.geas
 target/bin/geas emit-header skeleton/hello.geas
 target/bin/geas emit-proto skeleton/saga.geas
+target/bin/geas record skeleton/order_course.geas
 ```
+
+`record` writes the shape of every public contract in a file to `shapes/<Contract>.v<version>.shape` beside it, the recorded shape a later version's `amends` block is checked against.
 
 `build` reads the source, emits the module C into `target/geas-out/`, and links it with cc into a loadable `.geas.so`. Each module names `libgeasrt.so.0` as its runtime dependency, so a host may link the runtime plainly without preloading it with `RTLD_GLOBAL`. Hosts that already preload `libgeasrt.so` globally keep using the same runtime through its symlink to `libgeasrt.so.0`. Run it from the repository root, or set `GEAS_ROOT` to a checkout and run `geas` from anywhere: `GEAS_ROOT` points cc at the runtime headers and `libgeasrt`, and `GEAS_HOME` at the standard library for imports.
 
@@ -226,6 +244,15 @@ make test-course-saga
 
 # the same course from Python
 make test-course-python
+
+# a version 1 saga parked and finished under version 2: mid course with the
+# course restarted, a step failing after the deploy, a second park, a kill at
+# every step boundary, a module without the block and a drifted row refused,
+# and the host driven saga amended too
+make test-amend-saga
+
+# the same deploy from Python
+make test-amend-python
 
 # the runtime surface underneath, one gate each, all under ASan and UBSan
 make test-terms test-remedy test-signal test-workflow-park
@@ -301,11 +328,10 @@ make test-bin
 
 ## Status
 
-What runs today, end to end, host driven and engine driven: contracts with vows, pledges, clauses, subcontracts, and requirements policies, records and sums, match, loops, propagation, imports with package visibility, and a standard library under `lib/std`. `Duration` and `Time`, with duration literals like `1h30m`, and size literals like `64M`, `512K`, `1G`, and `2T`, binary byte counts typed as `Int`. Declared attributes, typed settings named at the top level and carried by contracts, subcontracts, pledges, signals, and remedies for a host to read before or after sign. `Bytes`, an arbitrary byte buffer with String's layout and no UTF-8 rule, across the runtime, park, proto, Go, TypeScript, and Python wherever String goes except map keys and schema columns. A written requirements block holds up to 64 distinct atoms, checked by satisfiability search so fulfill and break cannot both hold, while a contract with no block synthesizes its default for up to 255 items. Terms, `within`, `after`, and `retry ... every ... backoff ... cap ... on`, on pledges, subcontracts, signals, and remedies, plus the contract `term`. Remedies and the `Remedying` state. The `course`, `await`, `select`, `sleep`, `together`, and `now()`, lowered to a resumable state machine the runtime drives on its pool, with autopark writing the row at every step, resume entering at the saved step, the course hash refusing a row from a changed course, a ticker thread, and the course read and waited on from C, Python, and dusk and over the bridge with a `GetCourse` rpc. Signals, delivered from C, from Python, and from another contract's body, with a typed `Signal` rpc per signal on the emitted gRPC surface. The clock and the tick, the partial surface with its lapses and remedy outcomes, and a park row that carries all of it across processes. The C runtime enforces the lifecycle with per pledge latching, user-bound host bodies, pollable and releasable futures, cancellation a body can read, and the out pointer helpers `geas_string_copy_into`, `geas_map_new_into`, and `geas_state_value_into`, runs fulfillments on a worker pool, owns every allocation an instance makes, and reclaims it all at break. Golden and compile fail suites, sanitizer gates, thread sanitizer gates, a determinism gate, store gates, and bridge gates hold the line on every build.
+What runs today, end to end, host driven and engine driven: contracts with vows, pledges, clauses, subcontracts, and requirements policies, records and sums, match, loops, propagation, imports with package visibility, and a standard library under `lib/std`. `Duration` and `Time`, with duration literals like `1h30m`, and size literals like `64M`, `512K`, `1G`, and `2T`, binary byte counts typed as `Int`. Declared attributes, typed settings named at the top level and carried by contracts, subcontracts, pledges, signals, and remedies for a host to read before or after sign. `Bytes`, an arbitrary byte buffer with String's layout and no UTF-8 rule, across the runtime, park, proto, Go, TypeScript, and Python wherever String goes except map keys and schema columns. A written requirements block holds up to 64 distinct atoms, checked by satisfiability search so fulfill and break cannot both hold, while a contract with no block synthesizes its default for up to 255 items. Terms, `within`, `after`, and `retry ... every ... backoff ... cap ... on`, on pledges, subcontracts, signals, and remedies, plus the contract `term`. Remedies and the `Remedying` state. The `course`, `await`, `select`, `sleep`, `together`, and `now()`, lowered to a resumable state machine the runtime drives on its pool, with autopark writing the row at every step, resume entering at the saved step, the course hash refusing a row from a changed course, a ticker thread, and the course read and waited on from C, Python, and dusk and over the bridge with a `GetCourse` rpc. Amendment, `amends` blocks checked against the recorded shape of the version they amend and applied by the runtime at the resume, the shape hash and every signature hash covering the layout of each record and sum the boundary reaches. Signals, delivered from C, from Python, and from another contract's body, with a typed `Signal` rpc per signal on the emitted gRPC surface. The clock and the tick, the partial surface with its lapses and remedy outcomes, and a park row that carries all of it across processes. The C runtime enforces the lifecycle with per pledge latching, user-bound host bodies, pollable and releasable futures, cancellation a body can read, and the out pointer helpers `geas_string_copy_into`, `geas_map_new_into`, and `geas_state_value_into`, runs fulfillments on a worker pool, owns every allocation an instance makes, and reclaims it all at break. Golden and compile fail suites, sanitizer gates, thread sanitizer gates, a determinism gate, store gates, and bridge gates hold the line on every build.
 
-The roadmap, in order:
+The roadmap, next:
 
-- Amendment: `amends` blocks checked against the parked version's own shape, so a mapping that misses a difference fails the build, and emitted so a resume runs it. The syntax and the rules the new version alone can verify are in place today.
 - Signals on the reference bridge server: `emit-proto` already writes a `Signal` rpc per signal and a helper in each session wrapper, and the Python reference server in `interop/grpc` serves them next.
 
 ## Requirements

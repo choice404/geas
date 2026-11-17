@@ -18,7 +18,7 @@ import (
 // ShopShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const ShopShapeHash uint64 = 0x6fe34409781e3d4f
+const ShopShapeHash uint64 = 0x0eeff175659afd33
 
 // ShopSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server
@@ -85,7 +85,7 @@ func (s *ShopSession) Close() { s.cancel() }
 // DepotShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const DepotShapeHash uint64 = 0xdbd6e085dce9db4f
+const DepotShapeHash uint64 = 0x6738cc8f56d8db33
 
 // DepotSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

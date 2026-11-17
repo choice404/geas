@@ -1,0 +1,45 @@
+// restart course where the course calls for none, and none where it calls
+// for one
+contract AmendCourseSame [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        let a = step(1)?
+        step(a)?
+    }
+    amends 1 {
+        restart course
+    }
+}
+
+contract AmendCourseChanged [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        let a = step(1)?
+        step(a + 1)?
+    }
+    amends 1 {
+    }
+}
+
+contract AmendCourseAdded [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        step(1)?
+    }
+    amends 1 {
+    }
+}
+
+contract AmendCourseDropped [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    amends 1 {
+        restart course
+    }
+}
+
+contract AmendCourseNone [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    amends 1 {
+        restart course
+    }
+}

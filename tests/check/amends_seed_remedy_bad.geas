@@ -1,0 +1,12 @@
+// A fulfilled seed carries no Ok value, so a remedy that takes one has
+// nothing to be handed
+contract AmendSeedRemedy [version: 2] {
+    pledge ship() -> Result<Int, String>
+    pledge notify() -> Result<String, String>
+
+    remedy recall for notify(sent: String) -> Unit
+
+    amends 1 {
+        latch notify as fulfilled
+    }
+}

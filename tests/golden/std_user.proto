@@ -59,7 +59,7 @@ message IntGateDoublePosRequest {
   int64 n = 2;
 }
 
-// contract StdUser, version 1, shape 0xff920d047d909132.
+// contract StdUser, version 1, shape 0x38c56172b5eea80a.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message StdUserSignRequest {
@@ -154,7 +154,7 @@ message StdUserComputeRequest {
   int64 x = 2;
 }
 
-// contract MathOps, version 1, shape 0x5cea56c248f9b040.
+// contract MathOps, version 1, shape 0xd4c2a79230a9be2b.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message MathOpsSignRequest {
@@ -293,7 +293,7 @@ message MathOpsApproxEqRequest {
   double b = 3;
 }
 
-// contract ListOps, version 1, shape 0xd1fa13d356232e92.
+// contract ListOps, version 1, shape 0x8929b04c369b38ea.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message ListOpsSignRequest {

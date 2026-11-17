@@ -7,36 +7,36 @@
 /* contract Stock, version 1
  * vow dsn: String (default)
  */
-#define GEAS_HASH_Stock 0xbb41a8d512125365ULL
+#define GEAS_HASH_Stock 0x538a2f7c02693f8bULL
 
 /* pledge drop(id: Int) -> Result<Unit, StoreError> */
-#define GEAS_MANGLED_Stock_drop "__geas_ash_Stock_drop_21c06c6a997a9b3c_v1"
+#define GEAS_MANGLED_Stock_drop "__geas_ash_Stock_drop_086b9865436e8354_v1"
 
 /* pledge named(n: String) -> Result<List<Parts>, StoreError> */
-#define GEAS_MANGLED_Stock_named "__geas_ash_Stock_named_c15c288ca50b3e79_v1"
+#define GEAS_MANGLED_Stock_named "__geas_ash_Stock_named_ff4d3881e24a055f_v1"
 
 /* pledge outside(a: Int, b: Int) -> Result<List<Parts>, StoreError> */
-#define GEAS_MANGLED_Stock_outside "__geas_ash_Stock_outside_d270f90d5394c392_v1"
+#define GEAS_MANGLED_Stock_outside "__geas_ash_Stock_outside_c9d4193eb41c1ed2_v1"
 
 /* pledge top(a: Int, b: Int, k: Int) -> Result<List<Parts>, StoreError> */
-#define GEAS_MANGLED_Stock_top "__geas_ash_Stock_top_9109d718d3acabdf_v1"
+#define GEAS_MANGLED_Stock_top "__geas_ash_Stock_top_ec419be0725565e5_v1"
 
 /* pledge not_not(a: Int) -> Result<List<Parts>, StoreError> */
-#define GEAS_MANGLED_Stock_not_not "__geas_ash_Stock_not_not_81fd19e322a57e8f_v1"
+#define GEAS_MANGLED_Stock_not_not "__geas_ash_Stock_not_not_bb5ae22fe5c45b75_v1"
 
 /* pledge de_morgan(a: Int, b: Int) -> Result<Int, StoreError> */
-#define GEAS_MANGLED_Stock_de_morgan "__geas_ash_Stock_de_morgan_a4051bb34752c49a_v1"
+#define GEAS_MANGLED_Stock_de_morgan "__geas_ash_Stock_de_morgan_b1f5d4195cfe726a_v1"
 
 /* pledge total(a: Int) -> Result<Float, StoreError> */
-#define GEAS_MANGLED_Stock_total "__geas_ash_Stock_total_ca5e1c996204cfec_v1"
+#define GEAS_MANGLED_Stock_total "__geas_ash_Stock_total_3502ebeb325635a4_v1"
 
 /* pledge edges(a: Int) -> Result<Option<Int>, StoreError> */
-#define GEAS_MANGLED_Stock_edges "__geas_ash_Stock_edges_8e175ddd36ea3d45_v1"
+#define GEAS_MANGLED_Stock_edges "__geas_ash_Stock_edges_e28a4f09665253eb_v1"
 
 /* pledge mean(a: Int) -> Result<Option<Float>, StoreError> */
-#define GEAS_MANGLED_Stock_mean "__geas_ash_Stock_mean_cb1c465701b48800_v1"
+#define GEAS_MANGLED_Stock_mean "__geas_ash_Stock_mean_aa4c2a4d75a51b88_v1"
 
 /* pledge bin(code: String, part: Int) -> Result<Unit, StoreError> */
-#define GEAS_MANGLED_Stock_bin "__geas_ash_Stock_bin_ed232297c5409b6f_v1"
+#define GEAS_MANGLED_Stock_bin "__geas_ash_Stock_bin_61958e4906370bd5_v1"
 
 #endif /* GEAS_HEADER_STORE_EXTRA */

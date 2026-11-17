@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/amends/src/amend_course.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // An engine driven contract at version 3: the course changed since version
+  ^

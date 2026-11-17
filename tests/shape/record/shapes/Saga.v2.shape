@@ -1,0 +1,10 @@
+geas shape 2
+contract Saga
+version 2
+hash 0xe6a7fd0f54bb9891
+course 0x0000000000000000
+shape contract Saga;vow dsn:S;vow region:S;vow grace:D;signal delivered:()->V;
+vow dsn S
+vow region S
+vow grace D
+signal delivered ()

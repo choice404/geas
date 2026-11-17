@@ -23,7 +23,7 @@ export interface SessionStream {
 // MainShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const MainShapeHash: bigint = 0xd9ff6780dd4c1263n;
+export const MainShapeHash: bigint = 0x999a08f81701d140n;
 
 export interface MainSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins

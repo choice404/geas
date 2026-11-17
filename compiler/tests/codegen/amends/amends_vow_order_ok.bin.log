@@ -1,0 +1,4 @@
+exit 1
+tests/check/amends_vow_order_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // A vow item reads this version's vows as the block has filled them so far:
+  ^

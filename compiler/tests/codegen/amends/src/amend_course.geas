@@ -1,0 +1,22 @@
+// An engine driven contract at version 3: the course changed since version
+// 1, so that block restarts it, and is the one version 2 ran, so that
+// block carries its frame
+contract CourseFlow [version: 3] {
+    vow target: Int
+    vow label: String = "flow"
+    pledge first(n: Int) -> Result<Int, String>
+    pledge second(n: Int) -> Result<Int, String>
+    signal ready(value: String)
+    course {
+        let a = first(target)?
+        let b = second(a)?
+        let note = await ready
+    }
+
+    amends 1 {
+        restart course
+    }
+
+    amends 2 {
+    }
+}

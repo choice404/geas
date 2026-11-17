@@ -12,7 +12,7 @@ package geas.hello;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/hellopb";
 
-// contract Greeter, version 1, shape 0x80464bf23398ab38.
+// contract Greeter, version 1, shape 0x8b67a53d561ff526.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

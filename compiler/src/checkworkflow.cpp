@@ -1,20 +1,15 @@
-// Attributes, transactions, remedies, and amends. The term attribute is a
+// Attributes, transactions, and remedies. The term attribute is a
 // contract's total lifetime and belongs nowhere else. A transactional
 // subcontract holds no signal and no pledge with a retry. A remedy undoes
 // one pledge of its own contract, takes that pledge's Ok value or nothing,
-// and answers Result<Unit, E> or Unit. An amends block names an older
-// version and says how an instance signed under it comes back as this one
+// and answers Result<Unit, E> or Unit
 #include "checker.hpp"
-
-#include "overloaded.hpp"
-#include "shape.hpp"
 
 namespace geas {
 
 namespace {
 
 constexpr std::string_view termKey = "term";
-constexpr std::int64_t firstVersion = 1;
 
 }  // namespace
 
@@ -144,96 +139,6 @@ void Checker::checkRemedyBody(const RemedyDecl& remedy) {
     const CallableSig& sig = remedySig(remedy);
     const TyId ret = sig.ret.isSet() ? sig.ret : unknown();
     checkBody(params, sig.params, ret, *remedy.body, remedy.lo, remedy.hi);
-}
-
-// An amends block names a version at least 1 and older than this contract's own,
-// and each older version is amended once
-void Checker::checkAmendsVersions(const ContractDecl& contract) {
-    const std::int64_t version = contractVersion(ast_, contract);
-    std::unordered_set<std::int64_t> seen;
-    for (const Member& member : contract.members) {
-        const auto* amends = std::get_if<AmendsDecl>(&member);
-        if (amends == nullptr) {
-            continue;
-        }
-        const std::string head = "amends " + countText(amends->version);
-        if (amends->version < firstVersion) {
-            emit(amends->lo, amends->hi, head + " names no version; versions start at 1");
-        } else if (amends->version >= version) {
-            emit(amends->lo, amends->hi,
-                 head + " must name a version older than contract " + quoted(contract.name) +
-                     ", which is at version " + countText(version));
-        }
-        if (!seen.insert(amends->version).second) {
-            emit(amends->lo, amends->hi,
-                 "duplicate " + head + " in contract " + quoted(contract.name));
-        }
-    }
-}
-
-// An amends vow, vow NAME = expr, supplies a vow this version has. The older instance's
-// vows are read through prior, whose members take any type at this stage
-void Checker::checkAmendVow(const ContractDecl& contract, const AmendsDecl& amends,
-                            const AmendVow& item) {
-    const MemberEntry* entry = resolved_.member(&contract, item.name);
-    const bool isVow = entry != nullptr && entry->kind() == MemberKind::Vow;
-    if (!isVow && !item.name.empty()) {
-        emit(amends.lo, amends.hi,
-             "amends vow " + quoted(item.name) + " is not a vow of contract " +
-                 quoted(contract.name));
-    }
-    const TyId declared = isVow ? vowType(*entry->vow()) : TyId{};
-    bodyLo_ = amends.lo;
-    bodyHi_ = amends.hi;
-    isInAmends_ = true;
-    const TyId actual = inferExpr(item.value, declared);
-    isInAmends_ = false;
-    if (declared.isSet() && !isCompatible(declared, actual)) {
-        emitAt(ast_.expr(item.value), typesMessage("amends vow " + quoted(item.name) + " has type ",
-                                                   actual, " but the vow is ", declared));
-    }
-}
-
-// The rename, retire, and latch items, held to what this version alone can verify
-void Checker::checkAmendName(const ContractDecl& contract, const AmendsDecl& amends,
-                             const AmendItem& item) {
-    const auto fault = [&](std::string message) {
-        emit(amends.lo, amends.hi, std::move(message) + " of contract " + quoted(contract.name));
-    };
-    const auto kindOfName = [&](const std::string& name) -> std::optional<MemberKind> {
-        const MemberEntry* entry = resolved_.reachable(&contract, name);
-        return entry == nullptr ? std::nullopt : std::optional<MemberKind>{entry->kind()};
-    };
-    if (const auto* rename = std::get_if<AmendRename>(&item)) {
-        const std::optional<MemberKind> kind = kindOfName(rename->to);
-        const bool isAllowed = kind && *kind != MemberKind::Clause && *kind != MemberKind::Remedy;
-        if (!isAllowed && !rename->to.empty()) {
-            fault("rename target " + quoted(rename->to) +
-                  " is not a pledge, a subcontract, a vow, or a signal");
-        }
-    } else if (const auto* latch = std::get_if<AmendLatch>(&item)) {
-        const std::optional<MemberKind> kind = kindOfName(latch->name);
-        const bool isAllowed = kind && (*kind == MemberKind::Pledge || *kind == MemberKind::Signal);
-        if (!isAllowed && !latch->name.empty()) {
-            fault("latch names " + quoted(latch->name) + ", which is not a pledge or a signal");
-        }
-    } else if (const auto* retire = std::get_if<AmendRetire>(&item)) {
-        if (kindOfName(retire->name)) {
-            fault("retire names " + quoted(retire->name) + ", which is still a member");
-        }
-    }
-}
-
-void Checker::checkAmends(const ContractDecl& contract, const AmendsDecl& amends) {
-    // TODO: load the shape of the amended version and require every
-    // difference between it and this version to be covered by an item
-    for (const AmendItem& item : amends.items) {
-        if (const auto* vow = std::get_if<AmendVow>(&item)) {
-            checkAmendVow(contract, amends, *vow);
-        } else {
-            checkAmendName(contract, amends, item);
-        }
-    }
 }
 
 }  // namespace geas

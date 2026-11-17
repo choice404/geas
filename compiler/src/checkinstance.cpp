@@ -252,6 +252,9 @@ const ContractDecl* Checker::staticContract(ExprId base) const {
 
 // A member expression in value position
 TyId Checker::inferMember(const Expr& expr, const MemberExpr& member) {
+    if (isPriorBase(member.base)) {
+        return inferPriorRead(expr, member);
+    }
     if (const ContractDecl* target = staticContract(member.base)) {
         if (member.name == "sign" || member.name == "resume") {
             emitAt(expr, quoted(member.name) + " must be called");

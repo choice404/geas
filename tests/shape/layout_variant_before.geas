@@ -1,0 +1,10 @@
+// The layout pair for a sum that gains a variant. A tag is the variant's
+// declaration index, so a new variant is a new layout, see
+// layout_variant_after.geas. The pledge that reaches no declared type keeps
+// its mangled name across the pair
+PayError is either Declined(reason: String) or Timeout
+
+contract Checkout {
+    pledge charge(amount: Float) -> Result<Unit, PayError>
+    pledge ping() -> Unit
+}

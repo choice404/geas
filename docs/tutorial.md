@@ -8,7 +8,8 @@ holding every term and every allocation that crosses the line. This tutorial
 walks the whole language surface, drives one contract from C and from Python
 with no generated bindings on either side, and then walks an order saga
 through its deadlines and its remedies, first host driven and then engine
-driven, the contract running its own course.
+driven, the contract running its own course, and finally across a deploy,
+parked under one version of the contract and finished under the next.
 
 The bridge, contracts served over gRPC to other processes, is a real part of
 Geas and is out of scope here on purpose. Everything below is the in
@@ -927,7 +928,8 @@ every host body and checks exactly that.
 The row also remembers which course wrote it. A module whose course changed,
 even one duration in a `timeout`, refuses the row with `GEAS_ERR_VERSION`,
 since a step number from one course means nothing to another, so a course that
-changes ships as a new contract version.
+changes ships as a new contract version, and section 15 is how a saga parked
+under the old one comes back as the new one.
 
 ```sh
 make test-course-saga
@@ -969,14 +971,128 @@ make test-course-python
 
 Same saga, same rules, and now the order lives in exactly one place.
 
+## 15. A saga, the next version
+
+So the saga runs, it parks, and it comes back after a crash. Now the thing is,
+the saga outlives the code. A parcel can sit in the carrier's van for three
+days, and in those three days you ship a new version of the contract, so the
+row in the store was written by version 1 and the module loaded now is version
+2. A plain resume refuses that row with `GEAS_ERR_VERSION`, and it should,
+since nothing says what a version 1 saga means to version 2. An `amends` block
+is where you say it.
+
+Think of it like a database migration, except it runs per instance at the
+moment the instance comes back, and the compiler checks it covers everything.
+
+First, record the shape of the version that shipped. `geas record` writes the
+shape of every public contract in the file beside it:
+
+```sh
+target/bin/geas record skeleton/order_course.geas
+# [geas] recorded skeleton/shapes/OrderCourse.v1.shape
+```
+
+That file is the old version as the compiler sees it, the vows, the pledges and
+signals, the subcontracts, the remedies, the type layouts, and the hashes a
+park row carries, and it goes into the repository next to the source. Record a
+version once it ships; recording it again is a no op while the shape is the
+same, and refused if somebody edited the contract under the same version
+number, which is exactly the mistake you want caught.
+
+Now write version 2. `skeleton/order_course_v2.geas` is the same `OrderCourse`
+contract with `[version: 2]`, and it changes a few things a real saga changes:
+the warehouse calls the shipping step `dispatch` now, the customer gets the
+tracking code through a new `notify` step, the carrier chases its own quiet
+parcels so `chase` is gone, the order is counted in `cents` with no default,
+and the course changed with all of that:
+
+```text
+vow cents: Int
+
+pledge dispatch(res: Reservation) -> Result<Tracking, ShipError>
+    after Payment, reserve
+
+pledge notify(tracking: Tracking) -> Result<Unit, ShipError>
+    after dispatch
+
+remedy recall for dispatch(tracking: Tracking) -> Result<Unit, ShipError>
+
+amends 1 {
+    // Version 1 counted the order in whole units
+    vow cents = prior.amount * 100
+    rename ship -> dispatch
+    retire chase
+    latch notify as pending
+    restart course
+}
+```
+
+Each item covers one difference. `cents` is new and has no default, so the
+block works it out, and `prior.amount` reads the vow the version 1 saga was
+signed with. `rename ship -> dispatch` carries ship's latch, its stored
+tracking, and its eligibility over to the new name, so a saga that already
+shipped stays shipped. `retire chase` drops a step version 2 does not have.
+`latch notify as pending` says where the new step starts, pending is what it
+would be anyway, and `fulfilled` or `broken` are there when a migration needs
+them. `restart course` is needed because the course changed: a step number of
+version 1's course means nothing in version 2's, so the saga enters the new
+course at step 0.
+
+The compiler holds you to it. Leave out `restart course` and the build tells
+you the course differs and its frame cannot carry; leave out the `vow` item and
+it tells you `cents` is new with no default; retire something version 1 never
+had and that is an error too. Check it like anything else:
+
+```sh
+target/bin/geas check skeleton/order_course_v2.geas
+```
+
+So what happens at the resume. The host parks a version 1 saga the usual way,
+here with autopark while the course waits at the `select`, and shuts down. The
+new deploy loads version 2, binds its bodies, `dispatch`, `notify`, and
+`recall` among them, and resumes the same row:
+
+```c
+GeasContract* c = NULL;
+geas_instance_resume(rt, dsn, "order-1", 0, &c);
+// geas_contract_amended_from(c) == 1
+// geas_vow_ref(c, "cents")->as.i == 10000
+```
+
+The hook sees `AMENDED`, carrying the two versions, then `RESUMED`, then
+`COURSE_STARTED`, and the course runs from the top. Steps are at least once, so
+`authorize`, `capture`, `reserve`, and `dispatch` run their bodies again; the
+course binds what they answer, while every latch stays where version 1 put it,
+and so does the Ok value a remedy would be handed. `notify` runs for the first
+time, the course waits on `delivered`, and the signal finishes the saga under
+version 2. If `notify` fails instead, the saga breaks and `recall` is handed the
+tracking `ship` produced back under version 1. After all that the instance is
+just a version 2 instance, its next park writes a version 2 row.
+
+Keep the bodies the rerun hits idempotent, the same advice as for a crash,
+since a restarted course is the same at least once story. And one block per
+older version, blocks do not chain: a version 3 that still has version 1 rows
+around carries `amends 1` and `amends 2`.
+
+```sh
+make test-amend-saga
+make test-amend-python
+```
+
+The C gate parks version 1 sagas and resumes them as version 2 mid course,
+after a failed step, after a kill at every step boundary, and through a module
+without the block, which refuses the row and leaves it for the one that has it.
+`interop/python/demo_amend.py` walks the same deploy from Python, where the
+instance answers `saga.amended_from()`.
+
 ## Where to go next
 
 - [docs/grammar.md](grammar.md) is the normative language grammar, every rule
   this tutorial showed and the ones it did not.
 - [docs/abi.md](abi.md) is the ABI a foreign host compiles against, the value
   layouts, the thunk frame, ownership, mangling, the hash, and the workflow
-  surface: the clock and the tick, terms, signals, remedies, the course, and
-  the park row.
+  surface: the clock and the tick, terms, signals, remedies, the course, the
+  park row, and amendment.
 - [docs/bridge.md](bridge.md) is the layer this tutorial skipped: the same
   contracts served over gRPC, the wire surface emitted by the compiler and
   driven from any language with stock tooling.

@@ -18,7 +18,7 @@ import (
 // SidekickShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const SidekickShapeHash uint64 = 0x3095e2440e1e9100
+const SidekickShapeHash uint64 = 0xb4324b39e6ea588a
 
 // SidekickSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server
@@ -85,7 +85,7 @@ func (s *SidekickSession) Close() { s.cancel() }
 // MainShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const MainShapeHash uint64 = 0x5aba182af590ab32
+const MainShapeHash uint64 = 0xa55394f654fdaec4
 
 // MainSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

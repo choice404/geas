@@ -1,0 +1,16 @@
+exit 1
+tests/check/amends_layout_ok.geas: 23:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow card: Card
+      ^~~~~~~~
+tests/check/amends_layout_ok.geas: 24:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow wallet: Wallet
+      ^~~~~~~~~~
+tests/check/amends_layout_ok.geas: 25:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow note: Note
+      ^~~~~~~~
+tests/check/amends_layout_ok.geas: 26:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow copy: Note
+      ^~~~~~~~
+tests/check/amends_layout_ok.geas: 27:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow spare: Card
+      ^~~~~~~~~

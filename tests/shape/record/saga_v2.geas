@@ -1,0 +1,8 @@
+// Version 2 of the Saga contract tests/check/amends_ok.geas amends from
+contract Saga [version: 2] {
+    vow dsn: String
+    vow region: String = "eu"
+    vow grace: Duration = 1h
+
+    signal delivered()
+}

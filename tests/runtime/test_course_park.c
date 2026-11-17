@@ -828,12 +828,25 @@ static atomic_int g_sleep_park;
 static atomic_int g_sleep_quick_seen;
 static atomic_int g_sleep_needs_quick;
 
+/* The instance an armed round parks. The course can reach its retry wait
+ * before sign hands the instance back to the test, so an armed round waits
+ * here until the test publishes it, and the park lands in the first retry
+ * wait however the threads are scheduled */
+static GeasContract* sleep_target(void) {
+    GeasContract* c = atomic_load(&g_sleep_target);
+    for (int i = 0; i < WAIT_MS && !c && atomic_load(&g_sleep_park) == -1; i++) {
+        usleep(1000);
+        c = atomic_load(&g_sleep_target);
+    }
+    return c;
+}
+
 /* Parks first, then lets the clock move, so the row's retry is still due.
  * With a together in flight it waits for quick's outcome, since no row is
  * written while a body runs */
 static void parking_sleep(void* user, uint64_t ms) {
     (void)user;
-    GeasContract* c = atomic_load(&g_sleep_target);
+    GeasContract* c = atomic_load(&g_sleep_park) == -1 ? sleep_target() : NULL;
     if (c && atomic_load(&g_sleep_park) == -1) {
         /* A partner still queued is parked with no outcome; this round wants
          * quick's outcome in the row, so it lets quick run first */

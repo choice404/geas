@@ -1,0 +1,19 @@
+// A vow item reads this version's vows as the block has filled them so far:
+// a vow carried from version 1 or with a default reads at once, and a vow
+// only the block sets reads in the items after the one that sets it
+contract AmendVowOrder [version: 2] {
+    vow base: Int = 10
+    vow note: String = "x"
+    vow rate: Int
+    vow total: Int
+    vow region: String = "eu"
+
+    pledge ship() -> Unit
+    pledge notify() -> Result<String, Unit>
+
+    amends 1 {
+        vow rate = prior.base * 2
+        vow total = rate + base
+        vow region = region + note
+    }
+}

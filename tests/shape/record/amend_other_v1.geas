@@ -1,0 +1,6 @@
+// A contract whose recorded shape tests/check/shapes/AmendMismatch.v1.shape
+// holds under the wrong file name, the case of a shape file that records
+// another contract than the one its name says
+contract AmendOther {
+    pledge step() -> Unit
+}

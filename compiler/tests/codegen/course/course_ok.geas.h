@@ -7,10 +7,10 @@
 /* contract Flow, version 1
  * vow limit: Duration (default)
  */
-#define GEAS_HASH_Flow 0x1dd9569d3b76ea36ULL
+#define GEAS_HASH_Flow 0xb421a32f1492afa4ULL
 
 /* pledge first(n: Int) -> Result<Int, PayError>, abstract */
-#define GEAS_MANGLED_Flow_first "__geas_ash_Flow_first_078b45426fc5a3ac_v1"
+#define GEAS_MANGLED_Flow_first "__geas_ash_Flow_first_e91432aef8c897b2_v1"
 
 /* pledge second(n: Int) -> Option<Int>, abstract */
 #define GEAS_MANGLED_Flow_second "__geas_ash_Flow_second_1da73ef4d721fbeb_v1"

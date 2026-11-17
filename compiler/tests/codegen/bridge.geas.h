@@ -9,33 +9,33 @@
  * vow open: Bool (default)
  * vow rate: Float (default)
  */
-#define GEAS_HASH_Shop 0x6fe34409781e3d4fULL
+#define GEAS_HASH_Shop 0x0eeff175659afd33ULL
 
 /* pledge sign(who: String) -> Result<Unit, Problem> */
-#define GEAS_MANGLED_Shop_sign "__geas_ash_Shop_sign_26f7fe3f4cef1750_v2"
+#define GEAS_MANGLED_Shop_sign "__geas_ash_Shop_sign_c822fb00278baa59_v2"
 
 /* pledge list_items(limit: Int, kinds: List<Kind>) -> Result<List<Item>, Problem> */
-#define GEAS_MANGLED_Shop_list_items "__geas_ash_Shop_list_items_a0c4e4d64eeba1c1_v2"
+#define GEAS_MANGLED_Shop_list_items "__geas_ash_Shop_list_items_89af7d4b8d3a0721_v2"
 
 /* pledge find_item(id: Int, hint: Option<String>) -> Option<Item> */
-#define GEAS_MANGLED_Shop_find_item "__geas_ash_Shop_find_item_1620a0a07f85f264_v2"
+#define GEAS_MANGLED_Shop_find_item "__geas_ash_Shop_find_item_edad313480ba2fe9_v2"
 
 /* pledge pay(amount: Float, memo: Tuple<Int, String>) -> Result<Tuple<Int, Bool>, Problem> */
-#define GEAS_MANGLED_Shop_pay "__geas_ash_Shop_pay_1d762b62e9b1f442_v2"
+#define GEAS_MANGLED_Shop_pay "__geas_ash_Shop_pay_8fafa4e6d97895ff_v2"
 
 /* pledge refund(id: Int) -> Result<Map<String, Int>, String> */
 #define GEAS_MANGLED_Shop_refund "__geas_ash_Shop_refund_fa3987b4e3a846c8_v2"
 
 /* pledge audit(flags: Map<String, Bool>) -> Result<Option<List<Int>>, Kind> */
-#define GEAS_MANGLED_Shop_audit "__geas_ash_Shop_audit_9a544dee8788c7d9_v2"
+#define GEAS_MANGLED_Shop_audit "__geas_ash_Shop_audit_9c369369f22429c5_v2"
 
 /* contract Depot, version 1
  * vow dsn: String (default)
  */
-#define GEAS_HASH_Depot 0xdbd6e085dce9db4fULL
+#define GEAS_HASH_Depot 0x6738cc8f56d8db33ULL
 
 /* pledge stock(item: Item) -> Result<UInt, Problem> */
-#define GEAS_MANGLED_Depot_stock "__geas_ash_Depot_stock_3e62c3a94a17f6fd_v1"
+#define GEAS_MANGLED_Depot_stock "__geas_ash_Depot_stock_9fbbd9928e8bcf05_v1"
 
 /* pledge out(n: Int) -> Result<Int, Int> */
 #define GEAS_MANGLED_Depot_out "__geas_ash_Depot_out_a7c9229487606e8b_v1"

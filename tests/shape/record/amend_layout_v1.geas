@@ -1,0 +1,30 @@
+// Version 1 of the AmendLayout contract the layout cases of tests/check
+// amend from. Its vows, pledges, and signal reach Card, Wallet, Outcome,
+// and Note, so the recorded shape carries each of their layouts
+record Card {
+    number: String
+}
+
+record Wallet {
+    owner: String
+    card: Card
+}
+
+Outcome is either Approved or Declined(reason: String)
+
+record Note {
+    text: String
+}
+
+contract AmendLayout {
+    vow card: Card
+    vow wallet: Wallet
+    vow note: Note
+    vow spare: Card
+    vow moved: Card
+    pledge charge() -> Result<Card, String>
+    pledge settle() -> Result<Outcome, String>
+    pledge memo() -> Result<Note, String>
+    pledge stale() -> Result<Card, String>
+    signal tapped(card: Card)
+}

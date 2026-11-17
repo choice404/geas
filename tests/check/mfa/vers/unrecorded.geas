@@ -1,0 +1,7 @@
+// A module whose contract amends a version nobody recorded
+contract MultiUnrecorded [version: 2] {
+    pledge step() -> Unit
+
+    amends 1 {
+    }
+}

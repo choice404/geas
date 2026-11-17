@@ -23,7 +23,7 @@ export interface SessionStream {
 // GreeterShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const GreeterShapeHash: bigint = 0x80464bf23398ab38n;
+export const GreeterShapeHash: bigint = 0x8b67a53d561ff526n;
 
 export interface GreeterSignRequest {
   prefix?: string;  // the vow; unset takes the declared default

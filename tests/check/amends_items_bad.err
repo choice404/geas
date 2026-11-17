@@ -1,0 +1,15 @@
+pledge 'reserve' yields 'Int' in version 1 and 'Float' in version 2; its stored value cannot carry, so retire 'reserve' and declare the pledge under a new name
+signal 'arrived' carries '(String)' in version 1 and '(Int)' in version 2; its stored value cannot carry, so retire 'arrived' and declare the signal under a new name
+pledge 'notify' of version 1 is a signal in version 2; declare the new one under a new name and retire 'notify'
+rename 'dispatch' -> 'ship': 'dispatch' yields 'String' in version 1 and 'ship' yields 'Int'; a stored value cannot change type, so retire 'dispatch' instead
+signal 'pinged' of version 1 is a pledge in version 2; declare the new one under a new name and retire 'pinged'
+pledge 'legacy' of version 1 is not in version 2; cover it with rename legacy -> NEW or retire legacy
+latch names 'wrapped', which takes the latch of 'wrap' from version 1
+latch names 'score', which version 1 already had; its latch carries over
+retire names 'ghost', which version 1 never had
+retire names 'flag', which is still a member of contract 'AmendItems'
+latch names 'extra' twice
+rename 'score' -> 'extra': version 2 still has 'score'
+rename 'spare' -> 'score': 'score' is already carried from version 1
+rename 'bell' -> 'other': 'bell' is a signal in version 1 and 'other' is a pledge
+restart course is written twice

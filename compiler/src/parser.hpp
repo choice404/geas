@@ -151,6 +151,7 @@ private:
     AmendItem parseAmendVow();
     AmendItem parseAmendRename();
     AmendItem parseAmendLatch();
+    void parseAmendRestart(std::vector<AmendItem>& items);
 
     // Types and parameter lists, parsetype.cpp
     TypeId parseType();

@@ -1,0 +1,6 @@
+// Version 1 of the AmendSeedRemedy contract the fulfilled seed cases of
+// tests/check amend from
+
+contract AmendSeedRemedy {
+    pledge ship() -> Result<Int, String>
+}

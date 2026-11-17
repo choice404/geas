@@ -1,0 +1,20 @@
+geas shape 2
+contract AmendLayout
+version 1
+hash 0xbeb786f7d7ac8470
+course 0x0000000000000000
+shape contract AmendLayout;vow card:NCard;vow wallet:NWallet;vow note:NNote;vow spare:NCard;vow moved:NCard;pledge charge:()->R(NCard,S);pledge settle:()->R(NOutcome,S);pledge memo:()->R(NNote,S);pledge stale:()->R(NCard,S);signal tapped:(NCard)->V;type Card{number:S};type Note{text:S};type Outcome=Approved|Declined(reason:S);type Wallet{owner:S,card:NCard};
+vow card NCard
+vow wallet NWallet
+vow note NNote
+vow spare NCard
+vow moved NCard
+pledge charge ()->R(NCard,S) NCard
+pledge settle ()->R(NOutcome,S) NOutcome
+pledge memo ()->R(NNote,S) NNote
+pledge stale ()->R(NCard,S) NCard
+signal tapped (NCard)
+type Card {number:S}
+type Note {text:S}
+type Outcome =Approved|Declined(reason:S)
+type Wallet {owner:S,card:NCard}

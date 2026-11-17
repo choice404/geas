@@ -12,7 +12,6 @@
 #include "check.hpp"
 #include "codegen.hpp"
 #include "emittext.hpp"
-#include "workflowgate.hpp"
 
 namespace geas {
 
@@ -43,21 +42,14 @@ std::string stemOf(std::string_view path) {
     return std::string{name.substr(0, name.rfind('.'))};
 }
 
-// The front end, then the workflow gate. Prints every fault and hands back
-// nothing when the program cannot be emitted
+// The front end. Prints every fault and hands back nothing when the program
+// cannot be emitted
 std::expected<CheckedProgram, int> checkForEmit(std::string_view path) {
     auto checked = checkProgram(path);
     if (!checked) {
         for (const std::string& fault : checked.error()) {
             report(fault);
         }
-        return std::unexpected(exitFailure);
-    }
-    const std::vector<std::string> constructs = findWorkflowConstructs(*checked);
-    for (const std::string& construct : constructs) {
-        report(joined("geas: workflow constructs are not emitted yet: ", construct));
-    }
-    if (!constructs.empty()) {
         return std::unexpected(exitFailure);
     }
     return std::move(*checked);

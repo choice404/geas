@@ -1,0 +1,29 @@
+// The pledges and signals of version 1 against version 2: one that stays
+// with the same stored type carries its latch, even with new parameters or
+// a new error type, a renamed one keeps it under its new name, a retired
+// one is dropped, and an item this version adds starts as its latch says
+contract AmendItems [version: 2] {
+    pledge reserve() -> Result<Int, Bool>
+    pledge ship() -> Result<String, String>
+    pledge notify(to: String) -> Unit
+    pledge wrapped() -> Unit
+    pledge rank() -> Result<Float, String>
+    pledge audit() -> Unit
+    signal arrived(code: String)
+    signal ping()
+    signal cancelled()
+
+    amends 1 {
+        rename dispatch -> ship
+        rename pinged -> ping
+        rename wrap -> wrapped
+        retire legacy
+        retire score
+        retire spare
+        retire flag
+        retire bell
+        latch rank as pending
+        latch audit as fulfilled
+        latch cancelled as broken
+    }
+}

@@ -1,0 +1,21 @@
+// Version 1 of the AmendParts contract the subcontract and remedy cases of
+// tests/check amend from
+contract AmendParts {
+    subcontract Billing {
+        pledge charge() -> Result<Int, String>
+    }
+    subcontract Shipping {
+        pledge pack() -> Unit
+    }
+    subcontract {
+        pledge log() -> Unit
+    }
+    subcontract Legacy {
+        pledge old() -> Unit
+    }
+    pledge reserve() -> Result<Int, String>
+
+    remedy refund for charge(amount: Int) -> Unit
+    remedy release for reserve(id: Int) -> Unit
+    remedy unpack for pack() -> Unit
+}

@@ -49,6 +49,14 @@ struct CheckedProgram {
 std::expected<CheckedProgram, std::vector<std::string>> checkProgram(std::string_view rootPath);
 
 /**
+ * Holds every amends block's restart course to the two courses it bridges,
+ * run once the courses have lowered and their hashes are known.
+ * @params checked - a checked program with its courses lowered
+ * @returns {std::vector<Diagnostic>} - one fault per block whose course rule fails
+ */
+std::vector<Diagnostic> checkAmendCourses(const CheckedProgram& checked);
+
+/**
  * The debug listing behind geas dump-shape: for every contract that is not
  * internal, its shape string as a comment, its shape hash, and the mangled
  * name of each pledge and remedy, spelled the way the C header spells them.

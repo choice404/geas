@@ -1,0 +1,14 @@
+geas shape 2
+contract AmendVows
+version 1
+hash 0x881d79909b36fe2c
+course 0x0000000000000000
+shape contract AmendVows;vow keep:S;vow count:I;vow url:S;vow legacy:B;vow order:NOrder;vow items:L(I);vow stamp:D;type Order{id:S,total:F};
+vow keep S
+vow count I
+vow url S
+vow legacy B
+vow order NOrder
+vow items L(I)
+vow stamp D
+type Order {id:S,total:F}

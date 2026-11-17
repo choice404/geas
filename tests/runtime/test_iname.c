@@ -31,13 +31,13 @@ static void fail_at(const char* what, const char* file, int line) {
  * keeps them honest. The stale name is v1 greet's signature hash wearing
  * Greeter2's name, the exact lie a host shipping yesterday's header would
  * tell, and it must miss. */
-#define GREET_V1   "__geas_ash_Greeter_greet_17cef80f14421b9b_v1"
-#define SHOUT_V1   "__geas_ash_Greeter_shout_17cef80f14421b9b_v1"
-#define CTYPE_V1   "__geas_ash_Greeter__80464bf23398ab38_v1"
-#define GREET_V2   "__geas_ash_Greeter2_greet_8d9bbc95f1afbbec_v2"
-#define CTYPE_V2   "__geas_ash_Greeter2__26a068304bf801f2_v2"
-#define STALE_V2   "__geas_ash_Greeter2_greet_17cef80f14421b9b_v2"
-#define STALE_V1   "__geas_ash_Greeter2_greet_17cef80f14421b9b_v1"
+#define GREET_V1   "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
+#define SHOUT_V1   "__geas_ash_Greeter_shout_5155c52e95ed821d_v1"
+#define CTYPE_V1   "__geas_ash_Greeter__8b67a53d561ff526_v1"
+#define GREET_V2   "__geas_ash_Greeter2_greet_0b2357619b406722_v2"
+#define CTYPE_V2   "__geas_ash_Greeter2__ed0ccb47c5176d84_v2"
+#define STALE_V2   "__geas_ash_Greeter2_greet_5155c52e95ed821d_v2"
+#define STALE_V1   "__geas_ash_Greeter2_greet_5155c52e95ed821d_v1"
 
 static GeasValue str_arg(const char* s) {
     GeasValue v;

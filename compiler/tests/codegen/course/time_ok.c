@@ -59,7 +59,7 @@ static GeasStatus geas_clause_Clock_isLate(GeasContract* cc, const GeasValue* ar
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Clock_wait_710372682da4a4c4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Clock_wait_f6016148724d055a_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -210,7 +210,7 @@ static const GeasVowDesc k_Clock_vows[] = {
 };
 
 static const GeasPledgeDesc k_Clock_pledges[] = {
-    { "wait", "__geas_ash_Clock_wait_710372682da4a4c4_v1", 1, __geas_ash_Clock_wait_710372682da4a4c4_v1, -1 },
+    { "wait", "__geas_ash_Clock_wait_f6016148724d055a_v1", 1, __geas_ash_Clock_wait_f6016148724d055a_v1, -1 },
     { "tick", NULL, 1, NULL, -1 },
 };
 
@@ -239,7 +239,7 @@ static const uint8_t k_Clock_kinds[] = {
 };
 
 static const GeasContractDesc k_Clock = {
-    "Clock", 0x6497245b3f9019b1ULL,
+    "Clock", 0xdad59f3912ecbc45ULL,
     1, 2, k_Clock_pledges,
     2, k_Clock_vows,
     0, NULL, 4,

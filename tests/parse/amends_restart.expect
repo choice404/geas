@@ -1,0 +1,42 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Flow",
+            attrs: [
+                Attr {
+                    key: "version",
+                    value: Int(3),
+                },
+            ],
+            members: [
+                Vow {
+                    name: "restart",
+                    ty: Named("Int"),
+                    init: Int(0),
+                },
+                Amends {
+                    version: 1,
+                    items: [
+                        RestartCourse,
+                        Latch {
+                            name: "audited",
+                            state: Pending,
+                        },
+                    ],
+                },
+                Amends {
+                    version: 2,
+                    items: [
+                        Rename {
+                            from: "dispatch",
+                            to: "ship",
+                        },
+                        RestartCourse,
+                    ],
+                },
+            ],
+        },
+    ],
+}

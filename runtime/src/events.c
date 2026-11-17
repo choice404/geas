@@ -115,6 +115,11 @@ void geas_rt_event_cancel(GeasContract* c) {
  * A lost entry is counted without allocating or stopping the host */
 void geas_rt_event_queue(GeasContract* c, uint32_t kind,
                          const char* item, uint32_t old_state) {
+    geas_rt_event_queue_pair(c, kind, item, old_state, c->state);
+}
+
+void geas_rt_event_queue_pair(GeasContract* c, uint32_t kind, const char* item,
+                              uint32_t old_state, uint32_t new_state) {
     if (!__atomic_load_n(&c->rt->event_fn, __ATOMIC_ACQUIRE)) return;
     pthread_mutex_lock(&c->rt->lock);
     GeasEventFn fn = __atomic_load_n(&c->rt->event_fn, __ATOMIC_RELAXED);
@@ -129,7 +134,7 @@ void geas_rt_event_queue(GeasContract* c, uint32_t kind,
     *node = (GeasEventNode){ .fn = fn, .user = user, .event = {
         .size = sizeof(GeasEvent), .kind = kind, .instance = c,
         .contract = c->desc->name, .item = item, .old_state = old_state,
-        .new_state = c->state, .at_ms = geas_rt_now(c->rt)
+        .new_state = new_state, .at_ms = geas_rt_now(c->rt)
     }};
     if (c->event_tail) {
         c->event_tail->next = node;

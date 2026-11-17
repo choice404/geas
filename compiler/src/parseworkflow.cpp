@@ -261,7 +261,25 @@ void Parser::parseAmendItem(std::vector<AmendItem>& items) {
         items.push_back(parseAmendLatch());
         return;
     }
-    error(expectedFound("an amends item, 'vow', 'rename', 'retire', or 'latch'"));
+    if (atIdentText("restart")) {
+        parseAmendRestart(items);
+        return;
+    }
+    error(expectedFound(
+        "an amends item, 'vow', 'rename', 'retire', 'latch', or 'restart course'"));
+    skipRestOfLine();
+}
+
+// restart course. restart is a keyword inside an amends block alone, and
+// course is the only thing it restarts
+void Parser::parseAmendRestart(std::vector<AmendItem>& items) {
+    bump();
+    if (at(TokenKind::KwCourse)) {
+        bump();
+        items.emplace_back(AmendRestart{});
+        return;
+    }
+    error(expectedFound("'course' after 'restart'"));
     skipRestOfLine();
 }
 

@@ -172,7 +172,7 @@ step_5:
 }
 
 static const GeasPledgeDesc k_Flow_pledges[] = {
-    { "value", "__geas_ash_Flow_value_2239093df2007542_v1", 0, NULL, -1 },
+    { "value", "__geas_ash_Flow_value_bb9b2465b4ec69ea_v1", 0, NULL, -1 },
     { "ready", NULL, 1, NULL, -1 },
 };
 
@@ -201,7 +201,7 @@ static const uint8_t k_Flow_kinds[] = {
 };
 
 static const GeasContractDesc k_Flow = {
-    "Flow", 0x1981c57b6bfbfb49ULL,
+    "Flow", 0xa52a98e6eef86695ULL,
     1, 2, k_Flow_pledges,
     0, NULL,
     0, NULL, 4,

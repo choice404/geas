@@ -5,10 +5,10 @@
 #define GEAS_HEADER_ATTRIBUTES
 
 /* contract Job, version 1 */
-#define GEAS_HASH_Job 0xb5ffbd595a96f63aULL
+#define GEAS_HASH_Job 0x66062d3a7ee8cbb3ULL
 
 /* pledge copy(target: String) -> Result<Unit, CopyError> */
-#define GEAS_MANGLED_Job_copy "__geas_ash_Job_copy_1a71fc89465496da_v1"
+#define GEAS_MANGLED_Job_copy "__geas_ash_Job_copy_acb18827992a1a53_v1"
 
 /* pledge flush() -> Option<Int> */
 #define GEAS_MANGLED_Job_flush "__geas_ash_Job_flush_a6bca9ba6197572c_v1"

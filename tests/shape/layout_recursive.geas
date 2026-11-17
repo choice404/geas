@@ -1,0 +1,18 @@
+// Recursive declared types: each layout is spelled once however often the
+// walk meets it, and the declared types the boundary never reaches, Unused
+// here, spell no layout at all
+record Node {
+    value: Int
+    next: Option<Node>
+}
+
+Tree is either Leaf or Branch(left: Tree, right: Tree, top: Node)
+
+record Unused {
+    note: String
+}
+
+contract Walker {
+    pledge walk(root: Tree) -> Result<Node, Int>
+    pledge note(text: String) -> Unit
+}

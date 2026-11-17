@@ -1,0 +1,4 @@
+exit 1
+tests/check/amends_items_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The pledges and signals of version 1 against version 2: one that stays
+  ^

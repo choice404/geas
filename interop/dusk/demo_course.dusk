@@ -309,6 +309,7 @@ func finish_happy(checks: *Checks, rt: Runtime, saga: Contract, host: *CourseHos
     check(checks, contract_state(saga) == state_fulfilled(), "the saga is fulfilled")
     check(checks, info.status == status_ok() && info.wait_due_ms == 0, "no status, no wait left")
     check(checks, (*host).chases == 0, "a parcel on time is never chased")
+    check(checks, contract_amended_from(saga) == 0, "a saga signed under this version was amended from none")
     se := runtime_stop_ticker(rt)
     if se.exists() {
         return se

@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/amends/src/amend_host.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // A host driven contract at version 3 amending versions 1 and 2: vows set
+  ^

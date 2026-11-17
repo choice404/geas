@@ -23,7 +23,7 @@ export interface SessionStream {
 // FlowShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const FlowShapeHash: bigint = 0x1981c57b6bfbfb49n;
+export const FlowShapeHash: bigint = 0xa52a98e6eef86695n;
 
 export interface FlowSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins

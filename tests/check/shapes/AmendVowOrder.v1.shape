@@ -1,0 +1,10 @@
+geas shape 2
+contract AmendVowOrder
+version 1
+hash 0xdcce17f3e3f55555
+course 0x0000000000000000
+shape contract AmendVowOrder;vow base:I;vow note:S;pledge ship:()->V;pledge notify:()->R(S,V);
+vow base I
+vow note S
+pledge ship ()->V V
+pledge notify ()->R(S,V) S

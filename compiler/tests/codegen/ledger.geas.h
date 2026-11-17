@@ -7,63 +7,63 @@
 /* contract Ledger, version 1
  * vow dsn: String (default)
  */
-#define GEAS_HASH_Ledger 0x513b853655ba4957ULL
+#define GEAS_HASH_Ledger 0x91e8dbbfad45dc44ULL
 
 /* pledge balance(id: Int) -> Result<Float, LedgerError> */
-#define GEAS_MANGLED_Ledger_balance "__geas_ash_Ledger_balance_08a85944c57677dc_v1"
+#define GEAS_MANGLED_Ledger_balance "__geas_ash_Ledger_balance_93da4ddb7e1fb12f_v1"
 
 /* pledge open(id: Int, owner: String, amount: Float) -> Result<Bool, LedgerError> */
-#define GEAS_MANGLED_Ledger_open "__geas_ash_Ledger_open_5d5e32c614fb5327_v1"
+#define GEAS_MANGLED_Ledger_open "__geas_ash_Ledger_open_0dec7644ef072374_v1"
 
 /* pledge set_balance(id: Int, owner: String, amount: Float) -> Result<Bool, LedgerError> */
-#define GEAS_MANGLED_Ledger_set_balance "__geas_ash_Ledger_set_balance_5d5e32c614fb5327_v1"
+#define GEAS_MANGLED_Ledger_set_balance "__geas_ash_Ledger_set_balance_0dec7644ef072374_v1"
 
 /* pledge owned_total(owner: String) -> Result<Float, LedgerError> */
-#define GEAS_MANGLED_Ledger_owned_total "__geas_ash_Ledger_owned_total_ce4ecc3f33b9edde_v1"
+#define GEAS_MANGLED_Ledger_owned_total "__geas_ash_Ledger_owned_total_fc22786fdc9ce27d_v1"
 
 /* pledge rich(min: Float) -> Result<Int, LedgerError> */
-#define GEAS_MANGLED_Ledger_rich "__geas_ash_Ledger_rich_370b158435948750_v1"
+#define GEAS_MANGLED_Ledger_rich "__geas_ash_Ledger_rich_6507ff46de4c993b_v1"
 
 /* pledge owned_above(owner: String, min: Float) -> Result<Float, LedgerError> */
-#define GEAS_MANGLED_Ledger_owned_above "__geas_ash_Ledger_owned_above_05e55a6d1d511224_v1"
+#define GEAS_MANGLED_Ledger_owned_above "__geas_ash_Ledger_owned_above_f26bab85d3551c17_v1"
 
 /* pledge owners_asc(min: Float) -> Result<String, LedgerError> */
-#define GEAS_MANGLED_Ledger_owners_asc "__geas_ash_Ledger_owners_asc_f1d74fe1573b1e1e_v1"
+#define GEAS_MANGLED_Ledger_owners_asc "__geas_ash_Ledger_owners_asc_06567d7f0ebb153d_v1"
 
 /* pledge owners_desc(min: Float) -> Result<String, LedgerError> */
-#define GEAS_MANGLED_Ledger_owners_desc "__geas_ash_Ledger_owners_desc_f1d74fe1573b1e1e_v1"
+#define GEAS_MANGLED_Ledger_owners_desc "__geas_ash_Ledger_owners_desc_06567d7f0ebb153d_v1"
 
 /* pledge top_owner(min: Float) -> Result<String, LedgerError> */
-#define GEAS_MANGLED_Ledger_top_owner "__geas_ash_Ledger_top_owner_f1d74fe1573b1e1e_v1"
+#define GEAS_MANGLED_Ledger_top_owner "__geas_ash_Ledger_top_owner_06567d7f0ebb153d_v1"
 
 /* pledge top_owners(min: Float, k: Int) -> Result<String, LedgerError> */
-#define GEAS_MANGLED_Ledger_top_owners "__geas_ash_Ledger_top_owners_3957ec7f5e3b73a5_v1"
+#define GEAS_MANGLED_Ledger_top_owners "__geas_ash_Ledger_top_owners_f756139bad41cc86_v1"
 
 /* pledge extremes(lo: Float, hi: Float) -> Result<String, LedgerError> */
-#define GEAS_MANGLED_Ledger_extremes "__geas_ash_Ledger_extremes_5fa8d72aa5207114_v1"
+#define GEAS_MANGLED_Ledger_extremes "__geas_ash_Ledger_extremes_7eb1797e0b691827_v1"
 
 /* pledge notable(who: String, floor: Float, vip: Float) -> Result<Int, LedgerError> */
-#define GEAS_MANGLED_Ledger_notable "__geas_ash_Ledger_notable_e0b02c5b3c29f887_v1"
+#define GEAS_MANGLED_Ledger_notable "__geas_ash_Ledger_notable_65eae7c204633dd4_v1"
 
 /* pledge tail_total(lo: Float, hi: Float) -> Result<Float, LedgerError> */
-#define GEAS_MANGLED_Ledger_tail_total "__geas_ash_Ledger_tail_total_6a2fa3fec425c85b_v1"
+#define GEAS_MANGLED_Ledger_tail_total "__geas_ash_Ledger_tail_total_ffe7fca0a4d8b340_v1"
 
 /* pledge mid_owners(lo: Float, hi: Float) -> Result<String, LedgerError> */
-#define GEAS_MANGLED_Ledger_mid_owners "__geas_ash_Ledger_mid_owners_5fa8d72aa5207114_v1"
+#define GEAS_MANGLED_Ledger_mid_owners "__geas_ash_Ledger_mid_owners_7eb1797e0b691827_v1"
 
 /* pledge others(who: String) -> Result<Int, LedgerError> */
-#define GEAS_MANGLED_Ledger_others "__geas_ash_Ledger_others_6c06a9d8314ae21f_v1"
+#define GEAS_MANGLED_Ledger_others "__geas_ash_Ledger_others_137b584aef67e2cc_v1"
 
 /* pledge spread(lo: Float) -> Result<Float, LedgerError> */
-#define GEAS_MANGLED_Ledger_spread "__geas_ash_Ledger_spread_565b118513865775_v1"
+#define GEAS_MANGLED_Ledger_spread "__geas_ash_Ledger_spread_e9149bb61dede676_v1"
 
 /* pledge midpoint(lo: Float) -> Result<Option<Float>, LedgerError> */
-#define GEAS_MANGLED_Ledger_midpoint "__geas_ash_Ledger_midpoint_5b44653d86cf95ef_v1"
+#define GEAS_MANGLED_Ledger_midpoint "__geas_ash_Ledger_midpoint_1fa763904c865bbc_v1"
 
 /* pledge debit(id: Int, amount: Float) -> Result<Unit, LedgerError> */
-#define GEAS_MANGLED_Ledger_debit "__geas_ash_Ledger_debit_64d377f2192096ae_v1"
+#define GEAS_MANGLED_Ledger_debit "__geas_ash_Ledger_debit_a5445a61d72109ed_v1"
 
 /* pledge credit(id: Int, amount: Float) -> Result<Unit, LedgerError> */
-#define GEAS_MANGLED_Ledger_credit "__geas_ash_Ledger_credit_64d377f2192096ae_v1"
+#define GEAS_MANGLED_Ledger_credit "__geas_ash_Ledger_credit_a5445a61d72109ed_v1"
 
 #endif /* GEAS_HEADER_LEDGER */

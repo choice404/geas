@@ -1,0 +1,4 @@
+exit 1
+tests/check/amends_seed_remedy_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // An item version 2 adds may be seeded fulfilled when no remedy for it
+  ^

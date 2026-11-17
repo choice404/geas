@@ -8,7 +8,10 @@
 // schema, so a contract that uses none of the workflow surface hashes
 // exactly as it always has. Signals, remedies, terms, the course, and the
 // term attribute each append a segment of their own, and only when the
-// contract has one
+// contract has one. Last come the layouts of the declared records and sums
+// the boundary reaches, see layout.hpp, so a contract that reaches none keeps
+// its string. A pledge's or remedy's signature hash is taken over its
+// signature spelling followed by the layouts that signature alone reaches
 #pragma once
 
 #include <cstdint>
@@ -16,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "amendshape.hpp"
 #include "ast.hpp"
 #include "checked.hpp"
 #include "loader.hpp"
@@ -61,6 +65,7 @@ struct ContractShape {
     const RequirementsDecl* requirements;
     std::vector<std::string> requirementAtoms;
     const CourseDecl* course;
+    std::vector<TypeLayout> layouts;
     std::string shape;
     std::uint64_t shapeHash;
 };
@@ -87,5 +92,24 @@ std::optional<std::int64_t> contractTerm(const Ast& ast, const ContractDecl& con
  */
 std::vector<ContractShape> buildContractShapes(const Program& program, const Sigs& sigs,
                                                const TypeArena& types, const CheckTables& tables);
+
+/**
+ * Flattens one contract, the same view buildContractShapes builds for each.
+ * @params ast - the tree, sigs - the lowered signatures, types - the arena, tables - the checker's
+ * side tables, contract - the contract to flatten
+ * @returns {ContractShape} - its shape
+ */
+ContractShape buildContractShape(const Ast& ast, const Sigs& sigs, const TypeArena& types,
+                                 const CheckTables& tables, const ContractDecl& contract);
+
+/**
+ * The recorded form of a contract's shape, what geas record writes and what
+ * an amends block of a later version is checked against.
+ * @params shape - the flattened contract, sigs - its lowered signatures, types - the arena,
+ * courseHash - the hash of its lowered course, 0 when it has none
+ * @returns {RecordedShape} - the names and canonical type codes in descriptor order
+ */
+RecordedShape recordShape(const ContractShape& shape, const Sigs& sigs, const TypeArena& types,
+                          std::uint64_t courseHash);
 
 }  // namespace geas

@@ -12,7 +12,7 @@ package geas.main_course;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/main_coursepb";
 
-// contract Main, version 1, shape 0xd9ff6780dd4c1263.
+// contract Main, version 1, shape 0x999a08f81701d140.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

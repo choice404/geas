@@ -5,10 +5,10 @@
 #define GEAS_HEADER_MAIN_COURSE
 
 /* contract Main, version 1 */
-#define GEAS_HASH_Main 0xd9ff6780dd4c1263ULL
+#define GEAS_HASH_Main 0x999a08f81701d140ULL
 
 /* pledge run(args: List<String>) -> Result<Int, Failure> */
-#define GEAS_MANGLED_Main_run "__geas_ash_Main_run_a022a90ae4e00c35_v1"
+#define GEAS_MANGLED_Main_run "__geas_ash_Main_run_9f39bfb78af39036_v1"
 
 /* pledge step() -> Option<Int>, abstract */
 #define GEAS_MANGLED_Main_step "__geas_ash_Main_step_a6bca9ba6197572c_v1"

@@ -108,7 +108,7 @@ export function resumeIntGateSession(
 // StdUserShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const StdUserShapeHash: bigint = 0xff920d047d909132n;
+export const StdUserShapeHash: bigint = 0x38c56172b5eea80an;
 
 export interface StdUserSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
@@ -193,7 +193,7 @@ export function resumeStdUserSession(
 // MathOpsShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const MathOpsShapeHash: bigint = 0x5cea56c248f9b040n;
+export const MathOpsShapeHash: bigint = 0xd4c2a79230a9be2bn;
 
 export interface MathOpsSignRequest {
   epsilon?: number;  // the vow; unset takes the declared default
@@ -280,7 +280,7 @@ export function resumeMathOpsSession(
 // ListOpsShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const ListOpsShapeHash: bigint = 0xd1fa13d356232e92n;
+export const ListOpsShapeHash: bigint = 0x8929b04c369b38ean;
 
 export interface ListOpsSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins

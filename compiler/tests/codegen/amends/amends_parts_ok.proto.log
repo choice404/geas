@@ -1,0 +1,10 @@
+exit 1
+tests/check/amends_parts_ok.geas: 10:9: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+          pledge pack() -> Unit
+          ^~~~~~~~~~~
+tests/check/amends_parts_ok.geas: 13:9: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+          pledge log() -> Unit
+          ^~~~~~~~~~
+tests/check/amends_parts_ok.geas: 16:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge ship() -> Unit
+      ^~~~~~~~~~~

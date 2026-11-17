@@ -1,0 +1,8 @@
+// The layout pair for a variant payload, the second half: Refused carries
+// an Int code, see layout_payload_before.geas
+ShipError is either NoCarrier or Refused(reason: Int)
+
+contract Shipping {
+    vow last: Option<ShipError>
+    pledge ship() -> Unit
+}

@@ -1,0 +1,42 @@
+// The layout changes of version 1 against version 2 covered: Card gains
+// expiry, so the vows that reach it are set without reading prior, the
+// pledges and the signal that store it retire and come back under new
+// names, and Outcome and Note keep their layouts, so settle and memo carry
+// their latches and prior reads a Note
+record Card {
+    number: String
+    expiry: Int
+}
+
+record Wallet {
+    owner: String
+    card: Card
+}
+
+Outcome is either Approved or Declined(reason: String)
+
+record Note {
+    text: String
+}
+
+contract AmendLayout [version: 2] {
+    vow card: Card
+    vow wallet: Wallet
+    vow note: Note
+    vow copy: Note
+    vow spare: Card
+    pledge settle() -> Result<Outcome, String>
+    pledge memo() -> Result<Note, String>
+    pledge charged() -> Result<Card, String>
+    signal swiped(card: Card)
+
+    amends 1 {
+        vow card = Card { number: "0000", expiry: 0 }
+        vow wallet = Wallet { owner: prior.note.text, card: Card { number: "", expiry: 0 } }
+        vow copy = prior.note
+        vow spare = Card { number: "", expiry: 0 }
+        retire charge
+        retire stale
+        retire tapped
+    }
+}

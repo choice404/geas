@@ -1,0 +1,4 @@
+exit 1
+tests/check/order_saga.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The worked example from section 15 of the workflow grammar, with the
+  ^

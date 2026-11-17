@@ -1,0 +1,39 @@
+// Every place a layout change of version 1 against version 2 has to be
+// covered, left uncovered or covered the wrong way. Card gains expiry and
+// Outcome gains Held, so every vow, pledge, and signal that reaches either
+// keeps its type code while its layout changes; Note keeps its layout and
+// carries
+record Card {
+    number: String
+    expiry: Int
+}
+
+record Wallet {
+    owner: String
+    card: Card
+}
+
+Outcome is either Approved or Declined(reason: String) or Held
+
+record Note {
+    text: String
+}
+
+contract AmendLayout [version: 2] {
+    vow card: Card
+    vow wallet: Wallet
+    vow note: Note
+    vow spare: Card
+    vow renamed: Card
+    pledge charge() -> Result<Card, String>
+    pledge settle() -> Result<Outcome, String>
+    pledge memo() -> Result<Note, String>
+    pledge fresh() -> Result<Card, String>
+    signal tapped(card: Card)
+
+    amends 1 {
+        vow spare = prior.spare
+        rename moved -> renamed
+        rename stale -> fresh
+    }
+}

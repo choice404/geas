@@ -1,0 +1,7 @@
+exit 1
+compiler/tests/codegen/amends/src/amend_host.geas: 16:9: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+          pledge log() -> Unit
+          ^~~~~~~~~~
+compiler/tests/codegen/amends/src/amend_host.geas: 19:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge ship() -> Unit
+      ^~~~~~~~~~~

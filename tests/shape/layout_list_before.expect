@@ -1,0 +1,3 @@
+// shape Stock v1: contract Stock;pledge reserve:(L(NItem))->O(M(S,NItem));type Item{sku:S,quantity:I};
+#define GEAS_HASH_Stock 0xde10add2bef58bf0ULL
+#define GEAS_MANGLED_Stock_reserve "__geas_ash_Stock_reserve_902629f3338e3e81_v1"

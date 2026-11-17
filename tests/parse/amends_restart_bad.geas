@@ -1,0 +1,6 @@
+contract Flow [version: 2] {
+    amends 1 {
+        restart audit
+        retire old
+    }
+}

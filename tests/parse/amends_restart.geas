@@ -1,0 +1,15 @@
+// restart course sits beside the other amends items, restart read as a
+// keyword inside the block alone
+contract Flow [version: 3] {
+    vow restart: Int = 0
+
+    amends 1 {
+        restart course
+        latch audited as pending
+    }
+
+    amends 2 {
+        rename dispatch -> ship
+        restart course
+    }
+}

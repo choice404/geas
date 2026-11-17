@@ -1,0 +1,17 @@
+// A vow only the block sets, read before the item that sets it and inside
+// that item itself
+contract AmendVowOrder [version: 2] {
+    vow base: Int = 10
+    vow note: String = "x"
+    vow rate: Int
+    vow total: Int
+    vow region: String = "eu"
+
+    pledge ship() -> Unit
+    pledge notify() -> Result<String, Unit>
+
+    amends 1 {
+        vow total = rate + base
+        vow rate = rate + prior.base
+    }
+}

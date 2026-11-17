@@ -5,13 +5,13 @@
 #define GEAS_HEADER_FLOWDESK
 
 /* contract Courier, version 1 */
-#define GEAS_HASH_Courier 0x2684f2c8439cd5caULL
+#define GEAS_HASH_Courier 0xa75e59e7dac071dfULL
 
 /* pledge pickup(code: String) -> Result<Parcel, Int> */
-#define GEAS_MANGLED_Courier_pickup "__geas_ash_Courier_pickup_5b41db35c677cfa5_v1"
+#define GEAS_MANGLED_Courier_pickup "__geas_ash_Courier_pickup_6659cab9dec10d4e_v1"
 
 /* remedy unpick for pickup(parcel: Parcel) -> Unit */
-#define GEAS_MANGLED_Courier_unpick "__geas_ash_Courier_unpick_2995ebbfb3633f34_v1"
+#define GEAS_MANGLED_Courier_unpick "__geas_ash_Courier_unpick_d3a9dc08c6de3981_v1"
 
 /* contract Desk, version 1 */
 #define GEAS_HASH_Desk 0xfd5046c594794ce1ULL

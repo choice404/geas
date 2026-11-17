@@ -8,24 +8,24 @@
  * vow amount: Int (default)
  * vow grace: Duration (default)
  */
-#define GEAS_HASH_OrderSaga 0xc4b82acace621419ULL
+#define GEAS_HASH_OrderSaga 0xeef34448ebb6d73cULL
 
 /* pledge authorize(card: Card) -> Result<AuthId, PayError>, abstract */
-#define GEAS_MANGLED_OrderSaga_authorize "__geas_ash_OrderSaga_authorize_2496ee103529fb93_v1"
+#define GEAS_MANGLED_OrderSaga_authorize "__geas_ash_OrderSaga_authorize_3d078794604bf824_v1"
 
 /* pledge capture(auth: AuthId) -> Result<Receipt, PayError>, abstract */
-#define GEAS_MANGLED_OrderSaga_capture "__geas_ash_OrderSaga_capture_9d85d13a858e6eb1_v1"
+#define GEAS_MANGLED_OrderSaga_capture "__geas_ash_OrderSaga_capture_5f7fe51731b3dd09_v1"
 
 /* pledge reserve(sku: String, hold: Duration) -> Result<Reservation, StockError> */
-#define GEAS_MANGLED_OrderSaga_reserve "__geas_ash_OrderSaga_reserve_72a130df4f591267_v1"
+#define GEAS_MANGLED_OrderSaga_reserve "__geas_ash_OrderSaga_reserve_164137f834809cbf_v1"
 
 /* pledge ship(res: Reservation) -> Result<Tracking, ShipError>, abstract */
-#define GEAS_MANGLED_OrderSaga_ship "__geas_ash_OrderSaga_ship_609b1c88bb35d677_v1"
+#define GEAS_MANGLED_OrderSaga_ship "__geas_ash_OrderSaga_ship_ad537d643b4ebed9_v1"
 
 /* remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>, abstract */
-#define GEAS_MANGLED_OrderSaga_refund "__geas_ash_OrderSaga_refund_73b89f044b14c286_v1"
+#define GEAS_MANGLED_OrderSaga_refund "__geas_ash_OrderSaga_refund_2a5cbc30109a1eac_v1"
 
 /* remedy release for reserve(res: Reservation) -> Result<Unit, StockError> */
-#define GEAS_MANGLED_OrderSaga_release "__geas_ash_OrderSaga_release_36a30ca752417ebc_v1"
+#define GEAS_MANGLED_OrderSaga_release "__geas_ash_OrderSaga_release_193ad2efdb97ef80_v1"
 
 #endif /* GEAS_HEADER_SAGA */

@@ -8,9 +8,9 @@
  * vow grace: Duration (default)
  * vow started: Time (no default)
  */
-#define GEAS_HASH_Clock 0x6497245b3f9019b1ULL
+#define GEAS_HASH_Clock 0xdad59f3912ecbc45ULL
 
 /* pledge wait(limit: Duration) -> Result<Duration, PayError> */
-#define GEAS_MANGLED_Clock_wait "__geas_ash_Clock_wait_710372682da4a4c4_v1"
+#define GEAS_MANGLED_Clock_wait "__geas_ash_Clock_wait_f6016148724d055a_v1"
 
 #endif /* GEAS_HEADER_TIME_OK */

@@ -1,0 +1,11 @@
+// The layout pair for a record: the same contract over a Card without and
+// then with an expiry field. The canonical code of Card is NCard in both,
+// so only the layout segment tells them apart, and the shape hash and the
+// mangled name of pay move with it, see layout_card_after.geas
+record Card {
+    number: String
+}
+
+contract C {
+    pledge pay(card: Card) -> Result<Unit, Int>
+}

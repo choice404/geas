@@ -1,0 +1,17 @@
+geas shape 2
+contract AmendItems
+version 1
+hash 0xe883be1bc6453252
+course 0x0000000000000000
+shape contract AmendItems;pledge reserve:()->R(I,S);pledge dispatch:()->R(S,S);pledge notify:()->V;pledge legacy:()->V;pledge score:()->R(I,S);pledge spare:()->V;pledge wrap:()->V;signal arrived:(S)->V;signal pinged:()->V;signal flag:(I)->V;signal bell:()->V;
+pledge reserve ()->R(I,S) I
+pledge dispatch ()->R(S,S) S
+pledge notify ()->V V
+pledge legacy ()->V V
+pledge score ()->R(I,S) I
+pledge spare ()->V V
+pledge wrap ()->V V
+signal arrived (S)
+signal pinged ()
+signal flag (I)
+signal bell ()

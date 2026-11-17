@@ -12,7 +12,7 @@ package geas.store_extra;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/store_extrapb";
 
-// contract Stock, version 1, shape 0xbb41a8d512125365.
+// contract Stock, version 1, shape 0x538a2f7c02693f8b.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

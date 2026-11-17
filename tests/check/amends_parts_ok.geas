@@ -1,0 +1,30 @@
+// The subcontracts and remedies of version 1 against version 2: renamed or
+// retired like any item, an anonymous subcontract paired with the next
+// anonymous one, a carried remedy following its pledge through a rename, and
+// a remedy this version adds needing no item
+contract AmendParts [version: 2] {
+    subcontract Payment {
+        pledge capture() -> Result<Int, String>
+    }
+    subcontract Shipping {
+        pledge pack() -> Unit
+    }
+    subcontract {
+        pledge log() -> Unit
+    }
+    pledge reserve() -> Result<Int, String>
+    pledge ship() -> Unit
+
+    remedy refund for capture(amount: Int) -> Unit
+    remedy free for reserve(id: Int) -> Unit
+    remedy recall for ship() -> Unit
+
+    amends 1 {
+        rename Billing -> Payment
+        rename charge -> capture
+        retire Legacy
+        retire old
+        rename release -> free
+        retire unpack
+    }
+}

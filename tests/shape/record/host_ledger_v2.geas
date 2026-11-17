@@ -1,0 +1,18 @@
+// Version 2 of the HostLedger contract compiler/tests/codegen/amends/src/amend_host.geas
+// amends from
+contract HostLedger [version: 2] {
+    vow account: String
+    vow limit: Int = 100
+    vow ratio: Float = 0.5
+
+    subcontract Payment {
+        pledge capture(amount: Int) -> Result<Int, String>
+    }
+    subcontract {
+        pledge log() -> Unit
+    }
+    pledge reserve() -> Result<Int, String>
+    signal approved(by: String)
+
+    remedy refund for capture(id: Int) -> Unit
+}

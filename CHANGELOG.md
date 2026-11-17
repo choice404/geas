@@ -4,6 +4,44 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.9.1] the amendment
+
+Geas now carries a parked obligation across the versions that have to finish
+it, a contract at version M names each earlier version N it accepts, accounts
+for every difference in an `amends N` block, and resumes that row as an
+ordinary version M instance. Recorded shapes give the checker the version
+that shipped, layout enters every hash whose boundary reaches it, and the
+runtime applies the whole map or leaves the row untouched, so a deploy can
+move the contract forward without pretending its durable past disappeared.
+
+- add `geas record FILE [--force]`, writing format 2 recorded shapes for
+  every public contract to `shapes/<Contract>.v<N>.shape` beside its source,
+  and have a missing shape name the command that records the earlier version
+- diff the recorded shape of N against M, require every difference to be
+  covered exactly once, and refuse an amendment item that covers nothing
+- carry matching vows, take defaults, or set a changed or added vow with `vow
+  NAME = expr`, where `prior.NAME` reads the value the parked version signed
+- carry, rename, or retire pledges, signals, subcontracts, and remedies, seed
+  an added item with `latch` or leave it pending, and restart a changed course
+  with `restart course`
+- map every `amends N` block straight from N to the version that carries it,
+  without chaining through the versions between them
+- put the layout of every record and sum a contract boundary reaches into the
+  shape hash and each pledge or remedy signature hash that reaches it, so a
+  changed field or variant is a version mismatch and a changed amendment type
+- emit `GeasAmendDesc` tables on the contract descriptor tail, with vow, item,
+  subcontract, and remedy maps, latch seeds, and a vow function, and validate
+  every table when its contract registers
+- resume by version and shape hash, applying vows, payloads, latches, stamps,
+  remedy records, episode fates, and a kept, dropped, or restarted course
+  frame before this version's policy runs, all or nothing
+- raise `amended` before `resumed`, add `geas_contract_amended_from`, and
+  carry `amended_from` into the Python and dusk bindings
+- add `skeleton/order_course_v2.geas` beside the first order course, keep both
+  recorded shapes under `skeleton/shapes`, take the skeleton host's mangled
+  name from its emitted header, and add the `test-amend`, `test-amend-saga`,
+  and `test-amend-python` gates
+
 ## [v0.9.0] the course
 
 Geas now runs the obligation as well as holding it, a contract can carry

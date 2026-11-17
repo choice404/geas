@@ -24,8 +24,9 @@ host calling the steps and the runtime enforcing the rules, and engine driven,
 a contract that carries its own `course`, which the runtime runs step by step.
 The store layer backs a contract with a database and parks an instance into a
 row another process can resume, and the bridge serves the same contracts over
-gRPC. Typed amendment between versions is parsed and checked today and is the
-next step on the roadmap; its section says where it stands. The compiler is `geas`, written by hand
+gRPC. Typed amendment carries a parked instance from one version of its
+contract to the next, checked at build time against the recorded shape of the
+older version and applied by the runtime at the resume. The compiler is `geas`, written by hand
 in C++23 and emitting C, source files end in `.geas`, a compiled module ends in
 `.geas.so`, and the runtime is a shared C library, `libgeasrt`.
 
@@ -638,33 +639,107 @@ is in `docs/abi.md` under The course.
 
 ## Amendment
 
-A parked instance can outlive the version of the contract it was signed under,
-so a contract says how an older instance comes back. Inside a contract at
-version 2:
+A parked instance can outlive the version of the contract it was signed
+under. A saga waiting three days on a delivery scan does not care that a new
+module shipped in the meantime, so a contract says how an instance parked
+under an older version comes back as this one. Inside the order saga at
+version 2, `skeleton/order_course_v2.geas`:
 
 ```text
 amends 1 {
-    vow dsn = prior.store_url
-    rename dispatch -> ship
-    retire legacy
-    latch delivered as pending
+    // Version 1 counted the order in whole units
+    vow cents = prior.amount * 100
+    rename ship -> dispatch
+    retire chase
+    latch notify as pending
+    restart course
 }
 ```
 
-`vow` supplies a vow, reading the parked instance's old vows through `prior`,
-`rename` maps an old member name onto a new one, `retire` drops a member and
-its latched state, and `latch` sets the starting state of a pledge or signal
-the old version did not have. Blocks chain, so a version 3 contract carries
-`amends 1` and `amends 2`. The design is that the checker diffs the two shapes
-and refuses the build when a difference is left uncovered, which turns a
-resume nobody planned for into a compile error instead of a surprise in
-production.
+`vow` supplies a vow of this version, reading the parked instance's vows
+through `prior`, `rename` maps a member of the older version onto one of
+this version, `retire` drops a member and whatever it stored, `latch` sets
+the starting state of a pledge or signal the older version did not have,
+and `restart course` enters a changed course from the top.
 
-Amendment is the next step on the roadmap. The checker holds amends blocks
-today to what the new version alone can verify, a real older version number,
-vows and targets that exist and agree in type, a retired name that is really
-gone, and `geas build` refuses one until the older shape is loaded and the
-resume runs it.
+*The model.* A park row records the contract version and the shape hash it
+was written under. A row whose version and hash are the registered
+contract's resumes the way it always did. Otherwise the runtime looks
+through the contract's amends table for the block whose version is the
+row's and whose recorded shape hash is the row's hash, and when one is
+there it applies it; when none is, the resume answers `GEAS_ERR_VERSION`
+and the row is left exactly as it was, so a later module that does carry
+the block still resumes it. The apply is all or nothing: the row is
+decoded against the older version's counts, mapped onto a fresh instance of
+this version, and the instance is published only when every step landed, so
+a failed apply leaves nothing half built and nothing written. Blocks do not
+chain. Each one maps its version straight to the one that carries it, and a
+version 3 that wants version 1 rows to resume carries `amends 1` beside
+`amends 2`.
+
+*Where the older shape comes from.* The compiler only has the source of the
+version it compiles, so the shape of the older version is recorded. `geas
+record` writes `shapes/<Contract>.v<N>.shape` beside the source, the shape
+string and its hash, the course hash, the names the row is positional over,
+and the layout of every declared record and sum the boundary reaches, and a
+block is checked against that file. Every difference between the two shapes
+has to be covered by exactly one item, and an item no difference calls for is
+an error too, which turns a resume nobody planned for into a compile error
+instead of a surprise in production. The rules are in `docs/grammar.md`
+under Amendment.
+
+*The order of the apply.* The course frame is checked first: a row whose
+frame was written by another course than the one the block names is
+refused. Then the vows: every vow the two versions share is carried, this
+version's defaults fill what is still empty, and the block's `vow` items run
+in source order, each reading `prior.NAME` and this version's vows as filled
+so far. Then the contract's own sign time, term lapse, and latch counter,
+then each item of the older version through the block: its latch, its `Err`
+payload, its eligibility stamp, its lapse, its place in the latch order, its
+stored `Ok` value or signal payload, and its retry progress held to this
+version's retry budget. Then the subcontracts' transactional fates, the
+remedy records, the seeds of the items this version adds, and eligibility
+under this version's terms. The course frame is kept, dropped, or left for a
+fresh start last.
+
+*The course.* When both versions carry the same course, by hash, its frame
+carries over and the course goes on at the step it parked at. When the
+course changed, or only the new version has one, the block says `restart
+course` and the resumed instance enters the course at step 0 with a fresh
+frame. Steps are at least once, so a step whose pledge already latched runs
+its body again: the course binds what that run returns, while the latch, the
+stored `Ok` value a remedy is handed, and the latch order stay the ones the
+older version recorded. When only the older version had a course its frame
+is dropped and the contract goes on host driven.
+
+*After the apply.* The runtime raises an `amended` event naming the version
+left and the version taken, then `resumed`, then, for a restarted course,
+`course started`. From then on the instance is an ordinary instance of this
+version: its terms and requirements are this version's, its next park
+writes a row of this version, and resuming that row is a plain resume.
+`geas_contract_amended_from` answers the older version on the instance that
+went through a block and 0 on any other. A break after the amendment runs
+the remedies of this version over what landed in both, newest latch first,
+each handed the `Ok` value its pledge stored, the one the older version
+stored for a pledge that latched before the deploy.
+
+*Remedies at the resume.* This version's policy is evaluated once, after
+the `amended` and `resumed` events. When it already breaks the instance, a
+`latch NAME as broken` seed matching the new break line for one, the
+instance reads Remedying and no remedy runs inside the resume; the first
+tick, an explicit one or any call that ticks, runs the pass, the same rule a
+row parked in the middle of a pass follows. A row parked mid pass keeps the
+records of the remedies that ran, under their new names, and its first tick
+runs the ones still owed.
+
+*The shape covers layout.* A type code names a declared record or sum and
+nothing more, so the shape string spells the layout of every record and sum
+the boundary reaches beside the codes, and every pledge and remedy signature
+hash covers the layouts its own signature reaches. A record that gained a
+field therefore moves the shape hash and the mangled names of the pledges
+that carry it, a row written before the change is a row of another shape,
+and an amends block treats a vow, a stored value, or a signal payload whose
+layout changed as a changed type.
 
 ---
 

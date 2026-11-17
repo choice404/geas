@@ -1,5 +1,5 @@
-// Amends blocks chained from two older versions, every item naming what this
-// version can verify
+// Amends blocks from two older versions, each mapping its version straight
+// to this one and covering every difference the recorded shapes show
 contract Saga [version: 3] {
     vow dsn: String
     vow region: String = "eu"
@@ -21,10 +21,10 @@ contract Saga [version: 3] {
         rename url -> dsn
         retire legacy
         latch delivered as pending
-        latch capture as fulfilled
     }
 
     amends 2 {
         latch ship as broken
+        latch capture as fulfilled
     }
 }

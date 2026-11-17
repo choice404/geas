@@ -14,7 +14,7 @@ static GeasStatus geas_clause_Shop_nothing(GeasContract* cc, const GeasValue* ar
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Shop_sign_26f7fe3f4cef1750_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Shop_sign_c822fb00278baa59_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -37,7 +37,7 @@ static GeasStatus __geas_ash_Shop_sign_26f7fe3f4cef1750_v2(void* ctx, const Geas
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Shop_list_items_a0c4e4d64eeba1c1_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Shop_list_items_89af7d4b8d3a0721_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -61,7 +61,7 @@ static GeasStatus __geas_ash_Shop_list_items_a0c4e4d64eeba1c1_v2(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Shop_find_item_1620a0a07f85f264_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Shop_find_item_edad313480ba2fe9_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -77,7 +77,7 @@ static GeasStatus __geas_ash_Shop_find_item_1620a0a07f85f264_v2(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Shop_pay_1d762b62e9b1f442_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Shop_pay_8fafa4e6d97895ff_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -132,7 +132,7 @@ static GeasStatus __geas_ash_Shop_refund_fa3987b4e3a846c8_v2(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Shop_audit_9a544dee8788c7d9_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Shop_audit_9c369369f22429c5_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -161,12 +161,12 @@ static const GeasVowDesc k_Shop_vows[] = {
 };
 
 static const GeasPledgeDesc k_Shop_pledges[] = {
-    { "sign", "__geas_ash_Shop_sign_26f7fe3f4cef1750_v2", 1, __geas_ash_Shop_sign_26f7fe3f4cef1750_v2, -1 },
-    { "list_items", "__geas_ash_Shop_list_items_a0c4e4d64eeba1c1_v2", 2, __geas_ash_Shop_list_items_a0c4e4d64eeba1c1_v2, -1 },
-    { "find_item", "__geas_ash_Shop_find_item_1620a0a07f85f264_v2", 2, __geas_ash_Shop_find_item_1620a0a07f85f264_v2, -1 },
-    { "pay", "__geas_ash_Shop_pay_1d762b62e9b1f442_v2", 2, __geas_ash_Shop_pay_1d762b62e9b1f442_v2, 0 },
+    { "sign", "__geas_ash_Shop_sign_c822fb00278baa59_v2", 1, __geas_ash_Shop_sign_c822fb00278baa59_v2, -1 },
+    { "list_items", "__geas_ash_Shop_list_items_89af7d4b8d3a0721_v2", 2, __geas_ash_Shop_list_items_89af7d4b8d3a0721_v2, -1 },
+    { "find_item", "__geas_ash_Shop_find_item_edad313480ba2fe9_v2", 2, __geas_ash_Shop_find_item_edad313480ba2fe9_v2, -1 },
+    { "pay", "__geas_ash_Shop_pay_8fafa4e6d97895ff_v2", 2, __geas_ash_Shop_pay_8fafa4e6d97895ff_v2, 0 },
     { "refund", "__geas_ash_Shop_refund_fa3987b4e3a846c8_v2", 1, __geas_ash_Shop_refund_fa3987b4e3a846c8_v2, 0 },
-    { "audit", "__geas_ash_Shop_audit_9a544dee8788c7d9_v2", 1, __geas_ash_Shop_audit_9a544dee8788c7d9_v2, 1 },
+    { "audit", "__geas_ash_Shop_audit_9c369369f22429c5_v2", 1, __geas_ash_Shop_audit_9c369369f22429c5_v2, 1 },
 };
 
 static const char* const k_Shop_subs[] = {
@@ -205,7 +205,7 @@ static const GeasReqOp k_Shop_rb[] = {
 };
 
 static const GeasContractDesc k_Shop = {
-    "Shop", 0x6fe34409781e3d4fULL,
+    "Shop", 0x0eeff175659afd33ULL,
     2, 6, k_Shop_pledges,
     3, k_Shop_vows,
     2, k_Shop_subs, 4,
@@ -225,7 +225,7 @@ static const GeasSchemaDesc k_Depot_schemas[] = {
     { "Crates", 2, k_Depot_Crates_cols },
 };
 
-static GeasStatus __geas_ash_Depot_stock_3e62c3a94a17f6fd_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Depot_stock_9fbbd9928e8bcf05_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -293,7 +293,7 @@ static const GeasVowDesc k_Depot_vows[] = {
 };
 
 static const GeasPledgeDesc k_Depot_pledges[] = {
-    { "stock", "__geas_ash_Depot_stock_3e62c3a94a17f6fd_v1", 1, __geas_ash_Depot_stock_3e62c3a94a17f6fd_v1, -1 },
+    { "stock", "__geas_ash_Depot_stock_9fbbd9928e8bcf05_v1", 1, __geas_ash_Depot_stock_9fbbd9928e8bcf05_v1, -1 },
     { "out", "__geas_ash_Depot_out_a7c9229487606e8b_v1", 1, __geas_ash_Depot_out_a7c9229487606e8b_v1, 0 },
     { "wait", "__geas_ash_Depot_wait_a7c9229487606e8b_v1", 1, __geas_ash_Depot_wait_a7c9229487606e8b_v1, 1 },
 };
@@ -340,7 +340,7 @@ static const uint8_t k_Depot_sub_flags[] = {
 };
 
 static const GeasContractDesc k_Depot = {
-    "Depot", 0xdbd6e085dce9db4fULL,
+    "Depot", 0x6738cc8f56d8db33ULL,
     1, 3, k_Depot_pledges,
     1, k_Depot_vows,
     2, k_Depot_subs, 6,

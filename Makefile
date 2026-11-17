@@ -27,7 +27,8 @@ OUT     := target/geas-out
 RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
     runtime/src/events.c runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
     runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c \
-    runtime/src/course.c runtime/src/coursejoin.c runtime/src/coursepark.c
+    runtime/src/course.c runtime/src/coursejoin.c runtime/src/coursepark.c \
+    runtime/src/amendrow.c runtime/src/amend.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -63,7 +64,7 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
-.PHONY: test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-amend test-amend-saga test-amend-python test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
 .PHONY: test-requirements
 .PHONY: test-soname test-future test-cancel test-process test-dusk tsan-process
 .PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
@@ -74,7 +75,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: test-course test-course-park test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-course-saga test-course-python tsan tsan-workflow tsan-process
+all: test-course test-course-park test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-course-saga test-course-python test-amend-saga test-amend-python tsan tsan-workflow tsan-process
 
 runtime: $(RT_SO)
 
@@ -146,8 +147,16 @@ $(BIN_DEMO): $(GEAS) skeleton/main_demo.geas $(RT_SO) runtime/include/geas/geas_
 
 host: $(HOST)
 
-$(HOST): skeleton/host.c $(RT_SO)
-	$(CC) $(CFLAGS) -pthread -I runtime/include skeleton/host.c -L $(OUT) -lgeasrt \
+# The host includes the header emit-header writes for hello.geas, so the
+# mangled name it resolves follows the module's signature hash
+HELLO_HEADER := $(OUT)/hello.geas.h
+
+$(HELLO_HEADER): $(GEAS) skeleton/hello.geas
+	@mkdir -p $(OUT)
+	$(GEAS) emit-header skeleton/hello.geas
+
+$(HOST): skeleton/host.c $(RT_SO) $(HELLO_HEADER)
+	$(CC) $(CFLAGS) -pthread -I runtime/include -I $(OUT) skeleton/host.c -L $(OUT) -lgeasrt \
 	    -Wl,-rpath,'$$ORIGIN' -o $(HOST)
 
 smoke: $(RT_SO) $(MODULE) $(HOST)
@@ -399,6 +408,19 @@ test-course-park: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_park.c
 	    tests/runtime/test_course_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_park
 	./$(OUT)/test_course_park
 
+# Amendment: a row parked under one version resumed as a later one through
+# an amends block, handwritten descriptor pairs on a fake clock. Renames,
+# retirements, added items and their seeds, vows carried, defaulted and
+# computed, signal payloads, lapses, eligibility, remedy records,
+# transactional fates, retry progress, the course frame kept, restarted,
+# dropped and refused, a together's progress, every flow blob version, the
+# counts, the events, and the registrar.
+test-amend: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_amend.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_amend.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_amend
+	./$(OUT)/test_amend
+
 # Events preserve instance order and run with runtime locks released
 test-events: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_events.c
 	@mkdir -p $(OUT)
@@ -493,6 +515,45 @@ test-course-saga: course-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/tes
 	    tests/runtime/test_course_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_saga
 	./$(OUT)/test_course_saga
 
+# Amendment end to end: the compiler builds skeleton/order_course.geas at
+# version 1 and skeleton/order_course_v2.geas at version 2, whose amends 1
+# block reads the recorded shape in skeleton/shapes, plus a version 2 with
+# the block cut out, a version 1 whose shape drifted from the recorded one,
+# and the host driven saga at version 2 from tests/runtime. Recording the
+# sources again is a no op while their shapes are the ones on file and a
+# refusal once they are not, which keeps the recorded shapes honest. The C
+# host parks version 1 sagas and resumes them as version 2: mid course with
+# the course restarted, a step failing after the amendment, a second park as
+# version 2, a kill at every step boundary, the module without the block and
+# the drifted row refused, and the host driven saga.
+AMEND_BARE := $(OUT)/order_course_bare.geas
+AMEND_DRIFT := $(OUT)/order_course_drift.geas
+AMEND_SAGA_DIR := $(OUT)/amend_saga_v1
+
+.PHONY: test-amend-saga amend-saga-modules
+amend-saga-modules: $(GEAS) $(RT_SO) skeleton/order_course.geas skeleton/order_course_v2.geas skeleton/saga.geas tests/runtime/saga_v2.geas
+	@mkdir -p $(OUT) $(AMEND_SAGA_DIR)/shapes
+	$(GEAS) record skeleton/order_course.geas
+	$(GEAS) record skeleton/order_course_v2.geas
+	$(GEAS) build skeleton/order_course.geas
+	$(GEAS) build skeleton/order_course_v2.geas
+	sed '/^    amends 1 {/,/^    }/d' skeleton/order_course_v2.geas > $(AMEND_BARE)
+	! grep -q '^    amends' $(AMEND_BARE)
+	$(GEAS) build $(AMEND_BARE)
+	sed 's/^    vow grace: Duration = 30m$$/&\n    vow note: String = "drift"/' skeleton/order_course.geas > $(AMEND_DRIFT)
+	grep -q 'vow note' $(AMEND_DRIFT)
+	$(GEAS) build $(AMEND_DRIFT)
+	cp skeleton/saga.geas $(AMEND_SAGA_DIR)/saga.geas
+	cp tests/runtime/shapes/OrderSaga.v1.shape $(AMEND_SAGA_DIR)/shapes/
+	$(GEAS) record $(AMEND_SAGA_DIR)/saga.geas
+	$(GEAS) build skeleton/saga.geas
+	$(GEAS) build tests/runtime/saga_v2.geas
+
+test-amend-saga: amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_amend_saga.c
+	$(CC) $(CFLAGS) $(WF_SAN) $(COURSE_SAGA_WRAP) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_amend_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_amend_saga
+	./$(OUT)/test_amend_saga
+
 # The engine driven saga from Python: geas.py loads the same order_course
 # module, binds Python callables over the abstract steps, points the
 # runtime at a Python clock with the runtime's own ticker running, and walks
@@ -507,10 +568,21 @@ test-course-python: $(GEAS) $(RT_SO)
 	    echo "[test-course-python] python3 not found, skipping"; \
 	fi
 
+# Amendment from Python: geas.py parks a version 1 order saga at its select
+# in one Runtime and resumes it in a fresh one that loaded version 2, which
+# amends the row, restarts the course, and finishes the saga.
+.PHONY: test-amend-python
+test-amend-python: amend-saga-modules
+	@if command -v python3 >/dev/null 2>&1; then \
+	    python3 interop/python/demo_amend.py; \
+	else \
+	    echo "[test-amend-python] python3 not found, skipping"; \
+	fi
+
 # The workflow gates under ThreadSanitizer: retries with the instance lock
 # released, remedy passes and signals across threads, user bindings, and
 # the courses, handwritten and compiled
-tsan-workflow: course-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c
+tsan-workflow: course-saga-modules amend-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_saga.c tests/runtime/test_course.c tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c tests/runtime/test_course_park.c tests/runtime/test_amend.c tests/runtime/test_amend_saga.c
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
@@ -542,9 +614,15 @@ tsan-workflow: course-saga-modules $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_c
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_course_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_park_tsan
 	@for round in $$(seq 1 30); do ./$(OUT)/test_course_park_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_amend.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_amend_tsan
+	@for round in $$(seq 1 20); do ./$(OUT)/test_amend_tsan || exit $$?; done
 	$(CC) $(CFLAGS) -fsanitize=thread $(COURSE_SAGA_WRAP) -g -pthread -rdynamic $(RT_INC) \
 	    tests/runtime/test_course_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_saga_tsan
 	@for round in $$(seq 1 30); do ./$(OUT)/test_course_saga_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread $(COURSE_SAGA_WRAP) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_amend_saga.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_amend_saga_tsan
+	@for round in $$(seq 1 30); do ./$(OUT)/test_amend_saga_tsan || exit $$?; done
 
 # The threading gate under ASan: the pool, the per-instance serialization,
 # out-of-order waits, and the break race, with every allocation watched.
@@ -812,7 +890,7 @@ test-determinism: $(GEAS) $(RT_SO)
 # full host walk, runtime compiled into each binary so TSan sees every lock.
 # The dlopened module is not instrumented, which TSan tolerates; the runtime
 # and host side of every race is.
-tsan: $(MODULE)
+tsan: $(MODULE) $(HELLO_HEADER)
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_thread.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_thread_tsan
@@ -820,7 +898,7 @@ tsan: $(MODULE)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_future.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_future_tsan
 	./$(OUT)/test_future_tsan
-	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread -rdynamic $(RT_INC) \
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread -rdynamic $(RT_INC) -I $(OUT) \
 	    skeleton/host.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/host_tsan
 	./$(OUT)/host_tsan
 
@@ -1069,8 +1147,8 @@ test-grpc-node: $(RT_SO) $(MODULE_PAY) $(GEAS)
 	kill $$srv 2>/dev/null; wait $$srv 2>/dev/null; \
 	exit $$code
 
-smoke-asan: $(MODULE)
-	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic $(RT_INC) \
+smoke-asan: $(MODULE) $(HELLO_HEADER)
+	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic $(RT_INC) -I $(OUT) \
 	    skeleton/host.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/host_asan
 	./$(OUT)/host_asan
 

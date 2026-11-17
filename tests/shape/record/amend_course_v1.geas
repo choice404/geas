@@ -1,0 +1,32 @@
+// Version 1 of each contract the course cases of tests/check amend from:
+// one whose course stays, one whose course changes, one that gains a
+// course, one that loses it, and one that never has one
+contract AmendCourseSame {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        let a = step(1)?
+        step(a)?
+    }
+}
+
+contract AmendCourseChanged {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        step(1)?
+    }
+}
+
+contract AmendCourseAdded {
+    pledge step(n: Int) -> Result<Int, String>
+}
+
+contract AmendCourseDropped {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        step(1)?
+    }
+}
+
+contract AmendCourseNone {
+    pledge step(n: Int) -> Result<Int, String>
+}

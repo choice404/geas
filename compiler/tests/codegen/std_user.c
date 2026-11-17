@@ -311,7 +311,7 @@ static GeasStatus __geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_StdUser_check_positive_32bae2fcd33cc271_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_StdUser_check_positive_e48419e7eb8dd411_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -351,7 +351,7 @@ static GeasStatus __geas_ash_StdUser_check_positive_32bae2fcd33cc271_v1(void* ct
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_StdUser_describe_3fd9a34e1a2d3fb3_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_StdUser_describe_bbf075dd95f7a80f_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -515,8 +515,8 @@ static GeasStatus __geas_ash_StdUser_compute_a7c9229487606e8b_v1(void* ctx, cons
 
 static const GeasPledgeDesc k_StdUser_pledges[] = {
     { "sort3", "__geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1", 3, __geas_ash_StdUser_sort3_68cf0dfa38373bbc_v1, -1 },
-    { "check_positive", "__geas_ash_StdUser_check_positive_32bae2fcd33cc271_v1", 1, __geas_ash_StdUser_check_positive_32bae2fcd33cc271_v1, -1 },
-    { "describe", "__geas_ash_StdUser_describe_3fd9a34e1a2d3fb3_v1", 1, __geas_ash_StdUser_describe_3fd9a34e1a2d3fb3_v1, -1 },
+    { "check_positive", "__geas_ash_StdUser_check_positive_e48419e7eb8dd411_v1", 1, __geas_ash_StdUser_check_positive_e48419e7eb8dd411_v1, -1 },
+    { "describe", "__geas_ash_StdUser_describe_bbf075dd95f7a80f_v1", 1, __geas_ash_StdUser_describe_bbf075dd95f7a80f_v1, -1 },
     { "compute", "__geas_ash_StdUser_compute_a7c9229487606e8b_v1", 1, __geas_ash_StdUser_compute_a7c9229487606e8b_v1, -1 },
 };
 
@@ -552,7 +552,7 @@ static const GeasReqOp k_StdUser_rb[] = {
 };
 
 static const GeasContractDesc k_StdUser = {
-    "StdUser", 0xff920d047d909132ULL,
+    "StdUser", 0x38c56172b5eea80aULL,
     1, 4, k_StdUser_pledges,
     0, NULL,
     0, NULL, 8,
@@ -723,7 +723,7 @@ static GeasStatus geas_clause_MathOps_abs_float(GeasContract* cc, const GeasValu
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_abs_c9fed415a521619e_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -783,7 +783,7 @@ static GeasStatus __geas_ash_MathOps_abs_c9fed415a521619e_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_sign_c9fed415a521619e_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -849,7 +849,7 @@ static GeasStatus __geas_ash_MathOps_sign_c9fed415a521619e_v1(void* ctx, const G
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_min_b1c7cd6fca6e6dd1_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_min_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -884,7 +884,7 @@ static GeasStatus __geas_ash_MathOps_min_b1c7cd6fca6e6dd1_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_max_b1c7cd6fca6e6dd1_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_max_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -919,7 +919,7 @@ static GeasStatus __geas_ash_MathOps_max_b1c7cd6fca6e6dd1_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_clamp_6a9c32947d56022e_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -986,7 +986,7 @@ static GeasStatus __geas_ash_MathOps_clamp_6a9c32947d56022e_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_pow_int_b1c7cd6fca6e6dd1_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1072,7 +1072,7 @@ static GeasStatus __geas_ash_MathOps_pow_int_b1c7cd6fca6e6dd1_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_abs_f_c6af658fe9f0f6e2_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_abs_f_bbe6048dc2677789_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1096,7 +1096,7 @@ static GeasStatus __geas_ash_MathOps_abs_f_c6af658fe9f0f6e2_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_sign_f_c6af658fe9f0f6e2_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_sign_f_bbe6048dc2677789_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1162,7 +1162,7 @@ static GeasStatus __geas_ash_MathOps_sign_f_c6af658fe9f0f6e2_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_min_f_9d53a3d15721ece8_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_min_f_5e73eefa4d11d063_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1197,7 +1197,7 @@ static GeasStatus __geas_ash_MathOps_min_f_9d53a3d15721ece8_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_max_f_9d53a3d15721ece8_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_max_f_5e73eefa4d11d063_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1232,7 +1232,7 @@ static GeasStatus __geas_ash_MathOps_max_f_9d53a3d15721ece8_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_clamp_f_c19c2944a7934c42_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_clamp_f_3233404172772e69_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1299,7 +1299,7 @@ static GeasStatus __geas_ash_MathOps_clamp_f_c19c2944a7934c42_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_approx_eq_52f29ef79478267c_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1338,18 +1338,18 @@ static const GeasVowDesc k_MathOps_vows[] = {
 };
 
 static const GeasPledgeDesc k_MathOps_pledges[] = {
-    { "abs", "__geas_ash_MathOps_abs_c9fed415a521619e_v1", 1, __geas_ash_MathOps_abs_c9fed415a521619e_v1, -1 },
-    { "sign", "__geas_ash_MathOps_sign_c9fed415a521619e_v1", 1, __geas_ash_MathOps_sign_c9fed415a521619e_v1, -1 },
-    { "min", "__geas_ash_MathOps_min_b1c7cd6fca6e6dd1_v1", 2, __geas_ash_MathOps_min_b1c7cd6fca6e6dd1_v1, -1 },
-    { "max", "__geas_ash_MathOps_max_b1c7cd6fca6e6dd1_v1", 2, __geas_ash_MathOps_max_b1c7cd6fca6e6dd1_v1, -1 },
-    { "clamp", "__geas_ash_MathOps_clamp_6a9c32947d56022e_v1", 3, __geas_ash_MathOps_clamp_6a9c32947d56022e_v1, -1 },
-    { "pow_int", "__geas_ash_MathOps_pow_int_b1c7cd6fca6e6dd1_v1", 2, __geas_ash_MathOps_pow_int_b1c7cd6fca6e6dd1_v1, -1 },
-    { "abs_f", "__geas_ash_MathOps_abs_f_c6af658fe9f0f6e2_v1", 1, __geas_ash_MathOps_abs_f_c6af658fe9f0f6e2_v1, -1 },
-    { "sign_f", "__geas_ash_MathOps_sign_f_c6af658fe9f0f6e2_v1", 1, __geas_ash_MathOps_sign_f_c6af658fe9f0f6e2_v1, -1 },
-    { "min_f", "__geas_ash_MathOps_min_f_9d53a3d15721ece8_v1", 2, __geas_ash_MathOps_min_f_9d53a3d15721ece8_v1, -1 },
-    { "max_f", "__geas_ash_MathOps_max_f_9d53a3d15721ece8_v1", 2, __geas_ash_MathOps_max_f_9d53a3d15721ece8_v1, -1 },
-    { "clamp_f", "__geas_ash_MathOps_clamp_f_c19c2944a7934c42_v1", 3, __geas_ash_MathOps_clamp_f_c19c2944a7934c42_v1, -1 },
-    { "approx_eq", "__geas_ash_MathOps_approx_eq_52f29ef79478267c_v1", 2, __geas_ash_MathOps_approx_eq_52f29ef79478267c_v1, -1 },
+    { "abs", "__geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1", 1, __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1, -1 },
+    { "sign", "__geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1", 1, __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1, -1 },
+    { "min", "__geas_ash_MathOps_min_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_min_5f090dc695f53dde_v1, -1 },
+    { "max", "__geas_ash_MathOps_max_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_max_5f090dc695f53dde_v1, -1 },
+    { "clamp", "__geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1", 3, __geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1, -1 },
+    { "pow_int", "__geas_ash_MathOps_pow_int_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1, -1 },
+    { "abs_f", "__geas_ash_MathOps_abs_f_bbe6048dc2677789_v1", 1, __geas_ash_MathOps_abs_f_bbe6048dc2677789_v1, -1 },
+    { "sign_f", "__geas_ash_MathOps_sign_f_bbe6048dc2677789_v1", 1, __geas_ash_MathOps_sign_f_bbe6048dc2677789_v1, -1 },
+    { "min_f", "__geas_ash_MathOps_min_f_5e73eefa4d11d063_v1", 2, __geas_ash_MathOps_min_f_5e73eefa4d11d063_v1, -1 },
+    { "max_f", "__geas_ash_MathOps_max_f_5e73eefa4d11d063_v1", 2, __geas_ash_MathOps_max_f_5e73eefa4d11d063_v1, -1 },
+    { "clamp_f", "__geas_ash_MathOps_clamp_f_3233404172772e69_v1", 3, __geas_ash_MathOps_clamp_f_3233404172772e69_v1, -1 },
+    { "approx_eq", "__geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1", 2, __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1, -1 },
 };
 
 static const GeasReqAtom k_MathOps_atoms[] = {
@@ -1432,7 +1432,7 @@ static const GeasReqOp k_MathOps_rb[] = {
 };
 
 static const GeasContractDesc k_MathOps = {
-    "MathOps", 0x5cea56c248f9b040ULL,
+    "MathOps", 0xd4c2a79230a9be2bULL,
     1, 12, k_MathOps_pledges,
     1, k_MathOps_vows,
     0, NULL, 24,
@@ -1580,7 +1580,7 @@ static GeasStatus geas_clause_ListOps_list_mul_overflows(GeasContract* cc, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ListOps_sum_043fb8a354b4b67e_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_ListOps_sum_03dd8f77689df9be_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1612,7 +1612,7 @@ static GeasStatus __geas_ash_ListOps_sum_043fb8a354b4b67e_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ListOps_product_043fb8a354b4b67e_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_ListOps_product_03dd8f77689df9be_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1782,7 +1782,7 @@ static GeasStatus __geas_ash_ListOps_max_of_a4953c25fab4fe16_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ListOps_contains_d65f3b6c375948d4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_ListOps_contains_5b6985d7961e0de8_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1826,7 +1826,7 @@ static GeasStatus __geas_ash_ListOps_contains_d65f3b6c375948d4_v1(void* ctx, con
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ListOps_count_of_fd04302d77c9e91d_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_ListOps_count_of_12a3a603b2cf5d65_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1912,7 +1912,7 @@ static GeasStatus __geas_ash_ListOps_index_of_18ac3672ca25b51f_v1(void* ctx, con
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ListOps_all_eq_d65f3b6c375948d4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1957,14 +1957,14 @@ static GeasStatus __geas_ash_ListOps_all_eq_d65f3b6c375948d4_v1(void* ctx, const
 }
 
 static const GeasPledgeDesc k_ListOps_pledges[] = {
-    { "sum", "__geas_ash_ListOps_sum_043fb8a354b4b67e_v1", 1, __geas_ash_ListOps_sum_043fb8a354b4b67e_v1, -1 },
-    { "product", "__geas_ash_ListOps_product_043fb8a354b4b67e_v1", 1, __geas_ash_ListOps_product_043fb8a354b4b67e_v1, -1 },
+    { "sum", "__geas_ash_ListOps_sum_03dd8f77689df9be_v1", 1, __geas_ash_ListOps_sum_03dd8f77689df9be_v1, -1 },
+    { "product", "__geas_ash_ListOps_product_03dd8f77689df9be_v1", 1, __geas_ash_ListOps_product_03dd8f77689df9be_v1, -1 },
     { "min_of", "__geas_ash_ListOps_min_of_a4953c25fab4fe16_v1", 1, __geas_ash_ListOps_min_of_a4953c25fab4fe16_v1, -1 },
     { "max_of", "__geas_ash_ListOps_max_of_a4953c25fab4fe16_v1", 1, __geas_ash_ListOps_max_of_a4953c25fab4fe16_v1, -1 },
-    { "contains", "__geas_ash_ListOps_contains_d65f3b6c375948d4_v1", 2, __geas_ash_ListOps_contains_d65f3b6c375948d4_v1, -1 },
-    { "count_of", "__geas_ash_ListOps_count_of_fd04302d77c9e91d_v1", 2, __geas_ash_ListOps_count_of_fd04302d77c9e91d_v1, -1 },
+    { "contains", "__geas_ash_ListOps_contains_5b6985d7961e0de8_v1", 2, __geas_ash_ListOps_contains_5b6985d7961e0de8_v1, -1 },
+    { "count_of", "__geas_ash_ListOps_count_of_12a3a603b2cf5d65_v1", 2, __geas_ash_ListOps_count_of_12a3a603b2cf5d65_v1, -1 },
     { "index_of", "__geas_ash_ListOps_index_of_18ac3672ca25b51f_v1", 2, __geas_ash_ListOps_index_of_18ac3672ca25b51f_v1, -1 },
-    { "all_eq", "__geas_ash_ListOps_all_eq_d65f3b6c375948d4_v1", 2, __geas_ash_ListOps_all_eq_d65f3b6c375948d4_v1, -1 },
+    { "all_eq", "__geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1", 2, __geas_ash_ListOps_all_eq_5b6985d7961e0de8_v1, -1 },
 };
 
 static const GeasReqAtom k_ListOps_atoms[] = {
@@ -2023,7 +2023,7 @@ static const GeasReqOp k_ListOps_rb[] = {
 };
 
 static const GeasContractDesc k_ListOps = {
-    "ListOps", 0xd1fa13d356232e92ULL,
+    "ListOps", 0x8929b04c369b38eaULL,
     1, 8, k_ListOps_pledges,
     0, NULL,
     0, NULL, 16,

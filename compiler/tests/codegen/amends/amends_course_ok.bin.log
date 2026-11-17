@@ -1,0 +1,4 @@
+exit 1
+tests/check/amends_course_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The course against version 1: an unchanged course carries its frame with
+  ^

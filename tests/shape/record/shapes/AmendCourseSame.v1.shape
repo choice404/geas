@@ -1,0 +1,7 @@
+geas shape 2
+contract AmendCourseSame
+version 1
+hash 0x004553e609273dfc
+course 0x1a60b41adb8571b2
+shape contract AmendCourseSame;pledge step:(I)->R(I,S);course;
+pledge step (I)->R(I,S) I

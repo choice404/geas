@@ -12,7 +12,7 @@ static GeasStatus geas_clause_OrderSaga_released(GeasContract* cc, const GeasVal
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_OrderSaga_reserve_72a130df4f591267_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_OrderSaga_reserve_164137f834809cbf_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -104,7 +104,7 @@ static GeasStatus __geas_ash_OrderSaga_reserve_72a130df4f591267_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_OrderSaga_release_36a30ca752417ebc_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_OrderSaga_release_193ad2efdb97ef80_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -172,10 +172,10 @@ static const GeasVowDesc k_OrderSaga_vows[] = {
 };
 
 static const GeasPledgeDesc k_OrderSaga_pledges[] = {
-    { "authorize", "__geas_ash_OrderSaga_authorize_2496ee103529fb93_v1", 1, NULL, 0 },
-    { "capture", "__geas_ash_OrderSaga_capture_9d85d13a858e6eb1_v1", 1, NULL, 0 },
-    { "reserve", "__geas_ash_OrderSaga_reserve_72a130df4f591267_v1", 2, __geas_ash_OrderSaga_reserve_72a130df4f591267_v1, -1 },
-    { "ship", "__geas_ash_OrderSaga_ship_609b1c88bb35d677_v1", 1, NULL, -1 },
+    { "authorize", "__geas_ash_OrderSaga_authorize_3d078794604bf824_v1", 1, NULL, 0 },
+    { "capture", "__geas_ash_OrderSaga_capture_5f7fe51731b3dd09_v1", 1, NULL, 0 },
+    { "reserve", "__geas_ash_OrderSaga_reserve_164137f834809cbf_v1", 2, __geas_ash_OrderSaga_reserve_164137f834809cbf_v1, -1 },
+    { "ship", "__geas_ash_OrderSaga_ship_ad537d643b4ebed9_v1", 1, NULL, -1 },
     { "delivered", NULL, 1, NULL, -1 },
 };
 
@@ -255,12 +255,12 @@ static const GeasTermDesc k_OrderSaga_terms[] = {
 };
 
 static const GeasRemedyDesc k_OrderSaga_remedies[] = {
-    { "refund", "__geas_ash_OrderSaga_refund_73b89f044b14c286_v1", 1, 1, NULL, { .retry_count = 2, .retry_every_ms = 60000 } },
-    { "release", "__geas_ash_OrderSaga_release_36a30ca752417ebc_v1", 2, 1, __geas_ash_OrderSaga_release_36a30ca752417ebc_v1, { 0 } },
+    { "refund", "__geas_ash_OrderSaga_refund_2a5cbc30109a1eac_v1", 1, 1, NULL, { .retry_count = 2, .retry_every_ms = 60000 } },
+    { "release", "__geas_ash_OrderSaga_release_193ad2efdb97ef80_v1", 2, 1, __geas_ash_OrderSaga_release_193ad2efdb97ef80_v1, { 0 } },
 };
 
 static const GeasContractDesc k_OrderSaga = {
-    "OrderSaga", 0xc4b82acace621419ULL,
+    "OrderSaga", 0xeef34448ebb6d73cULL,
     1, 5, k_OrderSaga_pledges,
     2, k_OrderSaga_vows,
     1, k_OrderSaga_subs, 4,

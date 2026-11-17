@@ -23,7 +23,7 @@ export interface SessionStream {
 // ClockShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const ClockShapeHash: bigint = 0x6497245b3f9019b1n;
+export const ClockShapeHash: bigint = 0xdad59f3912ecbc45n;
 
 export interface ClockSignRequest {
   grace?: string;  // the vow; unset takes the declared default

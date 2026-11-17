@@ -23,7 +23,7 @@ export interface SessionStream {
 // ShopShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const ShopShapeHash: bigint = 0x6fe34409781e3d4fn;
+export const ShopShapeHash: bigint = 0x0eeff175659afd33n;
 
 export interface ShopSignRequest {
   city?: string;  // the vow; no default is declared, so unset refuses at sign
@@ -114,7 +114,7 @@ export function resumeShopSession(
 // DepotShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const DepotShapeHash: bigint = 0xdbd6e085dce9db4fn;
+export const DepotShapeHash: bigint = 0x6738cc8f56d8db33n;
 
 export interface DepotSignRequest {
   dsn?: string;  // the vow; unset takes the declared default

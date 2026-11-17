@@ -190,7 +190,7 @@ static GeasStatus __geas_ash_Buffer_compare_9ed2428630730bb1_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Buffer_containers_969e771c89273602_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Buffer_containers_d5ed29b78b7a4c31_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -238,7 +238,7 @@ static GeasStatus __geas_ash_Buffer_containers_969e771c89273602_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Buffer_payload_8c1d8d4da2460908_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_Buffer_payload_7e21f2d6edfdfcb0_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -295,8 +295,8 @@ static const GeasPledgeDesc k_Buffer_pledges[] = {
     { "decode", "__geas_ash_Buffer_decode_5936b5add715a0d0_v1", 1, __geas_ash_Buffer_decode_5936b5add715a0d0_v1, -1 },
     { "maybe", "__geas_ash_Buffer_maybe_5947b5add7241403_v1", 1, __geas_ash_Buffer_maybe_5947b5add7241403_v1, -1 },
     { "compare", "__geas_ash_Buffer_compare_9ed2428630730bb1_v1", 2, __geas_ash_Buffer_compare_9ed2428630730bb1_v1, -1 },
-    { "containers", "__geas_ash_Buffer_containers_969e771c89273602_v1", 1, __geas_ash_Buffer_containers_969e771c89273602_v1, -1 },
-    { "payload", "__geas_ash_Buffer_payload_8c1d8d4da2460908_v1", 1, __geas_ash_Buffer_payload_8c1d8d4da2460908_v1, -1 },
+    { "containers", "__geas_ash_Buffer_containers_d5ed29b78b7a4c31_v1", 1, __geas_ash_Buffer_containers_d5ed29b78b7a4c31_v1, -1 },
+    { "payload", "__geas_ash_Buffer_payload_7e21f2d6edfdfcb0_v1", 1, __geas_ash_Buffer_payload_7e21f2d6edfdfcb0_v1, -1 },
     { "received", NULL, 1, NULL, -1 },
 };
 
@@ -378,7 +378,7 @@ static const GeasRemedyDesc k_Buffer_remedies[] = {
 };
 
 static const GeasContractDesc k_Buffer = {
-    "Buffer", 0x4b1f1cc71457d4dfULL,
+    "Buffer", 0xca6ae330d37473e0ULL,
     1, 9, k_Buffer_pledges,
     1, k_Buffer_vows,
     0, NULL, 18,

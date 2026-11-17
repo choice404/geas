@@ -1,0 +1,7 @@
+// An imported module's amends block names the shapes directory beside the
+// module when its recorded shape is missing
+import vers.unrecorded
+
+contract Front {
+    pledge go() -> Unit
+}

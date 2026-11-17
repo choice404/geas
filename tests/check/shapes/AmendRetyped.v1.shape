@@ -1,0 +1,8 @@
+geas shape 2
+contract AmendRetyped
+version 1
+hash 0x399a8dd5885112ad
+course 0x0000000000000000
+shape contract AmendRetyped;pledge step:()->R(NTicket,S);type Ticket{id:S};
+pledge step ()->R(NTicket,S) NTicket
+type Ticket {id:I}

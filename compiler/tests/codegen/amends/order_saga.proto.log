@@ -1,0 +1,4 @@
+exit 1
+tests/check/order_saga.geas: 44:5: error: codegen: not yet supported: a vow on the gRPC surface outside the scalar set
+      vow order: Order
+      ^~~~~~~~~

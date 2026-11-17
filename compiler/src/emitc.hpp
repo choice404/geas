@@ -1,7 +1,7 @@
 // The module C emitter. Given a checked program it emits one C translation
 // unit: a static function per clause, a static thunk per compiled pledge
 // body in the uniform frame, a static resumable function per course, the
-// vow, pledge, schema, and requirements tables, one contract descriptor
+// vow, pledge, schema, requirements, and amends tables, one contract descriptor
 // per public contract with its shape hash and version baked in, and the
 // single exported geas_module_register. The emitted C includes geas/geas.h
 // and nothing else defines a layout.
@@ -374,6 +374,20 @@ private:
     void genCourseNoArm();
     std::string emitCourseTail(const ContractShape& shape, std::string_view function);
 
+    // The amends table, emitamends.cpp
+    std::string emitAmends(const ContractShape& shape);
+    std::string emitAmendEntry(const ContractShape& shape, const AmendsDecl& amends,
+                               const AmendPlan& plan);
+    std::string emitAmendNames(std::string_view symbol, const std::vector<std::string>& names);
+    std::string emitAmendMap(std::string_view symbol, const std::vector<std::int32_t>& map);
+    std::string emitAmendLatches(std::string_view symbol, const AmendPlan& plan);
+    std::string emitAmendVows(const ContractShape& shape, const AmendsDecl& amends,
+                              const AmendPlan& plan, std::string_view symbol);
+    void emitAmendVowsFrame(const ContractShape& shape, const AmendPlan& plan,
+                            std::string_view symbol);
+    void genAmendVow(const ContractShape& shape, const AmendVow& item);
+    std::optional<CValue> genPriorRead(const Expr& expr, const MemberExpr& member);
+
     EmitLookup lookup_;
     std::vector<Diagnostic> scratch_;
     TypeLowering lowering_;
@@ -384,6 +398,7 @@ private:
     int indent_ = 0;
     const ContractShape* shape_ = nullptr;
     const LoweredCourse* course_ = nullptr;
+    const AmendPlan* amend_ = nullptr;
     std::vector<std::size_t> courseBlockMarks_;
     TyId returnType_;
     std::int64_t spanLo_ = 0;

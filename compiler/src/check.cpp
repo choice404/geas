@@ -48,6 +48,10 @@ std::expected<CheckedProgram, std::vector<std::string>> checkProgram(std::string
     if (!lowered) {
         return std::unexpected(std::vector<std::string>{lowered.error()});
     }
+    const std::vector<Diagnostic> courseFaults = checkAmendCourses(checked);
+    if (!courseFaults.empty()) {
+        return std::unexpected(renderAll(checked.program, courseFaults));
+    }
     return checked;
 }
 

@@ -158,8 +158,13 @@ void AstDumper::renderAmends(const AmendsDecl& amends, int level) {
     closeStruct(level);
 }
 
-// AmendVow { name, value }, Rename { from, to }, Retire("x"), Latch { name, state }
+// AmendVow { name, value }, Rename { from, to }, Retire { name }, Latch { name, state },
+// and RestartCourse, a leaf
 void AstDumper::renderAmendItem(const AmendItem& item, int level) {
+    if (std::holds_alternative<AmendRestart>(item)) {
+        write("RestartCourse");
+        return;
+    }
     const auto namedStruct = [&](std::string_view kind, std::string_view nameKey,
                                  const std::string& name) {
         openStruct(kind);
@@ -184,6 +189,7 @@ void AstDumper::renderAmendItem(const AmendItem& item, int level) {
                        key(level + 1, "state");
                        write(latchStateName(latch.state));
                    },
+                   [](const AmendRestart&) {},
                },
                item);
     if (!std::holds_alternative<AmendRetire>(item)) {

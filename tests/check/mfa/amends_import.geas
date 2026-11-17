@@ -1,0 +1,7 @@
+// The multi-file amends case: an imported module's amends block reads the
+// recorded shape beside the module, not beside this root
+import vers.billing
+
+contract Front {
+    pledge go() -> Unit
+}

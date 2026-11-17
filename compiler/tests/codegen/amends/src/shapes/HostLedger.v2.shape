@@ -1,0 +1,16 @@
+geas shape 2
+contract HostLedger
+version 2
+hash 0x81f2e35fc39d5117
+course 0x0000000000000000
+shape contract HostLedger;vow account:S;vow limit:I;vow ratio:F;pledge capture:(I)->R(I,S);pledge log:()->V;pledge reserve:()->R(I,S);signal approved:(S)->V;remedy refund:capture:(I)->V;
+vow account S
+vow limit I
+vow ratio F
+pledge capture (I)->R(I,S) I
+pledge log ()->V V
+pledge reserve ()->R(I,S) I
+signal approved (S)
+sub Payment
+sub
+remedy refund capture

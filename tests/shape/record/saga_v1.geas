@@ -1,0 +1,12 @@
+// Version 1 of the Saga contract tests/check/amends_ok.geas amends from
+contract Saga {
+    vow store_url: String
+    vow url: String
+    vow grace: Duration = 1h
+
+    subcontract Billing {
+        pledge charge() -> Unit
+    }
+    pledge dispatch() -> Unit
+    pledge legacy() -> Unit
+}

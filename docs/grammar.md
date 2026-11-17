@@ -2,7 +2,7 @@
 
 This is the normative grammar for Geas. It covers the lexical structure, the type grammar, every declaration form including the workflow surface, terms, remedies, signals, the course, and amendment, and the statement and expression core that clause, pledge, remedy, and course bodies are written in. Where the grammar alone cannot pin a rule down, a semantic note next to the production carries the rest. The parser and the checker are held to this document, and a change to the surface lands here first.
 
-The workflow surface runs in both of its modes today. Durations, terms, remedies, signals, and the contract term are parsed, checked, emitted, and enforced by the runtime for a host driven contract, and the course, with `await`, `select`, `sleep`, `together`, and `now()`, is lowered to a resumable state machine the runtime drives for an engine driven one. The amends block is parsed and checked in full, and its emission is the next step on the roadmap; until it lands, `geas build` refuses a program that carries one with `geas: workflow constructs are not emitted yet: amends`. Its section says so at the top.
+The workflow surface runs in both of its modes today. Durations, terms, remedies, signals, and the contract term are parsed, checked, emitted, and enforced by the runtime for a host driven contract, and the course, with `await`, `select`, `sleep`, `together`, and `now()`, is lowered to a resumable state machine the runtime drives for an engine driven one. The amends block is checked against the recorded shape of the version it amends and emitted into the module, so a parked instance resumes as a later version of its contract.
 
 ## Notation
 
@@ -94,7 +94,7 @@ Contextual keywords, ordinary identifiers except in the positions named:
 - `fulfill` and `partial` are labels inside a `requirements` block.
 - `every`, `backoff`, `cap`, and `on` are options inside a `retry` term.
 - `as` and `timeout` belong to `select` arms.
-- `rename`, `retire`, `latch`, `as`, and `prior` belong to an `amends` block, and `fulfilled`, `pending`, and `broken` follow `latch NAME as`.
+- `rename`, `retire`, `latch`, `restart`, `as`, and `prior` belong to an `amends` block, `fulfilled`, `pending`, and `broken` follow `latch NAME as`, and `course` follows `restart`.
 - `version`, `term`, `abi`, and `symbol` are builtin attribute keys.
 - `attribute` opens an attribute declaration when followed by an identifier at the top level, and `on` separates its type from its target. Both remain ordinary identifiers elsewhere.
 - `sign`, `resume`, `status`, `park`, and `partial` are builtin contract methods.
@@ -281,6 +281,7 @@ Semantic notes.
 - A pledge return type must be `Result<T, E>`, `Option<T>`, `Unit`, or `Bytes`. A bare `Bytes` return latches fulfilled on delivery.
 - A pledge with a `Block` is implemented in Geas. A pledge without one is abstract: it must be bound to a foreign symbol through `[abi: ..., symbol: ...]` or bound by the host through the runtime before the contract signs. Signing with an unbound pledge is an error.
 - A vow initializer must be a constant expression of the vow type. A vow without an initializer must be supplied at sign time.
+- A vow's type is one the contract descriptor carries as a single value: `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `String`, `Bytes`, `Duration`, or `Time`. A vow of a record, a sum, a `List`, a `Map`, an `Option`, a `Result`, or `Unit` checks, and `geas build` refuses it with `codegen: not yet supported: a vow of this type in a compiled module`; carrying composite vows in the descriptor is a later step on the roadmap.
 - Clauses are not first class. A clause is callable by bare name only inside its own contract.
 - Subcontracts do not nest. An anonymous subcontract cannot be named in a `requirements` block.
 - A `schema` names a table and its columns for a store-backed contract. A column type is one of the seven scalars a flat row holds, `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, or `String`; a composite column type is a type error. The first column is the schema's primary key. A contract may declare more than one schema, one per table it touches, and the schema is vow shaped: it joins the shape hash and locks at sign. A contract that declares at least one schema is store-backed and must carry a `dsn` vow, or the sign fails unbound.
@@ -438,7 +439,7 @@ A suspending operation is one the course can stop at and come back to: a call of
 
 ## Amendment
 
-Amends blocks parse and check today, against what the amending version alone can verify; loading the older version's shape and its emission come next on the roadmap, and `geas build` refuses a contract with an amends block until then.
+A contract keeps changing after it ships, and an instance parked under an older version still has to finish. An `amends N` block inside a contract at version M says how an instance parked under version N resumes as version M, and `geas build` emits it into the module, so the runtime that loads version M picks up a version N row, applies the block, and carries on with an ordinary version M instance.
 
 ```text
 AmendsDecl ::= "amends" INT "{" NL { AmendItem NL } "}"
@@ -446,27 +447,63 @@ AmendItem  ::= "vow" IDENT "=" Expr
              | "rename" IDENT "->" IDENT
              | "retire" IDENT
              | "latch" IDENT "as" LatchState
+             | "restart" "course"
 LatchState ::= "fulfilled" | "pending" | "broken"
 ```
 
-`amends N` inside a contract at version M says how an instance parked under version N resumes as version M. The design is that the checker diffs the shape of N against M and every difference must be covered by an item, so a resume the build cannot account for is a compile error rather than a surprise in production. Blocks chain: a contract at version 3 may carry `amends 1` and `amends 2`.
+The block from `skeleton/order_course_v2.geas`, version 2 of the engine driven order saga, which renames ship, adds a notify step, drops chase, counts the order in cents, and changes the course:
 
 ```text
 amends 1 {
-    vow dsn = prior.store_url
-    rename dispatch -> ship
-    retire legacy
-    latch delivered as pending
+    // Version 1 counted the order in whole units
+    vow cents = prior.amount * 100
+    rename ship -> dispatch
+    retire chase
+    latch notify as pending
+    restart course
 }
 ```
 
-Semantic notes, as the checker holds them today.
+#### Recorded shapes
+
+The checker compiles version M, so it needs version N's shape from somewhere other than the source being compiled, and that is the recorded shape. `geas record FILE` writes `shapes/<Contract>.v<version>.shape` beside the file for every public contract in it, creating `shapes/` when it is missing:
+
+```text
+$ geas record skeleton/order_course.geas
+[geas] recorded skeleton/shapes/OrderCourse.v1.shape
+```
+
+The file is plain text and stable across runs: the shape string and its hash, the course hash, the names the park row is positional over (vows, pledges then signals, subcontracts, remedies) each with its canonical type, and the layout of every declared record and sum the boundary reaches. Recording the same shape again is a no op, and a file that already records a different shape of the same version is refused unless `--force` is given, so a shape that shipped cannot quietly drift. The recorded files belong in the repository next to the source, the way `skeleton/shapes` holds both versions of the order saga.
+
+Compiling a contract with `amends N` loads `shapes/<Contract>.v<N>.shape` from beside the source that declares the contract. A missing file is a compile error that names the path and says to run `geas record` on the source of version N.
+
+#### Coverage
+
+The checker diffs the recorded shape of N against M, and every difference has to be covered by exactly one item, so a resume the build cannot account for is a compile error and never a surprise in production.
+
+- **Vows.** A vow N and M both have, under the same name and the same type, carries its value. A vow M adds takes its default when it has one, otherwise it needs `vow NAME = Expr`. A vow whose type changed needs `vow NAME = Expr` too. A vow N has and M lacks is dropped with no item, or mapped onto a vow of M with `rename OLD -> NEW` when the type agrees; a `retire` of a vow is an error, since there is nothing to retire.
+- **Pledges and signals.** An item N and M both have under the same name, of the same kind, carries its latch, its `Err` payload, its stored `Ok` value or signal payload, its eligibility, its lapse, and its retry progress, even when its parameters or its error type changed. An item of N that M lacks needs `rename OLD -> NEW` or `retire OLD`. An item whose stored type changed, the `T` of a pledge's `Result<T, E>` or a signal's payload, cannot carry what it stored: it is retired and declared under a new name, and the error says so. A pledge of N that is a signal in M, or the other way round, is the same story. An item M adds starts pending, or in the state `latch NAME as STATE` gives it, and `latch` names only an item M adds.
+- **Subcontracts and remedies.** Renamed with `rename` or dropped with `retire` the same way. A remedy that already ran stays ran under its new name, and a remedy that undoes another pledge in M than it did in N is retired and declared under a new name. A remedy M adds for a pledge that already latched fulfilled is due like any other when the contract breaks.
+- **The course.** When N and M both have a course and the course hashes differ, or only M has one, the block holds `restart course`: the resumed instance enters M's course at step 0 with a fresh frame, and since every step is at least once, a step whose pledge already latched runs its body again, its result goes to the course, and its latch, its stored `Ok` value, and its place in the remedy order stay the ones it had. When the hashes agree the frame carries over and the course goes on at the step it parked at. When only N had a course its frame is dropped with no item.
+- **Nothing extra.** An item no difference calls for is an error: a `retire` or a `rename` of a name N never had, a `rename` onto a name M lacks or onto a name that is already carried, a `latch` on an item N already had, a second item for one name, and a `restart course` where the course did not change.
+- **Layout is type.** A canonical type code names a declared record or sum and nothing more, so the comparison reads the layouts too: a vow, a pledge's stored `Ok` value, or a signal's payload whose declared type kept its name but changed its fields or its variants counts as a changed type, and the error names the type whose layout moved.
+- **A fulfilled seed has no value.** `latch NAME as fulfilled` latches the item with no `Ok` value behind it, so when NAME has a remedy that takes the `Ok` value, the seed is a compile error; latch it `pending`, or let the remedy take no parameter.
+- Terms, requirements, the contract's own term, and attributes change freely and need no item. M's apply from the resume on, with the eligibility stamps and the signing time the row kept.
+
+#### Reading the older version
+
+Inside `vow NAME = Expr`, `prior.NAME` reads vow NAME of the parked instance, as version N signed it. `prior` alone is not a value, only `prior.NAME` is. A `prior` read is typed when N's type is a scalar, or when it equals the type of M's vow of the same name or of the vow being set and every declared record and sum it reaches kept its layout, the types M can still spell; any other read is an error that says which type M no longer declares.
+
+A vow item also reads M's own vows by bare name, as the block has filled them so far: a vow carried from N or with a default reads at once, and a vow only the block sets reads in the items after the one that sets it. Reading such a vow earlier, or inside its own item, is a compile error.
+
+Semantic notes.
 
 - `N` is at least 1 and below the contract's own version, and each version is amended at most once.
-- `vow NAME = Expr` supplies a vow of this version, and the expression is held to that vow's type. Inside it `prior` reads the parked instance's vows, `prior.store_url`; until the older shape is loaded, a `prior` member is taken at any type.
-- `rename OLD -> NEW` maps an old member name onto a pledge, subcontract, vow, or signal of this version, never a clause or a remedy.
-- `retire NAME` drops an old member and discards its latched state; it must name something this version no longer has.
-- `latch NAME as STATE` sets the starting state of a pledge or signal of this version, `fulfilled`, `pending`, or `broken`.
+- Blocks do not chain. Each one maps N straight to the version that carries it, so a contract at version 3 that wants version 1 rows to resume carries `amends 1` as well as `amends 2`, each checked against its own recorded shape.
+- `rename OLD -> NEW` maps a member of N onto a pledge, signal, subcontract, vow, or remedy of M of the same kind, never a clause.
+- An `internal` contract never parks under a version of its own, so it takes no amends block.
+- `restart` is a contextual keyword, a keyword only at the head of an item.
+- A resumed instance that went through a block reads amended from version N on the C surface and the runtime raises an `amended` event before `resumed`; after that it is an ordinary version M instance, and its next park writes a version M row.
 
 ## Statements
 

@@ -1,0 +1,4 @@
+// shape Walker v1: contract Walker;pledge walk:(NTree)->R(NNode,I);pledge note:(S)->V;type Node{value:I,next:O(NNode)};type Tree=Leaf|Branch(left:NTree,right:NTree,top:NNode);
+#define GEAS_HASH_Walker 0x291cbe3c30f74075ULL
+#define GEAS_MANGLED_Walker_walk "__geas_ash_Walker_walk_b2ef51ccccdf5b46_v1"
+#define GEAS_MANGLED_Walker_note "__geas_ash_Walker_note_a7fc567ca9db6a8a_v1"

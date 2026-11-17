@@ -5,24 +5,24 @@
 #define GEAS_HEADER_TERMS_OK
 
 /* contract Shop, version 1 */
-#define GEAS_HASH_Shop 0x56ffd26c158bbe14ULL
+#define GEAS_HASH_Shop 0xb1480b46753cb1a3ULL
 
 /* pledge authorize(amount: Float) -> Result<Receipt, PayError>, abstract */
-#define GEAS_MANGLED_Shop_authorize "__geas_ash_Shop_authorize_7d96b8d6baea6752_v1"
+#define GEAS_MANGLED_Shop_authorize "__geas_ash_Shop_authorize_6b898bccc14bc9bf_v1"
 
 /* pledge capture(receipt: Receipt) -> Result<Receipt, PayError>, abstract */
-#define GEAS_MANGLED_Shop_capture "__geas_ash_Shop_capture_f0456cfc1359aa3c_v1"
+#define GEAS_MANGLED_Shop_capture "__geas_ash_Shop_capture_bb54dfb8b90dc41d_v1"
 
 /* pledge reserve(items: List<Item>) -> Result<Unit, PayError>, abstract */
-#define GEAS_MANGLED_Shop_reserve "__geas_ash_Shop_reserve_b261820576bfbfc8_v1"
+#define GEAS_MANGLED_Shop_reserve "__geas_ash_Shop_reserve_8d0d444673e235b8_v1"
 
 /* pledge ship() -> Result<Unit, PayError>, abstract */
-#define GEAS_MANGLED_Shop_ship "__geas_ash_Shop_ship_3ecc30ca1824269c_v1"
+#define GEAS_MANGLED_Shop_ship "__geas_ash_Shop_ship_c218b655ee1b7462_v1"
 
 /* pledge review() -> Unit, abstract */
 #define GEAS_MANGLED_Shop_review "__geas_ash_Shop_review_0e2ba22315b89a85_v1"
 
 /* remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>, abstract */
-#define GEAS_MANGLED_Shop_refund "__geas_ash_Shop_refund_73b89f044b14c286_v1"
+#define GEAS_MANGLED_Shop_refund "__geas_ash_Shop_refund_476b7004a9825223_v1"
 
 #endif /* GEAS_HEADER_TERMS_OK */

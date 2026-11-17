@@ -23,7 +23,7 @@ export interface SessionStream {
 // BufferShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const BufferShapeHash: bigint = 0x4b1f1cc71457d4dfn;
+export const BufferShapeHash: bigint = 0xca6ae330d37473e0n;
 
 export interface BufferSignRequest {
   seed?: Uint8Array;  // the vow; no default is declared, so unset refuses at sign

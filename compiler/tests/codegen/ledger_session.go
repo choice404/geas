@@ -18,7 +18,7 @@ import (
 // LedgerShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const LedgerShapeHash uint64 = 0x513b853655ba4957
+const LedgerShapeHash uint64 = 0x91e8dbbfad45dc44
 
 // LedgerSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

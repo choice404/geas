@@ -461,6 +461,42 @@ GeasStatus geas_runtime_tick(GeasRuntime* rt) {
     return GEAS_OK;
 }
 
+/* ---- eligibility after an amendment ---- */
+
+/* Whether pending pledge i waits on something under the instance's terms:
+ * its subcontract not yet eligible, or its own after not landed. Under the
+ * instance lock */
+static int pledge_held(const GeasContract* c, uint32_t i) {
+    const GeasContractDesc* d = c->desc;
+    if (!geas_rt_pledge_is_loose(d, i) &&
+        c->flow.sub_eligible_ms[d->pledges[i].sub] < 0) {
+        return 1;
+    }
+    return !after_landed(c, geas_rt_pledge_term(d, i));
+}
+
+/* An amended instance keeps the stamps its row carried, so a deadline keeps
+ * counting from where it started. A stamp the new terms no longer stand
+ * behind, on a subcontract with something pending or on a pending item whose
+ * after under these terms has not landed, is taken back, and the item
+ * becomes eligible again when that after lands. Every item with no stamp,
+ * one the new version adds among them, is then stamped now when its after
+ * has landed. Subcontracts go first, a member's eligibility reads its
+ * subcontract's. Under the instance lock, or on an unpublished instance */
+void geas_rt_recheck_eligible(GeasContract* c, int64_t now) {
+    const GeasContractDesc* d = c->desc;
+    GeasFlow* f = &c->flow;
+    for (uint32_t s = 0; s < d->nsubs; s++) {
+        if (f->sub_eligible_ms[s] < 0 || !sub_has_pending(c, s)) continue;
+        if (!after_landed(c, geas_rt_sub_term(d, s))) f->sub_eligible_ms[s] = -1;
+    }
+    for (uint32_t i = 0; i < d->npledges; i++) {
+        if (f->pledge_eligible_ms[i] < 0 || c->pledge_state[i] != PLEDGE_PENDING) continue;
+        if (pledge_held(c, i)) f->pledge_eligible_ms[i] = -1;
+    }
+    geas_rt_refresh_eligible(c, now);
+}
+
 /* ---- the lapse on the partial surface ---- */
 
 int geas_partial_lapsed(GeasContract* c, const char* name) {

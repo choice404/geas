@@ -1,0 +1,16 @@
+// Version 1 of the AmendVows contract the vow cases of tests/check amend from
+
+record Order {
+    id: String
+    total: Float
+}
+
+contract AmendVows {
+    vow keep: String
+    vow count: Int
+    vow url: String
+    vow legacy: Bool
+    vow order: Order
+    vow items: List<Int>
+    vow stamp: Duration
+}

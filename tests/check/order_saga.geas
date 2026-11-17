@@ -85,5 +85,6 @@ contract OrderSaga [version: 2, term: 7d] {
         vow dsn = prior.store_url
         rename dispatch -> ship
         latch delivered as pending
+        restart course
     }
 }

@@ -5,17 +5,17 @@
 #define GEAS_HEADER_MAIN_DEMO
 
 /* contract Sidekick, version 1 */
-#define GEAS_HASH_Sidekick 0x3095e2440e1e9100ULL
+#define GEAS_HASH_Sidekick 0xb4324b39e6ea588aULL
 
 /* pledge double(x: Int) -> Result<Int, DemoError> */
-#define GEAS_MANGLED_Sidekick_double "__geas_ash_Sidekick_double_c68b13510e217aab_v1"
+#define GEAS_MANGLED_Sidekick_double "__geas_ash_Sidekick_double_cab3c6d41dba2c03_v1"
 
 /* contract Main, version 1
  * vow greeting: String (default)
  */
-#define GEAS_HASH_Main 0x5aba182af590ab32ULL
+#define GEAS_HASH_Main 0xa55394f654fdaec4ULL
 
 /* pledge run(args: List<String>) -> Result<Int, DemoError> */
-#define GEAS_MANGLED_Main_run "__geas_ash_Main_run_9f204c0894aa306e_v1"
+#define GEAS_MANGLED_Main_run "__geas_ash_Main_run_420e4dcf040d9270_v1"
 
 #endif /* GEAS_HEADER_MAIN_DEMO */

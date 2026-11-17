@@ -1,0 +1,7 @@
+geas shape 2
+contract AmendCorrupt
+version 1
+hash 0x20c932b01e751f21
+course 0x0000000000000000
+shape contract AmendCorrupt;pledge step:()->V;
+pledge step ()->V V

@@ -1,0 +1,10 @@
+// The layout pair for a record reached through a type argument, the second
+// half: quantity becomes a UInt, see layout_list_before.geas
+record Item {
+    sku: String
+    quantity: UInt
+}
+
+contract Stock {
+    pledge reserve(items: List<Item>) -> Option<Map<String, Item>>
+}

@@ -18,7 +18,7 @@ import (
 // BufferShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const BufferShapeHash uint64 = 0x4b1f1cc71457d4df
+const BufferShapeHash uint64 = 0xca6ae330d37473e0
 
 // BufferSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

@@ -18,7 +18,7 @@ import (
 // JobShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const JobShapeHash uint64 = 0xb5ffbd595a96f63a
+const JobShapeHash uint64 = 0x66062d3a7ee8cbb3
 
 // JobSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

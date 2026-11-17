@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The codegen runner. Five checks, none of which needs the runtime: a stub
+# The codegen runner. Four checks, none of which needs the runtime: a stub
 # cc stands in for the real one, since what is under test is the text geas
 # emits, the module C, the entry wrapper, the header, the .proto, and the
 # two session wrappers.
@@ -15,16 +15,20 @@
 # compiler/tests/codegen/course pin the engine driven half, the course
 # function and the descriptor that carries it, over representative courses
 # of tests/course, the order saga with a course, and the course programs of
-# tests/check. Every program is emitted twice and the two runs are held to
-# each other, so the text is a function of the source and nothing else. The
-# coverage check walks the accepted programs of tests/check, each one has to
-# be a workflow or course golden, on the refused list, or on the plain list,
-# so a new one cannot slip between them. The refusals hold every program
-# with an amends block to the named build error. The syntax check runs the
-# real cc over the module C of every course golden and every course of
-# tests/course: it has to compile under -Wall -Wextra, no warning may land
-# inside a course function, and with gcc no goto may jump over an
-# initialization
+# tests/check. The amends goldens in compiler/tests/codegen/amends pin the
+# amends tables and their vows functions, over the programs in
+# compiler/tests/codegen/amends/src, whose recorded shapes sit in its
+# shapes/, and the accepted amends programs of tests/check. Every program is
+# emitted twice and the two runs are held to each other, so the text is a
+# function of the source and nothing else. The coverage check walks the
+# accepted programs of tests/check, each one has to be a workflow, course,
+# or amends golden or on the plain list, so a new one cannot slip between
+# them. The syntax check runs the real cc over the module C of every course
+# and amends golden and every course of tests/course: it has to compile
+# under -Wall -Wextra, no warning may land inside a course function, and
+# with gcc no goto may jump over an initialization. Module C that carries an
+# amends table compiles only against a runtime header that declares
+# GeasAmendDesc, and is counted as skipped against one that does not
 #
 # Set GEAS to test another build, the sanitizer one at target/bin-asan/geas
 # for instance. BLESS=1 rewrites every golden from GEAS and does nothing
@@ -48,10 +52,15 @@ COURSE_SOURCES="$(printf 'tests/course/%s.geas ' straight_line while_head for_li
 $(cd "$ROOT" && ls compiler/tests/codegen/course/src/*.geas)
 $(printf 'tests/check/%s.geas ' course_ok time_ok course_nested_ok course_together_ok course_local_ok course_body_context_ok)"
 
-# The workflow programs of tests/check the build refuses, each carrying an
-# amends block, and the course of tests/course that carries one
-REFUSED_SOURCES="amends_ok order_saga"
-REFUSED_COURSES="order_saga"
+# The course of tests/course whose build stops before any module C: its
+# record vow is outside what a compiled descriptor carries, so the syntax
+# check holds its build to that one fault instead
+UNBUILT_COURSES="order_saga"
+
+AMENDS_DIR="$ROOT/compiler/tests/codegen/amends"
+AMENDS_SOURCES="$(cd "$ROOT" && ls compiler/tests/codegen/amends/src/*.geas)
+$(printf 'tests/check/%s.geas ' amends_ok order_saga amends_vows_ok amends_items_ok amends_parts_ok amends_course_ok \
+    amends_layout_ok amends_vow_order_ok amends_seed_remedy_ok)"
 
 # The accepted programs of tests/check with no workflow construct in them,
 # which pin nothing the goldens above do not
@@ -73,6 +82,11 @@ chmod +x "$WORK/bin/cc"
 
 pass=0
 fail=0
+skipped=0
+HAS_AMEND_ABI=0
+if grep -q "GeasAmendDesc" "$ROOT/runtime/include/geas/geas_abi.h" 2>/dev/null; then
+    HAS_AMEND_ABI=1
+fi
 
 fail_case() {
     echo "FAIL $1: $2"
@@ -174,47 +188,19 @@ check_goldens() {
     done
 }
 
-# Every accepted program of tests/check is a workflow or course golden,
-# refused, or plain, so a new one cannot slip between them
+# Every accepted program of tests/check is a workflow, course, or amends
+# golden, or plain, so a new one cannot slip between them
 check_workflow_coverage() {
     local golden stem
     for golden in tests/check/*.expect; do
         stem="$(basename "${golden%.expect}")"
-        case " $(echo $REFUSED_SOURCES $PLAIN_SOURCES) " in *" $stem "*) continue ;; esac
-        if printf '%s\n' $WORKFLOW_SOURCES $COURSE_SOURCES | grep -qxF "tests/check/$stem.geas"; then
+        case " $(echo $PLAIN_SOURCES) " in *" $stem "*) continue ;; esac
+        if printf '%s\n' $WORKFLOW_SOURCES $COURSE_SOURCES $AMENDS_SOURCES |
+            grep -qxF "tests/check/$stem.geas"; then
             pass=$((pass + 1))
         else
-            fail_case "workflow/$stem" "accepted, neither a workflow or course golden, refused, nor plain"
+            fail_case "workflow/$stem" "accepted, neither a workflow, course, or amends golden, nor plain"
         fi
-    done
-}
-
-# Every program on the refused list has to be refused by each artifact
-# command with the named build error, and must write nothing
-check_refusals() {
-    local stem src base cmd dir sources=""
-    for stem in $REFUSED_SOURCES; do
-        sources="$sources tests/check/$stem.geas"
-    done
-    for stem in $REFUSED_COURSES; do
-        sources="$sources tests/course/$stem.geas"
-    done
-    for src in $sources; do
-        base="refuse/${src%.geas}"
-        src="$ROOT/$src"
-        for cmd in build emit-header emit-proto; do
-            dir="$WORK/$base/$cmd"
-            run_in "$dir" "$GEAS" "$cmd" "$src"
-            if [ "$(cat "$dir/code")" -ne 1 ]; then
-                fail_case "$base" "$cmd expected exit 1, got $(cat "$dir/code")"
-            elif ! grep -q "geas: workflow constructs are not emitted yet: " "$dir/stderr"; then
-                fail_case "$base" "$cmd stderr names no workflow construct"
-            elif [ -e "$dir/$OUT_DIR" ]; then
-                fail_case "$base" "$cmd wrote files for a refused program"
-            else
-                pass=$((pass + 1))
-            fi
-        done
     done
 }
 
@@ -236,9 +222,15 @@ in_course() {
 }
 
 # Runs the real cc over one module C file: a failure, a warning inside a
-# course function, or a goto over an initialization fails it
+# course function, or a goto over an initialization fails it. A file that
+# carries an amends table is skipped when the runtime header has no
+# GeasAmendDesc to compile it against
 check_c_file() {
     local name="$1" file="$2" log="$WORK/syntax.log" number
+    if [ "$HAS_AMEND_ABI" -eq 0 ] && grep -q "GeasAmendDesc" "$file"; then
+        skipped=$((skipped + 1))
+        return
+    fi
     if ! $CC_CHECK "$file" > "$log" 2>&1; then
         fail_case "syntax/$name" "cc rejects the module C"
         head -10 "$log"
@@ -254,8 +246,8 @@ check_c_file() {
     pass=$((pass + 1))
 }
 
-# The module C of every course golden, then every course of tests/course
-# but the refused ones, emitted fresh
+# The module C of every course and amends golden, then every course of
+# tests/course, emitted fresh
 check_course_syntax() {
     local cc src stem dir file
     cc="$(command -v cc || true)"
@@ -269,15 +261,24 @@ check_course_syntax() {
     else
         echo "[codegen] cc has no -Wjump-misses-init, the goto check rides on gcc alone"
     fi
-    for file in "$COURSE_DIR"/*.c; do
+    for file in "$COURSE_DIR"/*.c "$AMENDS_DIR"/*.c; do
         [ -f "$file" ] || continue
-        check_c_file "course/$(basename "$file")" "$file"
+        check_c_file "$(basename "$(dirname "$file")")/$(basename "$file")" "$file"
     done
     for src in tests/course/*.geas; do
         stem="$(basename "${src%.geas}")"
-        case " $REFUSED_COURSES " in *" $stem "*) continue ;; esac
         dir="$WORK/syntax/$stem"
         run_in "$dir" "$GEAS" build "$ROOT/$src"
+        case " $UNBUILT_COURSES " in
+            *" $stem "*)
+                if grep -q "not yet supported: a vow of this type in a compiled module" "$dir/stderr"; then
+                    pass=$((pass + 1))
+                else
+                    fail_case "syntax/$stem" "build did not stop at the record vow"
+                fi
+                continue
+                ;;
+        esac
         file="$dir/$OUT_DIR/$stem.c"
         if [ ! -f "$file" ]; then
             fail_case "syntax/$stem" "build wrote no module C"
@@ -285,12 +286,17 @@ check_course_syntax() {
         fi
         check_c_file "$stem" "$file"
     done
+    if [ "$skipped" -gt 0 ]; then
+        echo "[codegen] runtime/include/geas/geas_abi.h declares no GeasAmendDesc," \
+            "$skipped module C files that carry an amends table were not compiled"
+    fi
 }
 
 if [ "${BLESS:-0}" = "1" ]; then
     bless_dir "$GOLDEN_SOURCES" "$GOLDEN_DIR"
     bless_dir "$WORKFLOW_SOURCES" "$WORKFLOW_DIR"
     bless_dir "$COURSE_SOURCES" "$COURSE_DIR"
+    bless_dir "$AMENDS_SOURCES" "$AMENDS_DIR"
     exit 0
 fi
 
@@ -298,8 +304,8 @@ mkdir -p "$WORK/golden"
 check_goldens "$GOLDEN_SOURCES" "$GOLDEN_DIR"
 check_goldens "$WORKFLOW_SOURCES" "$WORKFLOW_DIR"
 check_goldens "$COURSE_SOURCES" "$COURSE_DIR"
+check_goldens "$AMENDS_SOURCES" "$AMENDS_DIR"
 check_workflow_coverage
-check_refusals
 check_course_syntax
 
 echo "[codegen] $pass passed, $fail failed"
