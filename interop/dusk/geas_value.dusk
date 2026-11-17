@@ -1,0 +1,564 @@
+/** geas_value: Geas values as dusk data. A Value is a heap tree that mirrors
+ *  GeasValue one variant per wire shape, built with the value_* helpers,
+ *  decoded from whatever the runtime hands back, and encoded onto the C heap
+ *  before a call that copies it in. Every tree is owned by whoever built or
+ *  decoded it and is released with value_free, which frees the strings, the
+ *  byte vectors and every child, so build a tree from fresh values and never
+ *  hang one node under two parents. */
+
+@paradigm procedural
+
+@import std.string
+@import std.vector
+
+foreign "C" {
+    func gd_copy(dst: *void, src: *void, n: int64) -> void
+    func gd_cstr_len(p: int64) -> int64
+    func gd_cstr_copy(p: int64, buf: *raw char, cap: int64) -> int64
+    func gd_ty(v: int64) -> int64
+    func gd_tag(v: int64) -> int64
+    func gd_int(v: int64) -> int64
+    func gd_uint(v: int64) -> uint64
+    func gd_float(v: int64) -> float64
+    func gd_small(v: int64) -> int64
+    func gd_char(v: int64) -> int64
+    func gd_box(v: int64) -> int64
+    func gd_elem_ty(v: int64) -> int64
+    func gd_len(v: int64) -> int64
+    func gd_elem(v: int64, i: int64) -> int64
+    func gd_byte_at(v: int64, i: int64) -> int64
+    func gd_text_copy(v: int64, buf: *raw char, cap: int64) -> int64
+    func gd_values_new(n: int64) -> int64
+    func gd_value_at(arr: int64, i: int64) -> int64
+    func gd_values_free(arr: int64, n: int64) -> void
+    func gd_slot_free(slot: int64) -> void
+    func gd_set_unit(v: int64) -> void
+    func gd_set_int(v: int64, i: int64) -> void
+    func gd_set_uint(v: int64, u: uint64) -> void
+    func gd_set_float(v: int64, f: float64) -> void
+    func gd_set_bool(v: int64, b: int64) -> void
+    func gd_set_byte(v: int64, b: int64) -> void
+    func gd_set_char(v: int64, ch: int64) -> void
+    func gd_set_buffer(v: int64, ty: int64, bytes: *raw char, len: int64) -> int64
+    func gd_set_box(v: int64, ty: int64, tag: int64) -> int64
+    func gd_set_none(v: int64) -> void
+    func gd_set_seq(v: int64, ty: int64, tag: int64, elem_ty: int64, n: int64) -> int64
+    func geas_value_render(v: int64, buf: *raw char, cap: int64, need: *raw int64) -> int32
+}
+
+/** The wire type tags, docs/abi.md, Values. Fixed forever */
+export func ty_unit() -> int64 { return 0 }
+export func ty_int() -> int64 { return 1 }
+export func ty_uint() -> int64 { return 2 }
+export func ty_float() -> int64 { return 3 }
+export func ty_bool() -> int64 { return 4 }
+export func ty_byte() -> int64 { return 5 }
+export func ty_char() -> int64 { return 6 }
+export func ty_string() -> int64 { return 7 }
+export func ty_list() -> int64 { return 8 }
+export func ty_map() -> int64 { return 9 }
+export func ty_tuple() -> int64 { return 10 }
+export func ty_option() -> int64 { return 11 }
+export func ty_result() -> int64 { return 12 }
+export func ty_record() -> int64 { return 13 }
+export func ty_sum() -> int64 { return 15 }
+export func ty_bytes() -> int64 { return 17 }
+
+/** One Geas value. List carries its declared element tag so an empty list
+ *  still says what it holds, Map carries its key tag and its pairs flat,
+ *  key then value, in insertion order, and Sum carries the variant's
+ *  declaration index and its fields */
+export enum Value {
+    Unit,
+    Int(i: int64),
+    UInt(u: uint64),
+    Float(f: float64),
+    Bool(b: bool),
+    Byte(b: uint8),
+    Char(c: rune),
+    Text(s: string),
+    Bytes(data: *Vector<uint8>),
+    None,
+    Some(v: *Value),
+    Ok(v: *Value),
+    Err(v: *Value),
+    List(elem_ty: int64, items: *Vector<*Value>),
+    Map(key_ty: int64, pairs: *Vector<*Value>),
+    Tuple(items: *Vector<*Value>),
+    Record(fields: *Vector<*Value>),
+    Sum(tag: int64, fields: *Vector<*Value>),
+}
+
+/* ---- building ---- */
+
+export func value_unit() -> *Value { return alloc(Value.Unit) }
+export func value_int(i: int64) -> *Value { return alloc(Value.Int(i)) }
+export func value_uint(u: uint64) -> *Value { return alloc(Value.UInt(u)) }
+export func value_float(f: float64) -> *Value { return alloc(Value.Float(f)) }
+export func value_bool(b: bool) -> *Value { return alloc(Value.Bool(b)) }
+export func value_byte(b: uint8) -> *Value { return alloc(Value.Byte(b)) }
+export func value_char(c: rune) -> *Value { return alloc(Value.Char(c)) }
+export func value_none() -> *Value { return alloc(Value.None) }
+export func value_some(v: *Value) -> *Value { return alloc(Value.Some(v)) }
+export func value_ok(v: *Value) -> *Value { return alloc(Value.Ok(v)) }
+export func value_err(v: *Value) -> *Value { return alloc(Value.Err(v)) }
+export func value_tuple(items: *Vector<*Value>) -> *Value { return alloc(Value.Tuple(items)) }
+export func value_record(fields: *Vector<*Value>) -> *Value { return alloc(Value.Record(fields)) }
+
+/** A String, s copied so the tree owns its text */
+export func value_text(s: string) -> *Value {
+    return alloc(Value.Text(substring(s, 0, str_len(s))))
+}
+
+/** Bytes, the vector handed over to the tree */
+export func value_bytes(data: *Vector<uint8>) -> *Value {
+    return alloc(Value.Bytes(data))
+}
+
+/** A list whose elements all carry elem_ty, one of the ty_* tags */
+export func value_list(elem_ty: int64, items: *Vector<*Value>) -> *Value {
+    return alloc(Value.List(elem_ty, items))
+}
+
+/** A map over key_ty, pairs flat as key, value, key, value in insertion order */
+export func value_map(key_ty: int64, pairs: *Vector<*Value>) -> *Value {
+    return alloc(Value.Map(key_ty, pairs))
+}
+
+/** A declared sum's variant by its declaration index, with its fields */
+export func value_variant(tag: int64, fields: *Vector<*Value>) -> *Value {
+    return alloc(Value.Sum(tag, fields))
+}
+
+/** An empty frame or field list */
+export func values() -> *Vector<*Value> {
+    return alloc(vec_new())
+}
+
+export func values1(a: *Value) -> *Vector<*Value> {
+    items: *Vector<*Value> = alloc(vec_new())
+    vec_push(items, a)
+    return items
+}
+
+export func values2(a: *Value, b: *Value) -> *Vector<*Value> {
+    items: *Vector<*Value> = values1(a)
+    vec_push(items, b)
+    return items
+}
+
+export func values3(a: *Value, b: *Value, c: *Value) -> *Vector<*Value> {
+    items: *Vector<*Value> = values2(a, b)
+    vec_push(items, c)
+    return items
+}
+
+/* ---- reading ---- */
+
+/** The element count of a list shaped value, -1 for anything else */
+export func value_len(v: *Value) -> int64 {
+    match *v {
+        List(elem_ty, items) => { return vec_len(items) }
+        Map(key_ty, pairs) => { return vec_len(pairs) }
+        Tuple(items) => { return vec_len(items) }
+        Record(fields) => { return vec_len(fields) }
+        Sum(tag, fields) => { return vec_len(fields) }
+        _ => { return -1 }
+    }
+}
+
+/** The i-th element, field, or pair slot of a list shaped value, borrowed
+ *  from the tree. The error exists when v has no elements or i is out of range */
+export func value_at(v: *Value, i: int64) -> (*Value, error) {
+    if i < 0 || i >= value_len(v) {
+        return (v, error { message: "value index " + int_to_string(i) + " out of range" })
+    }
+    match *v {
+        List(elem_ty, items) => { return (vec_get(items, i), error {}) }
+        Map(key_ty, pairs) => { return (vec_get(pairs, i), error {}) }
+        Tuple(items) => { return (vec_get(items, i), error {}) }
+        Record(fields) => { return (vec_get(fields, i), error {}) }
+        Sum(tag, fields) => { return (vec_get(fields, i), error {}) }
+        _ => { return (v, error { message: "value has no elements" }) }
+    }
+}
+
+/** The payload of a Some, an Ok, or an Err, borrowed from the tree */
+export func value_payload(v: *Value) -> (*Value, error) {
+    match *v {
+        Some(inner) => { return (inner, error {}) }
+        Ok(inner) => { return (inner, error {}) }
+        Err(inner) => { return (inner, error {}) }
+        _ => { return (v, error { message: "value carries no payload" }) }
+    }
+}
+
+/** The text of a String, borrowed from the tree */
+export func value_as_text(v: *Value) -> (string, error) {
+    match *v {
+        Text(s) => { return (s, error {}) }
+        _ => { return ("", error { message: "value is not a String" }) }
+    }
+}
+
+export func value_as_int(v: *Value) -> (int64, error) {
+    match *v {
+        Int(i) => { return (i, error {}) }
+        _ => { return (0, error { message: "value is not an Int" }) }
+    }
+}
+
+export func value_is_ok(v: *Value) -> bool {
+    match *v {
+        Ok(inner) => { return true }
+        _ => { return false }
+    }
+}
+
+export func value_is_err(v: *Value) -> bool {
+    match *v {
+        Err(inner) => { return true }
+        _ => { return false }
+    }
+}
+
+/** The variant tag of a declared sum, -1 for anything else */
+export func value_sum_tag(v: *Value) -> int64 {
+    match *v {
+        Sum(tag, fields) => { return tag }
+        _ => { return -1 }
+    }
+}
+
+/* ---- freeing ---- */
+
+/** Frees a whole tree, every child, string, and vector in it. root is consumed */
+export func value_free(root: *Value) -> void {
+    work: *Vector<*Value> = alloc(vec_new())
+    vec_push(work, root)
+    while vec_len(work) > 0 {
+        node: *Value = vec_take(work, vec_len(work) - 1)
+        match *node {
+            Text(s) => free(s),
+            Bytes(data) => {
+                vec_free(data)
+                free(data)
+            }
+            Some(inner) => vec_push(work, inner),
+            Ok(inner) => vec_push(work, inner),
+            Err(inner) => vec_push(work, inner),
+            List(elem_ty, items) => {
+                queue_children(items, work)
+                free(items)
+            }
+            Map(key_ty, pairs) => {
+                queue_children(pairs, work)
+                free(pairs)
+            }
+            Tuple(items) => {
+                queue_children(items, work)
+                free(items)
+            }
+            Record(fields) => {
+                queue_children(fields, work)
+                free(fields)
+            }
+            Sum(tag, fields) => {
+                queue_children(fields, work)
+                free(fields)
+            }
+            _ => {}
+        }
+        free(node)
+    }
+    vec_free(work)
+    free(work)
+}
+
+/** Frees a frame of values and the vector that holds them. items is consumed */
+export func values_free(items: *Vector<*Value>) -> void {
+    value_free(value_tuple(items))
+}
+
+// Moves every child onto the work list and empties the vector that held them
+func queue_children(items: *Vector<*Value>, work: *Vector<*Value>) -> void {
+    while vec_len(items) > 0 {
+        vec_push(work, vec_take(items, vec_len(items) - 1))
+    }
+    vec_free(items)
+}
+
+/* ---- C strings ---- */
+
+/** Copies a C string the runtime handed out into a dusk string, "" for NULL */
+export func c_string(p: int64) -> string {
+    n: int64 = gd_cstr_len(p)
+    buf: *raw char = alloc_bytes(n + 1)
+    gd_cstr_copy(p, buf, n + 1)
+    s: string = substring(cstr(buf), 0, n)
+    free(buf)
+    return s
+}
+
+/* ---- decoding ---- */
+
+/** Decodes the GeasValue behind handle into a fresh tree the caller owns.
+ *  Everything is copied, so the tree outlives the instance it came from.
+ *  The error exists for a tag dusk cannot hold and for a String with a NUL
+ *  byte in it */
+export func value_decode(h: int64) -> (*Value, error) {
+    ty: int64 = gd_ty(h)
+    if ty <= ty_char() {
+        return (decode_scalar(h, ty), error {})
+    }
+    if ty == ty_string() {
+        return decode_text(h)
+    }
+    if ty == ty_bytes() {
+        return (decode_bytes(h), error {})
+    }
+    if ty == ty_option() || ty == ty_result() {
+        return decode_boxed(h, ty)
+    }
+    if ty == ty_list() || ty == ty_map() || ty == ty_tuple() || ty == ty_record() || ty == ty_sum() {
+        return decode_seq(h, ty)
+    }
+    return (value_unit(), error { message: "cannot decode type tag " + int_to_string(ty) })
+}
+
+func decode_scalar(h: int64, ty: int64) -> *Value {
+    if ty == ty_int() { return value_int(gd_int(h)) }
+    if ty == ty_uint() { return value_uint(gd_uint(h)) }
+    if ty == ty_float() { return value_float(gd_float(h)) }
+    if ty == ty_bool() { return value_bool(gd_small(h) != 0) }
+    if ty == ty_byte() { return value_byte(uint8(gd_small(h))) }
+    if ty == ty_char() { return value_char(rune(gd_char(h))) }
+    return value_unit()
+}
+
+func decode_text(h: int64) -> (*Value, error) {
+    n: int64 = gd_len(h)
+    buf: *raw char = alloc_bytes(n + 1)
+    copied: int64 = gd_text_copy(h, buf, n + 1)
+    if copied < 0 {
+        free(buf)
+        return (value_unit(), error { message: "a String with a NUL byte cannot cross into dusk" })
+    }
+    s: string = substring(cstr(buf), 0, n)
+    free(buf)
+    return (alloc(Value.Text(s)), error {})
+}
+
+func decode_bytes(h: int64) -> *Value {
+    data: *Vector<uint8> = alloc(vec_new())
+    n: int64 = gd_len(h)
+    mut i: int64 = 0
+    while i < n {
+        vec_push(data, uint8(gd_byte_at(h, i)))
+        i = i + 1
+    }
+    return value_bytes(data)
+}
+
+func decode_boxed(h: int64, ty: int64) -> (*Value, error) {
+    tag: int64 = gd_tag(h)
+    box: int64 = gd_box(h)
+    if ty == ty_option() && (tag == 0 || box == 0) {
+        return (value_none(), error {})
+    }
+    if box == 0 {
+        return wrap_result(tag, value_unit())
+    }
+    inner, e := value_decode(box)
+    if e.exists() {
+        value_free(inner)
+        return (value_unit(), e)
+    }
+    if ty == ty_option() {
+        return (value_some(inner), error {})
+    }
+    return wrap_result(tag, inner)
+}
+
+func wrap_result(tag: int64, inner: *Value) -> (*Value, error) {
+    if tag == 0 {
+        return (value_ok(inner), error {})
+    }
+    return (value_err(inner), error {})
+}
+
+func decode_seq(h: int64, ty: int64) -> (*Value, error) {
+    items: *Vector<*Value> = alloc(vec_new())
+    n: int64 = gd_len(h)
+    mut i: int64 = 0
+    while i < n {
+        item, e := value_decode(gd_elem(h, i))
+        if e.exists() {
+            value_free(item)
+            values_free(items)
+            return (value_unit(), e)
+        }
+        vec_push(items, item)
+        i = i + 1
+    }
+    if ty == ty_list() { return (value_list(gd_elem_ty(h), items), error {}) }
+    if ty == ty_map() { return (value_map(gd_elem_ty(h), items), error {}) }
+    if ty == ty_tuple() { return (value_tuple(items), error {}) }
+    if ty == ty_record() { return (value_record(items), error {}) }
+    return (value_variant(gd_tag(h), items), error {})
+}
+
+/* ---- encoding ---- */
+
+/** Writes v into the C heap slot behind handle. Whatever lands there is freed
+ *  by gd_values_free on the array that holds the slot, even after a failure */
+export func value_encode(slot: int64, v: *Value) -> error {
+    match *v {
+        Unit => gd_set_unit(slot),
+        Int(i) => gd_set_int(slot, i),
+        UInt(u) => gd_set_uint(slot, u),
+        Float(f) => gd_set_float(slot, f),
+        Bool(b) => gd_set_bool(slot, b ? 1 : 0),
+        Byte(b) => gd_set_byte(slot, int64(b)),
+        Char(c) => gd_set_char(slot, int64(c)),
+        Text(s) => { return encode_text(slot, s) }
+        Bytes(data) => { return encode_bytes(slot, data) }
+        None => gd_set_none(slot),
+        Some(inner) => { return encode_boxed(slot, ty_option(), 1, inner) }
+        Ok(inner) => { return encode_boxed(slot, ty_result(), 0, inner) }
+        Err(inner) => { return encode_boxed(slot, ty_result(), 1, inner) }
+        List(elem_ty, items) => { return encode_seq(slot, ty_list(), 0, elem_ty, items) }
+        Map(key_ty, pairs) => { return encode_seq(slot, ty_map(), 0, key_ty, pairs) }
+        Tuple(items) => { return encode_seq(slot, ty_tuple(), 0, 0, items) }
+        Record(fields) => { return encode_seq(slot, ty_record(), 0, 0, fields) }
+        Sum(tag, fields) => { return encode_seq(slot, ty_sum(), tag, 0, fields) }
+    }
+    return error {}
+}
+
+func encode_text(slot: int64, s: string) -> error {
+    p: *raw char = cbuf(s)
+    st: int64 = gd_set_buffer(slot, ty_string(), p, str_len(s))
+    free(p)
+    if st != 0 {
+        return error { message: "encode a String: out of memory" }
+    }
+    return error {}
+}
+
+func encode_bytes(slot: int64, data: *Vector<uint8>) -> error {
+    n: int64 = vec_len(data)
+    buf: *raw char = alloc_bytes(n + 1)
+    mut i: int64 = 0
+    while i < n {
+        buf[i] = char(vec_get(data, i))
+        i = i + 1
+    }
+    st: int64 = gd_set_buffer(slot, ty_bytes(), buf, n)
+    free(buf)
+    if st != 0 {
+        return error { message: "encode Bytes: out of memory" }
+    }
+    return error {}
+}
+
+func encode_boxed(slot: int64, ty: int64, tag: int64, inner: *Value) -> error {
+    child: int64 = gd_set_box(slot, ty, tag)
+    if child == 0 {
+        return error { message: "encode a payload: out of memory" }
+    }
+    return value_encode(child, inner)
+}
+
+func encode_seq(slot: int64, ty: int64, tag: int64, elem_ty: int64, items: *Vector<*Value>) -> error {
+    n: int64 = vec_len(items)
+    if gd_set_seq(slot, ty, tag, elem_ty, n) != 0 {
+        return error { message: "encode a list: out of memory" }
+    }
+    mut i: int64 = 0
+    while i < n {
+        e := value_encode(gd_elem(slot, i), vec_get(items, i))
+        if e.exists() {
+            return e
+        }
+        i = i + 1
+    }
+    return error {}
+}
+
+/** Encodes a frame of values into a fresh C heap array. Free it with
+ *  gd_values_free(arr, vec_len(items)) whatever the error says */
+export func values_encode(items: *Vector<*Value>) -> (int64, error) {
+    n: int64 = vec_len(items)
+    arr: int64 = gd_values_new(n)
+    if arr == 0 {
+        return (0, error { message: "encode a frame: out of memory" })
+    }
+    mut i: int64 = 0
+    while i < n {
+        e := value_encode(gd_value_at(arr, i), vec_get(items, i))
+        if e.exists() {
+            return (arr, e)
+        }
+        i = i + 1
+    }
+    return (arr, error {})
+}
+
+/** A deep copy of v the caller owns, made by a round trip through the wire
+ *  shape, so it holds exactly what crosses the boundary */
+export func value_clone(v: *Value) -> (*Value, error) {
+    arr: int64 = gd_values_new(1)
+    if arr == 0 {
+        return (value_unit(), error { message: "clone a value: out of memory" })
+    }
+    e := value_encode(arr, v)
+    if e.exists() {
+        gd_values_free(arr, 1)
+        return (value_unit(), e)
+    }
+    copy, de := value_decode(arr)
+    gd_values_free(arr, 1)
+    return (copy, de)
+}
+
+/* ---- rendering ---- */
+
+/** The runtime's canonical debug spelling of v, Ok("x") or {1, "a"} or #1 */
+export func value_render(v: *Value) -> string {
+    arr: int64 = gd_values_new(1)
+    if arr == 0 {
+        return "<out of memory>"
+    }
+    e := value_encode(arr, v)
+    if e.exists() {
+        gd_values_free(arr, 1)
+        return "<" + e.toString() + ">"
+    }
+    text: string = render_encoded(arr)
+    gd_values_free(arr, 1)
+    return text
+}
+
+func render_encoded(h: int64) -> string {
+    need: *raw int64 = alloc_bytes(8)
+    need[0] = 0
+    probe: *raw char = alloc_bytes(1)
+    sized: int32 = geas_value_render(h, probe, 0, need)
+    free(probe)
+    n: int64 = need[0]
+    if n <= 0 {
+        free(need)
+        return "<unrenderable, status " + int_to_string(int64(sized)) + ">"
+    }
+    buf: *raw char = alloc_bytes(n + 1)
+    st: int32 = geas_value_render(h, buf, n, need)
+    free(need)
+    if st != int32(0) {
+        free(buf)
+        return "<unrenderable>"
+    }
+    text: string = substring(cstr(buf), 0, str_len(cstr(buf)))
+    free(buf)
+    return text
+}

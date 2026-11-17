@@ -320,7 +320,11 @@ least `1.0`, and stops growing at `cap`. Without `on`, only lifecycle failures
 retry, a lost worker or a lapsed attempt, never a business `Err`, because a
 declined card is an answer and not an accident. With `on`, the listed variants
 of the pledge's error sum retry too. Only the last attempt's outcome is
-latched, and a delay is never waited past the step's own deadline.
+latched, and a delay is never waited past the step's own deadline. A park
+during the delay records the attempts already made and the absolute time
+the next attempt is due. Resume keeps that budget, and an early fulfillment
+is refused until the due time. The host supplies the pending pledge's
+arguments again; a tick alone does not run it.
 
 The runtime owns no timer. Every call that reads or moves an instance applies
 the deadlines that have passed first, in deadline order, and a host that wants
@@ -364,6 +368,12 @@ surface and the pass moves on, so one stuck refund never strands a
 reservation. Every remedy runs at most once for the life of a signature, a
 park and a resume included. A pledge inside a transactional subcontract whose
 episode never committed has nothing to undo, the rollback already did.
+
+A pass can park between remedies, inside a remedy body, or during a remedy
+retry wait, including from the host sleep callback. Finished remedies keep
+their outcomes, an in flight remedy resumes failed with `GEAS_ERR_STATE`,
+and remedies that had not started run on the first tick after resume. The
+resumed pass ends Broken, without repeating remedy history or its events.
 
 A remedy is never a requirements atom and never called through an instance; it
 belongs to the break, not to the host.
@@ -895,10 +905,41 @@ A first standard library lives under `lib/std` and is pulled in with `import`:
 - **`std.errors`**: common error sums for the `E` slot.
 - **`std.traits`**: the provisional clauses, `Comparable`, `Loggable`, and
   `Serializable`.
+- **`std.process`**: a program step, `Process.run(Command)` returning
+  `Result<Unit, ExitError>` on the caller's instance.
 
 A module lends another its record and sum shapes, its error sums, its provisional
 clauses, and its contracts themselves. A pledge in one module can sign a contract
 declared in another, fulfill its pledges, and break it.
+
+### Program steps
+
+`import std.process` brings in `Command`, with `program: String`,
+`args: List<String>`, `stdout_path: String`, and `stderr_path: String`, and
+`ExitError`, either `Exited(code: Int)`, `Signaled(number: Int)`, or
+`SpawnFailed(reason: String)`. `Process.run(command)` is a builtin namespace
+operation like `Store`, callable from a pledge, clause, or remedy. It runs on
+the caller's instance so cancellation and the result share that instance's
+lifetime, with no helper contract to sign or host binding to supply.
+
+The program is a path, relative to the process cwd when it is not absolute.
+There is no PATH search or shell expansion, and `args` excludes the program
+name. The child inherits the environment and reads stdin from `/dev/null`.
+An empty output path inherits that stream, any other path is opened for append,
+created with mode 0644 subject to the host's umask. Exit zero returns `Ok(Unit)`,
+a nonzero exit returns `Exited`, a terminating signal returns `Signaled`, and
+a launch failure returns `SpawnFailed` with a readable reason. Interior NUL
+bytes in the program, arguments, or output paths are launch failures.
+
+The runtime uses `posix_spawn` and its file actions, so it runs no application
+code in a forked child of the threaded host. The closefrom spawn action closes
+every descriptor above 2, including descriptors another host thread opened.
+This helper requires the GNU closefrom spawn action available in glibc 2.34
+and later. The wait retries `waitpid` on EINTR and polls the caller's atomic
+cancellation flag every 10 ms, which a breaker publishes before taking the
+instance lock. Cancellation sends SIGTERM, allows a 200 ms grace period, then
+sends SIGKILL if the child remains alive. The result names the signal that
+ended the child, and every launched child is reaped before the helper returns.
 
 ---
 
@@ -1114,11 +1155,22 @@ the runtime's own table behind `dsn`, and `Contract.resume(dsn, key)` stands it
 back up, in this process or another. The row carries the vows, the latches and
 their error payloads, the transactional fates, and a versioned workflow column
 holding the eligibility stamps, the lapses, the `Ok` values the remedies will
-need, the signal payloads, and the remedy progress, so a deadline keeps counting
+need, the signal payloads, the retry attempts and due times, and the remedy
+progress, so a deadline keeps counting
 across the park and a break after a resume runs the same remedies in the same
 order it would have before. An automatically Broken instance can park after
 its open episodes have rolled back and resumes Broken with its errors. An
 explicit `break()` reclaims the heap, so that instance can no longer park.
+
+A retry wait and a fulfillment driving a remedy pass can park with their
+futures still waiting. Park is a snapshot: the original operations continue
+if the host carries on, and their waits return their ordinary status and
+value. In particular, a failing pledge that triggered remedies still returns
+its `Err` with `GEAS_OK` after the original pass finishes. A shutdown joins
+workers, so the host wakes its own sleep callbacks. A running pledge body,
+a queued fulfillment, and a completed but unwaited receipt still refuse a
+park. Workflow blob version 3 adds the retry fields; version 2 and rows
+without a workflow blob retain their earlier resume rules.
 
 Steps are at least once. A host that dies in the middle of a step resumes from
 its last park with that pledge still pending and runs it again, so a step body

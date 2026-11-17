@@ -1,0 +1,190 @@
+/** geas_attrs: the declared settings of a contract, read from the runtime
+ *  before sign or from a signed instance. A setting is a host knob the module
+ *  carries, a queue name or a program path, and it stays readable after the
+ *  instance breaks. Every name and value is copied out, so what this answers
+ *  outlives the runtime. */
+
+@paradigm procedural
+
+@import std.string
+@import std.vector
+@import geas
+@import geas_value
+
+foreign "C" {
+    func gd_instance_attr(c: int64, item: *raw char, key: *raw char, out: *raw int64) -> int64
+    func geas_attr_count(rt: int64, contract: *raw char, count: *raw int64) -> int32
+    func geas_attr_at(rt: int64, contract: *raw char, i: int64, out: *raw AttrInfo) -> int32
+    func geas_contract_attr(rt: int64, contract: *raw char, key: *raw char, out: *raw int64) -> int32
+    func geas_item_attr(rt: int64, contract: *raw char, item: *raw char, key: *raw char, out: *raw int64) -> int32
+    func geas_instance_attr_count(c: int64, count: *raw int64) -> int32
+    func geas_instance_attr_at(c: int64, i: int64, out: *raw AttrInfo) -> int32
+}
+
+/** GeasAttrInfo, borrowed pointers carried as handles */
+struct AttrInfo {
+    owner: uint32,
+    owner_name: int64,
+    key: int64,
+    value: int64,
+}
+
+/** One declared setting, copied out of the runtime */
+export struct Attr {
+    owner: string,
+    owner_name: string,
+    key: string,
+    value: *Value,
+}
+
+// Decodes a borrowed value, Unit for NULL
+func value_or_unit(h: int64) -> (*Value, error) {
+    if h == 0 {
+        return (value_unit(), error {})
+    }
+    return value_decode(h)
+}
+
+// Takes ownership of a pointer the caller hands over to be freed
+owning func adopt<T>(p: *T) -> *T {
+    return p
+}
+
+func owner_kind(owner: int64) -> string {
+    kinds: string[5] = ["contract", "subcontract", "pledge", "signal", "remedy"]
+    if owner >= 0 && owner < 5 {
+        return kinds[owner]
+    }
+    return "unknown"
+}
+
+// Copies one GeasAttrInfo out of the runtime
+func attr_of(row: AttrInfo) -> (*Attr, error) {
+    value, e := value_or_unit(row.value)
+    attr: *Attr = alloc(Attr {
+        owner: owner_kind(int64(row.owner)),
+        owner_name: c_string(row.owner_name),
+        key: c_string(row.key),
+        value: value,
+    })
+    return (attr, e)
+}
+
+/** Every declared setting of a contract, available before sign */
+export func runtime_attrs(rt: Runtime, contract: string) -> (*Vector<*Attr>, error) {
+    attrs: *Vector<*Attr> = alloc(vec_new())
+    p: *raw char = cbuf(contract)
+    count: *raw int64 = alloc_bytes(8)
+    row: *raw AttrInfo = alloc_bytes(sizeof(AttrInfo))
+    defer free(p)
+    defer free(count)
+    defer free(row)
+    count[0] = 0
+    st: int32 = geas_attr_count(rt.h, p, count)
+    if st != int32(0) {
+        return (attrs, status_error(int64(st), "geas_attr_count " + contract))
+    }
+    mut i: int64 = 0
+    while i < count[0] {
+        ast: int32 = geas_attr_at(rt.h, p, i, row)
+        if ast != int32(0) {
+            return (attrs, status_error(int64(ast), "geas_attr_at " + contract))
+        }
+        attr, e := attr_of(row[0])
+        vec_push(attrs, attr)
+        if e.exists() {
+            return (attrs, e)
+        }
+        i = i + 1
+    }
+    return (attrs, error {})
+}
+
+/** Every declared setting the instance carries */
+export func contract_attrs(c: Contract) -> (*Vector<*Attr>, error) {
+    attrs: *Vector<*Attr> = alloc(vec_new())
+    count: *raw int64 = alloc_bytes(8)
+    row: *raw AttrInfo = alloc_bytes(sizeof(AttrInfo))
+    defer free(count)
+    defer free(row)
+    count[0] = 0
+    st: int32 = geas_instance_attr_count(c.h, count)
+    if st != int32(0) {
+        return (attrs, status_error(int64(st), "geas_instance_attr_count"))
+    }
+    mut i: int64 = 0
+    while i < count[0] {
+        ast: int32 = geas_instance_attr_at(c.h, i, row)
+        if ast != int32(0) {
+            return (attrs, status_error(int64(ast), "geas_instance_attr_at"))
+        }
+        attr, e := attr_of(row[0])
+        vec_push(attrs, attr)
+        if e.exists() {
+            return (attrs, e)
+        }
+        i = i + 1
+    }
+    return (attrs, error {})
+}
+
+/** One setting by key, item "" for the contract itself. The bool is false
+ *  when the owner carries no such key */
+export func runtime_attr(rt: Runtime, contract: string, item: string, key: string) -> (*Value, bool, error) {
+    p: *raw char = cbuf(contract)
+    k: *raw char = cbuf(key)
+    it: *raw char = cbuf(item)
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    mut st: int32 = int32(0)
+    if str_len(item) == 0 {
+        st = geas_contract_attr(rt.h, p, k, out)
+    } else {
+        st = geas_item_attr(rt.h, p, it, k, out)
+    }
+    h: int64 = out[0]
+    free(p)
+    free(k)
+    free(it)
+    free(out)
+    return found_attr(int64(st), h, "attribute " + contract + " " + key)
+}
+
+/** One setting of the instance by key, item "" for the contract itself */
+export func contract_attr(c: Contract, item: string, key: string) -> (*Value, bool, error) {
+    k: *raw char = cbuf(key)
+    it: *raw char = cbuf(item)
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    st: int64 = gd_instance_attr(c.h, it, k, out)
+    h: int64 = out[0]
+    free(k)
+    free(it)
+    free(out)
+    return found_attr(st, h, "instance attribute " + key)
+}
+
+func found_attr(st: int64, h: int64, what: string) -> (*Value, bool, error) {
+    if st != 0 {
+        return (value_unit(), false, status_error(st, what))
+    }
+    if h == 0 {
+        return (value_unit(), false, error {})
+    }
+    v, e := value_decode(h)
+    return (v, true, e)
+}
+
+/** Frees what geas_attrs or geas_instance_attrs answered */
+export func attrs_free(attrs: *Vector<*Attr>) -> void {
+    while vec_len(attrs) > 0 {
+        attr: *Attr = vec_take(attrs, vec_len(attrs) - 1)
+        free((*attr).owner_name)
+        free((*attr).key)
+        value_free((*attr).value)
+        free(attr)
+    }
+    owned: *Vector<*Attr> = adopt(attrs)
+    vec_free(owned)
+    free(owned)
+}

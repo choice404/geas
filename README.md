@@ -128,11 +128,11 @@ Next to it on the roadmap is amendment. A contract at version 2 carries an `amen
 
 The compiler reads a `.geas` file, checks it, and emits plain C that includes one header, `geas/geas.h`, then links it with cc into a loadable `.geas.so`. That module carries its contracts as descriptor tables: every pledge and its signature, every vow and its default, the requirements as a table the checker and the runtime both read so the two can never disagree, and the workflow tail, the terms, the signals, the remedies, and the contract term.
 
-The runtime registers those descriptors in the iname table, a queryable registry of every contract and pledge signature with the type signature hash and the version baked into each mangled name, so a version mismatch is a descriptive error at link time instead of silent corruption at run time. A C program, or anything that can load a C library, looks up a contract, signs it, binds the steps it owns, fulfills pledges, delivers signals, and reads the partial surface, all through a handful of runtime calls; `geas_pledge_bind_user` lets one body carry a user pointer for many bindings, futures poll and release with `geas_future_poll` and `geas_future_release`, and a running body sees a pending break through `geas_cancel_requested`.
+The runtime registers those descriptors in the iname table, a queryable registry of every contract and pledge signature with the type signature hash and the version baked into each mangled name, so a version mismatch is a descriptive error at link time instead of silent corruption at run time. A C program, or anything that can load a C library, looks up a contract, signs it, binds the steps it owns, fulfills pledges, delivers signals, and reads the partial surface, all through a handful of runtime calls; `geas_pledge_bind_user` lets one body carry a user pointer for many bindings, futures poll and release with `geas_future_poll` and `geas_future_release`, a running body sees a pending break through `geas_cancel_requested`, and `geas_runtime_set_event_hook` observes every lifecycle transition in order after the instance lock is released.
 
 Time runs through a clock the host can replace. The runtime keeps no timer thread of its own; every call that touches an instance checks its deadlines first, and a host that wants a lapse the moment it falls due calls `geas_runtime_tick` from whatever scheduler it already has. Swap the clock for a fake one and a three day deadline becomes a number a test moves, which is exactly how the saga gates run.
 
-An instance's durable state fits in one store row: the vows, the latches, the error payloads, the transactional fates, and a versioned workflow column holding eligibility stamps, lapses, the `Ok` values the remedies will need, signal payloads, and remedy progress. `geas_instance_park` writes it, `geas_instance_resume` stands it back up in another process, and a deadline keeps counting from where it started across the park, since the clock is wall time.
+An instance's durable state fits in one store row: the vows, the latches, the error payloads, the transactional fates, and a versioned workflow column holding eligibility stamps, lapses, the `Ok` values the remedies will need, signal payloads, retry progress, and remedy progress. `geas_instance_park` writes it, including during a pledge retry wait or a remedy pass, `geas_instance_resume` stands it back up in another process with the same retry budget and only the remedies not yet started, and a deadline keeps counting from where it started across the park, since the clock is wall time.
 
 ## Next to other tools
 
@@ -216,7 +216,7 @@ make tsan-workflow
 
 ### Two languages, one contract
 
-The runtime binds from anything that can load a C library, and the repository proves it with Python. `interop/python/geas.py` is a ctypes binding written against [docs/abi.md](docs/abi.md) alone, no header parsed, no code generated. `interop/python/demo_payment.py` walks the payment contract: it binds a Python function over the abstract `charge` pledge, signs with a vow override, drives the partial, fulfilled, and broken paths, and takes a by reference argument back through the write back. `interop/python/demo_saga.py` points the runtime at a Python clock, binds Python callables over the saga's steps, and watches the remedies run.
+The runtime binds from anything that can load a C library, and the repository proves it with Python and dusk. `interop/python/geas.py` is a ctypes binding written against [docs/abi.md](docs/abi.md) alone, no header parsed, no code generated, and exposes event delivery through `rt.on_event`. `interop/python/demo_payment.py` walks the payment contract: it binds a Python function over the abstract `charge` pledge, signs with a vow override, drives the partial, fulfilled, and broken paths, and takes a by reference argument back through the write back. `interop/python/demo_saga.py` points the runtime at a Python clock, binds Python callables over the saga's steps, and watches the remedies run. `interop/dusk` carries the same host surface through a thin C shim, with pledge and remedy handlers bound onto the runtime's worker threads.
 
 ```sh
 make test-python
@@ -258,6 +258,15 @@ make test-store test-store-txn test-store-python
 ```sh
 make test-supervisor test-supervisor-watch
 ```
+
+### Standard library
+
+Import the modules under `lib/std` where a contract needs them:
+
+- `std.math`, `std.strings`, and `std.collections` provide arithmetic, string, and list helpers.
+- `std.errors` carries common error sums, and `std.traits` carries provisional clauses.
+- `std.store` provides the `Store` operations over a contract's schemas.
+- `std.process` provides `Process.run(Command)`, a program step returning `Result<Unit, ExitError>`, with output redirection and cancellation. The program is a path, arguments stay separate, and exit zero is `Ok`.
 
 ### A standalone program
 

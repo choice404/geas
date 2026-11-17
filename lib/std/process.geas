@@ -1,0 +1,15 @@
+// Process.run runs on the caller's instance, so its wait observes that
+// instance's cancellation and its Result belongs to the caller
+
+ExitError is either Exited(code: Int) or Signaled(number: Int) or SpawnFailed(reason: String)
+
+record Command {
+    program: String
+    args: List<String>
+    stdout_path: String
+    stderr_path: String
+}
+
+// Process.run(command: Command) -> Result<Unit, ExitError>
+// The program is a path, args excludes argv[0], and no shell is involved
+// Empty output paths inherit the stream; other paths are opened for append

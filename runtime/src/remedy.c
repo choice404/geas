@@ -117,6 +117,7 @@ static void remedy_fail(GeasContract* c, uint32_t r, GeasStatus st,
     if (st == GEAS_OK && out && geas_rt_is_err(out) && out->as.box) {
         f->remedy_err[r] = *(const GeasValue*)out->as.box;
     }
+    geas_rt_event(c, GEAS_EVENT_REMEDY_FAILED, c->desc->remedies[r].name, c->state);
 }
 
 /* Waits one retry delay of a remedy with the instance lock released, never
@@ -133,9 +134,10 @@ static int remedy_wait(GeasContract* c, const GeasTermDesc* t, int64_t started,
     if (left <= 0) return 0;
     if ((uint64_t)left < delay) delay = (uint64_t)left;
     if (delay > 0) {
-        pthread_mutex_unlock(&c->mu);
+        geas_rt_unlock(c);
         geas_rt_sleep(c->rt, delay);
-        pthread_mutex_lock(&c->mu);
+        geas_rt_lock(c);
+        if (c->flow.break_pending) geas_rt_event_cancel(c);
     }
     return geas_rt_now(c->rt) < at;
 }
@@ -160,7 +162,10 @@ static GeasStatus call_remedy(GeasContract* c, uint32_t remedy,
 static void run_remedy(GeasContract* c, uint32_t r) {
     const GeasRemedyDesc* rd = &c->desc->remedies[r];
     GeasFlow* f = &c->flow;
+    /* The host clock runs between remedies, before this one starts */
+    int64_t started = geas_rt_now(c->rt);
     f->remedy_state[r] = REMEDY_RUNNING;
+    geas_rt_event(c, GEAS_EVENT_REMEDY_STARTED, rd->name, c->state);
     if (rd->has_param && !f->pledge_ok_set[rd->target]) {
         remedy_fail(c, r, GEAS_ERR_TYPE, NULL, 0);
         return;
@@ -169,15 +174,16 @@ static void run_remedy(GeasContract* c, uint32_t r) {
     memset(&arg, 0, sizeof(arg));
     if (rd->has_param) arg = f->pledge_ok[rd->target];
     size_t nargs = rd->has_param ? 1 : 0;
-    int64_t started = geas_rt_now(c->rt);
     for (uint32_t attempt = 0;; attempt++) {
         GeasValue out;
         memset(&out, 0, sizeof(out));
         f->in_thunk++;
         GeasStatus st = call_remedy(c, r, nargs ? &arg : NULL, nargs, &out);
         f->in_thunk--;
+        if (f->break_pending) geas_rt_event_cancel(c);
         if (st == GEAS_OK && !geas_rt_is_err(&out)) {
             f->remedy_state[r] = REMEDY_DONE;
+            geas_rt_event(c, GEAS_EVENT_REMEDY_DONE, rd->name, c->state);
             return;
         }
         if (!geas_rt_retryable(&rd->terms, attempt, st, &out)) {
@@ -224,9 +230,14 @@ void geas_rt_remedy_drive(GeasContract* c) {
         int32_t r = next_remedy(c);
         if (r < 0) break;
         run_remedy(c, (uint32_t)r);
+        if (next_remedy(c) < 0) break;
+        /* Completed remedies form a snapshot boundary between bodies
+         * The pass keeps ownership while another thread takes the lock */
+        geas_rt_unlock(c);
+        geas_rt_lock(c);
     }
     f->remedy_active = 0;
-    c->state = GEAS_BROKEN;
+    geas_rt_set_state(c, GEAS_BROKEN);
     if (f->break_pending) geas_rt_reclaim(c);
     pthread_cond_broadcast(&f->remedy_cv);
 }
@@ -249,18 +260,19 @@ GeasStatus geas_rt_break_explicit(GeasContract* c) {
         while (f->remedy_active) pthread_cond_wait(&f->remedy_cv, &c->mu);
         return GEAS_OK;
     }
+    geas_rt_event_cancel(c);
     /* Inside a body the heap is in use: the frame the body reads lives on
      * it. Nothing is reclaimed here, whatever the state; the break is noted
      * and the fulfillment the body runs in carries it out when it ends. */
     if (f->in_thunk > 0) {
         if (c->state == GEAS_SIGNED || c->state == GEAS_PARTIAL) {
-            c->state = geas_rt_break_state(c);
+            geas_rt_set_state(c, geas_rt_break_state(c));
         }
         if (!f->reclaimed) f->break_pending = 1;
         return GEAS_OK;
     }
     if (c->state == GEAS_SIGNED || c->state == GEAS_PARTIAL) {
-        c->state = geas_rt_break_state(c);
+        geas_rt_set_state(c, geas_rt_break_state(c));
     }
     if (c->state == GEAS_REMEDYING) {
         f->break_pending = 1;
@@ -283,11 +295,11 @@ static int32_t find_remedy(const GeasContractDesc* d, const char* name) {
 GeasRemedyState geas_remedy_state(GeasContract* c, const char* remedy_name) {
     if (!c || !remedy_name) return GEAS_REMEDY_IDLE;
     GeasRemedyState state = GEAS_REMEDY_IDLE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     int32_t r = find_remedy(c->desc, remedy_name);
     if (r >= 0) state = (GeasRemedyState)c->flow.remedy_state[r];
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return state;
 }
 
@@ -306,45 +318,45 @@ static int32_t failed_remedy(const GeasContract* c, size_t i) {
 size_t geas_partial_remedy_count(GeasContract* c) {
     if (!c) return 0;
     size_t n = 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     for (uint32_t r = 0; r < c->desc->nremedies; r++) {
         if (c->flow.remedy_state[r] == REMEDY_FAILED) n++;
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return n;
 }
 
 const char* geas_partial_remedy_name(GeasContract* c, size_t i) {
     if (!c) return NULL;
     const char* name = NULL;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     int32_t r = failed_remedy(c, i);
     if (r >= 0) name = c->desc->remedies[r].name;
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return name;
 }
 
 GeasStatus geas_partial_remedy_status(GeasContract* c, size_t i) {
     if (!c) return GEAS_ERR_TYPE;
     GeasStatus st = GEAS_ERR_NAME;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     int32_t r = failed_remedy(c, i);
     if (r >= 0) st = (GeasStatus)c->flow.remedy_status[r];
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
 int geas_partial_remedy_lapsed(GeasContract* c, size_t i) {
     if (!c) return 0;
     int lapsed = 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     int32_t r = failed_remedy(c, i);
     if (r >= 0) lapsed = c->flow.remedy_lapsed[r];
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return lapsed;
 }
 
@@ -352,13 +364,13 @@ GeasStatus geas_partial_remedy_error(GeasContract* c, size_t i,
                                    const GeasValue** err) {
     if (!c) return GEAS_ERR_TYPE;
     GeasStatus st = GEAS_ERR_NAME;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     int32_t r = failed_remedy(c, i);
     if (r >= 0) {
         if (err) *err = &c->flow.remedy_err[r];
         st = GEAS_OK;
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }

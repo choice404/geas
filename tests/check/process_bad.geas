@@ -1,0 +1,19 @@
+import std.process
+
+contract BadProcessStep {
+    pledge wrong_type() -> Result<Unit, ExitError> {
+        return Process.run("/bin/true")
+    }
+
+    pledge wrong_count() -> Result<Unit, ExitError> {
+        return Process.run()
+    }
+
+    pledge unknown_operation(command: Command) -> Result<Unit, ExitError> {
+        return Process.launch(command)
+    }
+
+    pledge named_argument(command: Command) -> Result<Unit, ExitError> {
+        return Process.run(command: command)
+    }
+}

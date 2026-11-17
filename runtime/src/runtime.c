@@ -128,10 +128,10 @@ static struct GeasFuture* future_new(GeasContract* c) {
     }
     f->c = c;
     f->refcnt = 1;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     f->next = c->futures;
     c->futures = f;
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return f;
 }
 
@@ -189,23 +189,23 @@ static void future_forfeit(struct GeasFuture* f) {
 GeasStatus geas_future_release(GeasFuture* fut) {
     if (!fut) return GEAS_ERR_TYPE;
     GeasContract* c = fut->c;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     pthread_mutex_lock(&fut->mu);
     int can_release = __atomic_load_n(&fut->done, __ATOMIC_RELAXED) &&
                       (fut->waited || c->flow.reclaimed);
     pthread_mutex_unlock(&fut->mu);
     if (!can_release) {
-        pthread_mutex_unlock(&c->mu);
+        geas_rt_unlock(c);
         return GEAS_ERR_STATE;
     }
     struct GeasFuture** entry = &c->futures;
     while (*entry && *entry != fut) entry = &(*entry)->next;
     if (!*entry) {
-        pthread_mutex_unlock(&c->mu);
+        geas_rt_unlock(c);
         return GEAS_ERR_STATE;
     }
     *entry = fut->next;
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     future_unref(fut);
     return GEAS_OK;
 }
@@ -1265,7 +1265,7 @@ GeasStatus geas_store_find(GeasContract* c, const GeasSchemaDesc* schema,
                          const GeasValue* key, GeasValue* out) {
     if (!c || !schema || !key || !out) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store && schema->ncols > 0) {
         char* sql = store_sql_select(schema);
@@ -1297,7 +1297,7 @@ GeasStatus geas_store_find(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(cts);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1308,7 +1308,7 @@ GeasStatus geas_store_query_eq(GeasContract* c, const GeasSchemaDesc* schema,
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || col >= schema->ncols) return GEAS_ERR_TYPE;
     if (value->ty != schema->cols[col].ty) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_select_eq(schema, col);
@@ -1325,7 +1325,7 @@ GeasStatus geas_store_query_eq(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(cts);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1341,7 +1341,7 @@ GeasStatus geas_store_query_where(GeasContract* c, const GeasSchemaDesc* schema,
         if (!terms[i].value) return GEAS_ERR_TYPE;
         if (terms[i].value->ty != schema->cols[terms[i].col].ty) return GEAS_ERR_TYPE;
     }
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_select_where(schema, terms, nterms);
@@ -1361,7 +1361,7 @@ GeasStatus geas_store_query_where(GeasContract* c, const GeasSchemaDesc* schema,
         free(cts);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1380,7 +1380,7 @@ GeasStatus geas_store_query_ordered(GeasContract* c, const GeasSchemaDesc* schem
     }
     if (order_col >= schema->ncols) return GEAS_ERR_TYPE;
     if (order_desc > 1) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_select_ordered(schema, terms, nterms, order_col, order_desc);
@@ -1400,7 +1400,7 @@ GeasStatus geas_store_query_ordered(GeasContract* c, const GeasSchemaDesc* schem
         free(cts);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1421,7 +1421,7 @@ GeasStatus geas_store_query_page(GeasContract* c, const GeasSchemaDesc* schema,
     if (order_desc > 1) return GEAS_ERR_TYPE;
     if (limit->ty != GEAS_TY_INT) return GEAS_ERR_TYPE;
     if (limit->as.i < 0) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_select_page(schema, terms, nterms, order_col, order_desc);
@@ -1442,7 +1442,7 @@ GeasStatus geas_store_query_page(GeasContract* c, const GeasSchemaDesc* schema,
         free(cts);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1478,7 +1478,7 @@ GeasStatus geas_store_select(GeasContract* c, const GeasSchemaDesc* schema,
         if (limit->as.i < 0) return GEAS_ERR_TYPE;
         if (total_terms == UINT32_MAX) return GEAS_ERR_TYPE;
     }
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_select_any(schema, terms, group_lens, ngroups, total_terms,
@@ -1500,7 +1500,7 @@ GeasStatus geas_store_select(GeasContract* c, const GeasSchemaDesc* schema,
         free(cts);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1523,7 +1523,7 @@ GeasStatus geas_store_count_any(GeasContract* c, const GeasSchemaDesc* schema,
         if (!terms[i].value) return GEAS_ERR_TYPE;
         if (terms[i].value->ty != schema->cols[terms[i].col].ty) return GEAS_ERR_TYPE;
     }
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_count_any(schema, terms, group_lens, ngroups, total_terms);
@@ -1565,7 +1565,7 @@ GeasStatus geas_store_count_any(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1591,7 +1591,7 @@ GeasStatus geas_store_sum_any(GeasContract* c, const GeasSchemaDesc* schema,
     if (sum_col >= schema->ncols) return GEAS_ERR_TYPE;
     uint32_t sum_ty = schema->cols[sum_col].ty;
     if (sum_ty != GEAS_TY_INT && sum_ty != GEAS_TY_FLOAT) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_sum_any(schema, sum_col, terms, group_lens, ngroups,
@@ -1638,7 +1638,7 @@ GeasStatus geas_store_sum_any(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1668,7 +1668,7 @@ GeasStatus geas_store_agg_any(GeasContract* c, const GeasSchemaDesc* schema,
     if (agg == GEAS_AGG_AVG && agg_ty != GEAS_TY_INT && agg_ty != GEAS_TY_FLOAT) {
         return GEAS_ERR_TYPE;
     }
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = NULL;
@@ -1760,7 +1760,7 @@ GeasStatus geas_store_agg_any(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1776,7 +1776,7 @@ GeasStatus geas_store_count_where(GeasContract* c, const GeasSchemaDesc* schema,
         if (!terms[i].value) return GEAS_ERR_TYPE;
         if (terms[i].value->ty != schema->cols[terms[i].col].ty) return GEAS_ERR_TYPE;
     }
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_count_where(schema, terms, nterms);
@@ -1818,7 +1818,7 @@ GeasStatus geas_store_count_where(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1837,7 +1837,7 @@ GeasStatus geas_store_sum_where(GeasContract* c, const GeasSchemaDesc* schema,
     if (sum_col >= schema->ncols) return GEAS_ERR_TYPE;
     uint32_t sum_ty = schema->cols[sum_col].ty;
     if (sum_ty != GEAS_TY_INT && sum_ty != GEAS_TY_FLOAT) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_sum_where(schema, sum_col, terms, nterms);
@@ -1883,7 +1883,7 @@ GeasStatus geas_store_sum_where(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1893,7 +1893,7 @@ GeasStatus geas_store_insert(GeasContract* c, const GeasSchemaDesc* schema,
     memset(out, 0, sizeof(*out));
     const GeasValue* params = store_row_params(schema, row);
     if (!params) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_insert(schema);
@@ -1905,7 +1905,7 @@ GeasStatus geas_store_insert(GeasContract* c, const GeasSchemaDesc* schema,
         }
         free(sql);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1916,7 +1916,7 @@ GeasStatus geas_store_update(GeasContract* c, const GeasSchemaDesc* schema,
     memset(out, 0, sizeof(*out));
     const GeasValue* rowp = store_row_params(schema, row);
     if (!rowp) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store) {
         char* sql = store_sql_update(schema);
@@ -1934,7 +1934,7 @@ GeasStatus geas_store_update(GeasContract* c, const GeasSchemaDesc* schema,
         free(sql);
         free(params);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -1942,7 +1942,7 @@ GeasStatus geas_store_delete(GeasContract* c, const GeasSchemaDesc* schema,
                            const GeasValue* key, GeasValue* out) {
     if (!c || !schema || !key || !out) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
     if (c->store && schema->ncols > 0) {
         size_t need = 48 + strlen(schema->table) + strlen(schema->cols[0].name);
@@ -1957,7 +1957,7 @@ GeasStatus geas_store_delete(GeasContract* c, const GeasSchemaDesc* schema,
         }
         free(sql);
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -2070,6 +2070,7 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
         c->shape_hash = desc->shape_hash;
         c->signed_at = now / 1000;
         geas_rt_flow_start(c, now);
+        geas_rt_lock(c);
         pthread_mutex_lock(&rt->lock);
         if (rt->ninstances == GEAS_MAX_INSTANCES) {
             st = GEAS_ERR_OOM;
@@ -2077,6 +2078,11 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
             rt->instances[rt->ninstances++] = c;
         }
         pthread_mutex_unlock(&rt->lock);
+        if (st == GEAS_OK) {
+            *out = c;
+            geas_rt_event(c, GEAS_EVENT_STATE_CHANGED, NULL, GEAS_UNSIGNED);
+        }
+        geas_rt_unlock(c);
     }
     if (st != GEAS_OK) {
         instance_discard(c);
@@ -2089,10 +2095,10 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
 GeasContractState geas_contract_state(const GeasContract* c) {
     if (!c) return GEAS_UNSIGNED;
     GeasContract* mc = (GeasContract*)c;
-    pthread_mutex_lock(&mc->mu);
+    geas_rt_lock(mc);
     geas_rt_tick(mc);
     GeasContractState s = mc->state;
-    pthread_mutex_unlock(&mc->mu);
+    geas_rt_unlock(mc);
     return s;
 }
 
@@ -2121,16 +2127,24 @@ GeasRuntime* geas_instance_runtime(const GeasContract* c) {
  * exactly two outcomes: delivered before the break, or GEAS_ERR_STATE. */
 GeasStatus geas_contract_break(GeasContract* c) {
     if (!c) return GEAS_ERR_TYPE;
+    if (geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
+    __atomic_add_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
     geas_rt_request_cancel(c);
-    pthread_mutex_lock(&c->mu);
-    if (c->state == GEAS_UNSIGNED) {
-        pthread_mutex_unlock(&c->mu);
-        return GEAS_ERR_STATE;
+    geas_rt_lock(c);
+    GeasStatus st = GEAS_OK;
+    if (geas_rt_events_blocked(c)) {
+        /* Delivery carries a request accepted before its reservation */
+    } else if (c->state == GEAS_UNSIGNED) {
+        st = GEAS_ERR_STATE;
+    } else {
+        st = geas_rt_break_explicit(c);
     }
-    /* The remedies a break owes run first, see remedy.c; the reclaim below
-     * is where every road through it ends. */
-    GeasStatus st = geas_rt_break_explicit(c);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
+    /* Depart before reading the status so a later failure goes to stderr
+     * The total atomic order pairs this read with the delivery owner's report */
+    __atomic_sub_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
+    GeasStatus deferred = __atomic_load_n(&c->event_cancel_status, __ATOMIC_SEQ_CST);
+    if (st == GEAS_OK && deferred != GEAS_OK) st = deferred;
     return st;
 }
 
@@ -2153,15 +2167,17 @@ void geas_rt_request_cancel(GeasContract* c) {
 void geas_rt_note_cancel(GeasContract* c) {
     if (!__atomic_load_n(&c->cancel_requested, __ATOMIC_ACQUIRE)) return;
     if (c->flow.reclaimed) return;
+    geas_rt_event_cancel(c);
     c->flow.break_pending = 1;
     if (c->state == GEAS_SIGNED || c->state == GEAS_PARTIAL) {
-        c->state = GEAS_REMEDYING;
+        geas_rt_set_state(c, GEAS_REMEDYING);
     }
 }
 
 /* The reclaim itself, what an explicit break has always done once nothing is
  * left to run. Under the instance lock. */
 void geas_rt_reclaim(GeasContract* c) {
+    int is_reclaimed = c->flow.reclaimed;
     for (struct GeasFuture* f = c->futures; f; f = f->next) {
         future_forfeit(f);
     }
@@ -2189,9 +2205,10 @@ void geas_rt_reclaim(GeasContract* c) {
         c->store = NULL;
     }
     contract_free_owned(c);
-    c->state = GEAS_BROKEN;
+    geas_rt_set_state(c, GEAS_BROKEN);
     c->flow.reclaimed = 1;
     c->flow.break_pending = 0;
+    if (!is_reclaimed) geas_rt_event(c, GEAS_EVENT_RECLAIMED, NULL, c->state);
 }
 
 /* ---- the partial result ---- */
@@ -2239,34 +2256,34 @@ static size_t partial_scan(const GeasContract* c, GeasItemState k, size_t want,
 
 size_t geas_partial_count(GeasContract* c, GeasItemState k) {
     if (!c) return 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     size_t n = partial_scan(c, k, 0, NULL);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return n;
 }
 
 const char* geas_partial_name(GeasContract* c, GeasItemState k, size_t i) {
     if (!c) return NULL;
     const char* name = NULL;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     partial_scan(c, k, i, &name);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return name;
 }
 
 size_t geas_partial_nerrors(GeasContract* c) {
     if (!c) return 0;
     size_t n = 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     if (c->pledge_state) {
         for (uint32_t i = 0; i < c->desc->npledges; i++) {
             if (c->pledge_state[i] == PLEDGE_BROKEN) n++;
         }
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return n;
 }
 
@@ -2274,7 +2291,7 @@ GeasStatus geas_partial_error(GeasContract* c, size_t i,
                             const char** pledge_name, const GeasValue** err) {
     if (!c) return GEAS_ERR_TYPE;
     GeasStatus st = GEAS_ERR_NAME;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     if (c->pledge_state) {
         size_t n = 0;
@@ -2289,7 +2306,7 @@ GeasStatus geas_partial_error(GeasContract* c, size_t i,
             n++;
         }
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -2301,13 +2318,13 @@ GeasStatus geas_partial_error(GeasContract* c, size_t i,
  * ownership rule every instance pointer follows. */
 const GeasValue* geas_vow_ref(GeasContract* c, const char* name) {
     if (!c || !name) return NULL;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     const GeasValue* v = NULL;
     if (c->vow_vals) {
         const GeasVowDesc* vd = find_vow_desc(c->desc, name);
         if (vd) v = &c->vow_vals[vd - c->desc->vows];
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return v;
 }
 
@@ -2685,10 +2702,10 @@ void geas_rt_eval_policy(GeasContract* c) {
         ful = default_line(c, PLEDGE_FULFILLED);
         par = default_partial(c);
     }
-    if (brk) c->state = geas_rt_break_state(c);
-    else if (ful) c->state = GEAS_FULFILLED;
-    else if (par) c->state = GEAS_PARTIAL;
-    else c->state = GEAS_SIGNED;
+    if (brk) geas_rt_set_state(c, geas_rt_break_state(c));
+    else if (ful) geas_rt_set_state(c, GEAS_FULFILLED);
+    else if (par) geas_rt_set_state(c, GEAS_PARTIAL);
+    else geas_rt_set_state(c, GEAS_SIGNED);
 }
 
 /* The per-pledge latch, the grammar's law: fulfilled on the first Ok, broken
@@ -2702,6 +2719,7 @@ static void latch_pledge(GeasContract* c, uint32_t pidx, const GeasValue* out) {
     if (out->ty == GEAS_TY_RESULT && out->tag == 1) {
         c->pledge_state[pidx] = PLEDGE_BROKEN;
         if (out->as.box) c->pledge_err[pidx] = *(const GeasValue*)out->as.box;
+        geas_rt_event(c, GEAS_EVENT_LATCH_BROKEN, c->desc->pledges[pidx].name, c->state);
     } else {
         /* The Ok value rides beside the latch too: the payload of the Ok
          * when the body answered a Result, the value itself otherwise. */
@@ -2712,6 +2730,7 @@ static void latch_pledge(GeasContract* c, uint32_t pidx, const GeasValue* out) {
         }
         c->pledge_state[pidx] = PLEDGE_FULFILLED;
         geas_rt_latched(c, pidx, ok);
+        geas_rt_event(c, GEAS_EVENT_LATCH_FULFILLED, c->desc->pledges[pidx].name, c->state);
     }
 }
 
@@ -2819,16 +2838,17 @@ static GeasStatus txn_after(GeasContract* c, uint32_t pidx, GeasStatus st,
  * that is already Broken. */
 static void run_task(struct GeasFuture* f) {
     GeasContract* c = f->c;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     GeasStatus gate = geas_rt_fulfill_gate(c, f->pidx);
     if (gate == GEAS_OK) gate = txn_before(c, f->pidx);
     if (gate != GEAS_OK) {
         future_finish(f, gate, NULL);
-        pthread_mutex_unlock(&c->mu);
+        geas_rt_unlock(c);
         return;
     }
     GeasValue out;
     memset(&out, 0, sizeof(out));
+    f->is_running = 1;
     GeasStatus st = run_bound_attempts(c, f->pidx, f->fn, f->frame,
                                         f->frame_nargs, &out);
     geas_rt_note_cancel(c);
@@ -2838,8 +2858,9 @@ static void run_task(struct GeasFuture* f) {
     }
     st = txn_after(c, f->pidx, st, &out);
     geas_rt_remedy_drive(c);
+    f->is_running = 0;
     future_finish(f, st, &out);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
 }
 
 /* Starts a fulfillment: validate and copy in on the caller's thread, under
@@ -2854,14 +2875,14 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
     if (!f) return NULL;
     GeasStatus st = GEAS_OK;
     int ready = 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     do {
         if ((nargs > 0 && !args) || (nrefs > 0 && !refs)) {
             st = GEAS_ERR_TYPE;
             break;
         }
-        if (!geas_rt_live(c)) {
+        if (!geas_rt_live(c) || geas_rt_events_blocked(c)) {
             st = GEAS_ERR_STATE;
             break;
         }
@@ -2898,7 +2919,7 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
         f->ref_slots = (nrefs > 0 && frame) ? frame + nargs : NULL;
         ready = 1;
     } while (0);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     if (!ready) {
         future_finish(f, st, NULL);
         return f;
@@ -2931,9 +2952,9 @@ GeasStatus geas_future_wait(GeasFuture* f, GeasValue* out) {
      * order stays instance above future, and only tried: a waiter never
      * queues behind an instance. A busy lock means a body is running or
      * another caller is in, and whoever holds it ticks on its own way. */
-    if (pthread_mutex_trylock(&f->c->mu) == 0) {
+    if (geas_rt_trylock(f->c) == 0) {
         geas_rt_tick(f->c);
-        pthread_mutex_unlock(&f->c->mu);
+        geas_rt_unlock(f->c);
     }
     pthread_mutex_lock(&f->mu);
     while (!__atomic_load_n(&f->done, __ATOMIC_RELAXED)) {
@@ -2969,14 +2990,14 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
                                 const GeasRef* refs, size_t nrefs,
                                 GeasValue* out) {
     GeasStatus st = GEAS_OK;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     do {
         if ((nargs > 0 && !args) || (nrefs > 0 && !refs)) {
             st = GEAS_ERR_TYPE;
             break;
         }
-        if (!geas_rt_live(c)) {
+        if (!geas_rt_live(c) || geas_rt_events_blocked(c)) {
             st = GEAS_ERR_STATE;
             break;
         }
@@ -3033,7 +3054,7 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
         }
         *out = res;
     } while (0);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -3094,7 +3115,7 @@ GeasStatus geas_partial_value(GeasContract* c, GeasContract* owner,
     if (!c || !owner || !out) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
 
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     GeasStatus st = GEAS_OK;
     GeasValue record;
@@ -3122,7 +3143,7 @@ GeasStatus geas_partial_value(GeasContract* c, GeasContract* owner,
         }
     }
     if (st != GEAS_OK) memset(out, 0, sizeof(*out));
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -3284,27 +3305,28 @@ static GeasValue park_int_param(int64_t i) {
 
 GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key) {
     if (!c || !dsn || !key) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     GeasStatus st = GEAS_OK;
-    if (c->state == GEAS_UNSIGNED) st = GEAS_ERR_STATE;
+    if (c->state == GEAS_UNSIGNED || geas_rt_event_park_blocked(c)) st = GEAS_ERR_STATE;
     /* An explicit break reclaimed the instance heap the vows and payloads
      * live on; the latches still read, but there is nothing left to write
      * down. An automatic break keeps that heap on purpose and parks fine. */
     if (st == GEAS_OK && c->desc->npledges > 0 && !c->owned) st = GEAS_ERR_STATE;
     if (st == GEAS_OK && c->flow.reclaimed) st = GEAS_ERR_STATE;
-    /* A fulfillment waiting out a retry delay released the lock but is a
-     * walk in the air all the same. */
-    if (st == GEAS_OK && c->flow.retrying > 0) st = GEAS_ERR_STATE;
-    /* A park is a state between walks: an unwaited future is a walk still in
-     * the air, and an open transactional episode holds buffered writes no row
-     * can carry. Both refuse rather than guess. */
+    /* A pledge body has no durable checkpoint until its outcome lands
+     * Remedy bodies record their running state and resume as failed */
+    if (c->flow.in_thunk > 0 && !c->flow.remedy_active) st = GEAS_ERR_STATE;
+    /* Retry waits and the outcome driving a remedy pass have durable state
+     * Other unwaited receipts and open transactions still refuse a park */
     if (st == GEAS_OK) {
         for (struct GeasFuture* f = c->futures; f; f = f->next) {
             pthread_mutex_lock(&f->mu);
             int has_waited = f->waited;
             pthread_mutex_unlock(&f->mu);
-            if (!has_waited) {
+            int can_snapshot = f->is_running &&
+                (c->flow.retry_waiting[f->pidx] || c->flow.remedy_active);
+            if (!has_waited && !can_snapshot) {
                 st = GEAS_ERR_STATE;
                 break;
             }
@@ -3359,7 +3381,8 @@ GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key)
     free(vows_buf);
     free(errs_buf);
     free(flow_buf);
-    pthread_mutex_unlock(&c->mu);
+    if (st == GEAS_OK) geas_rt_event(c, GEAS_EVENT_PARKED, NULL, c->state);
+    geas_rt_unlock(c);
     return st;
 }
 
@@ -3561,6 +3584,7 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
     if (st == GEAS_OK) {
         c->state = (GeasContractState)rstate;
         c->shape_hash = desc->shape_hash;
+        geas_rt_lock(c);
         pthread_mutex_lock(&rt->lock);
         if (rt->ninstances == GEAS_MAX_INSTANCES) {
             st = GEAS_ERR_OOM;
@@ -3568,6 +3592,11 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
             rt->instances[rt->ninstances++] = c;
         }
         pthread_mutex_unlock(&rt->lock);
+        if (st == GEAS_OK) {
+            *out = c;
+            geas_rt_event(c, GEAS_EVENT_RESUMED, NULL, c->state);
+        }
+        geas_rt_unlock(c);
     }
     park_arena_free(arena);
     if (st != GEAS_OK) {
@@ -3662,10 +3691,10 @@ uint8_t* geas_bytes(GeasContract* c, uint64_t n) {
     if (!c) return NULL;
     GeasBlock* b = malloc(sizeof(GeasBlock) + n);
     if (!b) return NULL;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     b->next = c->owned;
     c->owned = b;
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return (uint8_t*)(b + 1);
 }
 

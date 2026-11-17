@@ -1,0 +1,5 @@
+contract MissingProcessModule {
+    pledge run() -> Unit {
+        Process.run("/bin/true")
+    }
+}

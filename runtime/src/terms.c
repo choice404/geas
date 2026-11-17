@@ -22,8 +22,8 @@
  * functions are read under the runtime lock and called with it released, the
  * instance lock possibly held, which is the instance above runtime order the
  * rest of the runtime already keeps. The sleep is the one call made with no
- * lock at all: geas_rt_run_attempts drops the instance lock around it, counts
- * itself in flow.retrying so a park knows a walk is in the air, and trusts
+ * lock at all: geas_rt_run_attempts drops the instance lock around it, records
+ * the attempts and due time so a park can snapshot the wait, and trusts
  * nothing about the instance when it takes the lock back. */
 
 #include "runtime_internal.h"
@@ -209,8 +209,12 @@ GeasStatus geas_rt_flow_init(GeasContract* c) {
         f->pledge_ok = calloc(d->npledges, sizeof(GeasValue));
         f->pledge_ok_set = calloc(d->npledges, sizeof(uint8_t));
         f->latch_seq = calloc(d->npledges, sizeof(uint32_t));
+        f->retry_attempts = calloc(d->npledges, sizeof(uint32_t));
+        f->retry_due_ms = calloc(d->npledges, sizeof(int64_t));
+        f->retry_waiting = calloc(d->npledges, sizeof(uint8_t));
         if (!f->pledge_eligible_ms || !f->pledge_lapsed || !f->pledge_ok ||
-            !f->pledge_ok_set || !f->latch_seq) {
+            !f->pledge_ok_set || !f->latch_seq || !f->retry_attempts ||
+            !f->retry_due_ms || !f->retry_waiting) {
             return GEAS_ERR_OOM;
         }
         for (uint32_t i = 0; i < d->npledges; i++) f->pledge_eligible_ms[i] = -1;
@@ -246,6 +250,9 @@ void geas_rt_flow_free(GeasContract* c) {
     free(f->pledge_ok);
     free(f->pledge_ok_set);
     free(f->latch_seq);
+    free(f->retry_attempts);
+    free(f->retry_due_ms);
+    free(f->retry_waiting);
     free(f->remedy_state);
     free(f->remedy_status);
     free(f->remedy_lapsed);
@@ -376,6 +383,7 @@ static Due next_due(const GeasContract* c) {
 static void lapse_pledge(GeasContract* c, uint32_t i) {
     c->pledge_state[i] = PLEDGE_BROKEN;
     c->flow.pledge_lapsed[i] = 1;
+    geas_rt_event(c, GEAS_EVENT_LATCH_LAPSED, c->desc->pledges[i].name, c->state);
 }
 
 static void lapse_sub(GeasContract* c, uint32_t s) {
@@ -396,7 +404,8 @@ static void lapse_due(GeasContract* c, int64_t now) {
         if (due.kind == DUE_NONE || due.at > now) return;
         if (due.kind == DUE_TERM) {
             c->flow.term_lapsed = 1;
-            c->state = geas_rt_break_state(c);
+            geas_rt_event(c, GEAS_EVENT_TERM_LAPSED, NULL, c->state);
+            geas_rt_set_state(c, geas_rt_break_state(c));
             return;
         }
         if (due.kind == DUE_PLEDGE) lapse_pledge(c, due.index);
@@ -413,7 +422,7 @@ static int has_clock(const GeasContractDesc* d) {
 }
 
 void geas_rt_tick(GeasContract* c) {
-    if (c->flow.in_thunk > 0) return;
+    if (c->flow.in_thunk > 0 || geas_rt_event_read(c)) return;
     if (geas_rt_live(c) && has_clock(c->desc)) {
         lapse_due(c, geas_rt_now(c->rt));
     }
@@ -422,9 +431,9 @@ void geas_rt_tick(GeasContract* c) {
 
 GeasStatus geas_instance_tick(GeasContract* c) {
     if (!c) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return GEAS_OK;
 }
 
@@ -450,7 +459,7 @@ GeasStatus geas_runtime_tick(GeasRuntime* rt) {
 int geas_partial_lapsed(GeasContract* c, const char* name) {
     if (!c || !name) return 0;
     int lapsed = 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     const GeasContractDesc* d = c->desc;
     const GeasPledgeDesc* p = geas_rt_find_pledge(d, name);
@@ -466,23 +475,23 @@ int geas_partial_lapsed(GeasContract* c, const char* name) {
             }
         }
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return lapsed;
 }
 
 int geas_contract_term_lapsed(GeasContract* c) {
     if (!c) return 0;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     int lapsed = c->flow.term_lapsed;
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return lapsed;
 }
 
 /* ---- the fulfillment gate ---- */
 
 GeasStatus geas_rt_fulfill_gate(GeasContract* c, uint32_t pidx) {
-    if (geas_cancel_requested(c)) return GEAS_ERR_STATE;
+    if (geas_cancel_requested(c) || geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
     geas_rt_tick(c);
     if (!geas_rt_live(c)) return GEAS_ERR_STATE;
     if (pidx >= c->desc->npledges) return GEAS_ERR_NAME;
@@ -492,6 +501,9 @@ GeasStatus geas_rt_fulfill_gate(GeasContract* c, uint32_t pidx) {
     /* Too late: the deadline latched it broken, and the body never runs for
      * a pledge the clock already decided. */
     if (c->flow.pledge_lapsed[pidx]) return GEAS_ERR_STATE;
+    if (c->flow.retry_waiting[pidx]) return GEAS_ERR_STATE;
+    if (c->flow.retry_attempts[pidx] &&
+        geas_rt_now(c->rt) < c->flow.retry_due_ms[pidx]) return GEAS_ERR_STATE;
     return GEAS_OK;
 }
 
@@ -543,6 +555,7 @@ static uint64_t delay_to_deadline(const GeasContract* c, uint32_t pidx,
  * lapses here. Under the instance lock. */
 static int attempt_may_continue(GeasContract* c, uint32_t pidx) {
     if (geas_cancel_requested(c)) return 0;
+    if (geas_rt_events_blocked(c)) return 0;
     if (c->flow.reclaimed) return 0;
     geas_rt_tick(c);
     if (c->flow.reclaimed || !geas_rt_live(c)) return 0;
@@ -579,10 +592,10 @@ static GeasStatus run_body(GeasContract* c, GeasPledgeFn fn, GeasValue* frame,
  * back, so the frame is not touched again until attempt_may_continue says
  * the heap it lives on is still there. A fulfillment cut off that way
  * reports GEAS_ERR_STATE, the same answer a late or broken call gets. */
-GeasStatus geas_rt_run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
+static GeasStatus run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
                               GeasValue* frame, size_t nargs, GeasValue* out) {
     const GeasTermDesc* t = geas_rt_pledge_term(c->desc, pidx);
-    for (uint32_t attempt = 0;; attempt++) {
+    for (uint32_t attempt = c->flow.retry_attempts[pidx];; attempt++) {
         GeasStatus st = run_body(c, fn, frame, nargs, out);
         /* A body that broke its own instance left nothing to latch. */
         if (c->flow.reclaimed) return GEAS_ERR_STATE;
@@ -594,12 +607,26 @@ GeasStatus geas_rt_run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
         uint64_t delay = delay_to_deadline(c, pidx, t,
                                            geas_rt_retry_delay(t, attempt));
         if (delay > 0) {
+            c->flow.retry_attempts[pidx] = attempt + 1;
+            c->flow.retry_due_ms[pidx] = deadline_at(geas_rt_now(c->rt), delay);
+            c->flow.retry_waiting[pidx] = 1;
             c->flow.retrying++;
-            pthread_mutex_unlock(&c->mu);
+            geas_rt_unlock(c);
             retry_sleep(c, delay);
-            pthread_mutex_lock(&c->mu);
+            geas_rt_lock(c);
             c->flow.retrying--;
+            c->flow.retry_waiting[pidx] = 0;
         }
         if (!attempt_may_continue(c, pidx)) return GEAS_ERR_STATE;
     }
+}
+
+/* Retry progress belongs to this fulfillment until it ends
+ * A parked copy retains the progress recorded at its snapshot */
+GeasStatus geas_rt_run_attempts(GeasContract* c, uint32_t pidx, GeasPledgeFn fn,
+                              GeasValue* frame, size_t nargs, GeasValue* out) {
+    GeasStatus status = run_attempts(c, pidx, fn, frame, nargs, out);
+    c->flow.retry_attempts[pidx] = 0;
+    c->flow.retry_due_ms[pidx] = 0;
+    return status;
 }

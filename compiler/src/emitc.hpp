@@ -271,6 +271,7 @@ private:
     std::string genValueArray(const std::vector<CValue>& values);
     CValue genLen(const CallExpr& call);
     CValue genBytesConversion(const CallExpr& call, std::string_view name);
+    CValue genProcessCall(const CallExpr& call);
     CValue genBytesIndex(const CValue& base, const CValue& position);
     CValue genClauseCall(const ClauseDecl& clause, const CallExpr& call);
     CValue genSign(const Expr& expr, const CallExpr& call, const ContractDecl& contract);

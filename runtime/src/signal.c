@@ -38,7 +38,7 @@ static GeasStatus build_payload(GeasContract* c, const GeasValue* args,
  * *pidx receives the signal's index on GEAS_OK. Under the instance lock. */
 static GeasStatus signal_gate(GeasContract* c, const char* name, size_t nargs,
                              uint32_t* pidx) {
-    if (!geas_rt_live(c)) return GEAS_ERR_STATE;
+    if (!geas_rt_live(c) || geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
     const GeasPledgeDesc* p = geas_rt_find_pledge(c->desc, name);
     if (!p) return GEAS_ERR_NAME;
     uint32_t i = (uint32_t)(p - c->desc->pledges);
@@ -54,7 +54,7 @@ GeasStatus geas_signal(GeasContract* c, const char* name,
                      const GeasValue* args, size_t nargs) {
     if (!c || !name) return GEAS_ERR_TYPE;
     if (nargs > 0 && !args) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     uint32_t pidx = 0;
     GeasStatus st = signal_gate(c, name, nargs, &pidx);
@@ -65,18 +65,20 @@ GeasStatus geas_signal(GeasContract* c, const char* name,
         if (st == GEAS_OK) {
             c->pledge_state[pidx] = PLEDGE_FULFILLED;
             geas_rt_latched(c, pidx, &payload);
+            geas_rt_event(c, GEAS_EVENT_LATCH_FULFILLED, c->desc->pledges[pidx].name, c->state);
+            geas_rt_event(c, GEAS_EVENT_SIGNAL_DELIVERED, c->desc->pledges[pidx].name, c->state);
             geas_rt_eval_policy(c);
             geas_rt_remedy_drive(c);
         }
     }
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }
 
 GeasStatus geas_signal_payload(GeasContract* c, const char* name,
                              const GeasValue** out) {
     if (!c || !name || !out) return GEAS_ERR_TYPE;
-    pthread_mutex_lock(&c->mu);
+    geas_rt_lock(c);
     geas_rt_tick(c);
     GeasStatus st = GEAS_OK;
     const GeasPledgeDesc* p = geas_rt_find_pledge(c->desc, name);
@@ -85,6 +87,6 @@ GeasStatus geas_signal_payload(GeasContract* c, const char* name,
     else if (!geas_rt_is_signal(c->desc, i)) st = GEAS_ERR_TYPE;
     else if (!c->flow.pledge_ok_set[i]) st = GEAS_ERR_STATE;
     else *out = &c->flow.pledge_ok[i];
-    pthread_mutex_unlock(&c->mu);
+    geas_rt_unlock(c);
     return st;
 }

@@ -1,0 +1,742 @@
+/** geas: the dusk binding to libgeasrt, the Geas runtime. It loads compiled
+ *  contract modules, binds dusk functions over abstract pledges and remedies,
+ *  signs and resumes instances, fulfills pledges synchronously or through a
+ *  future, delivers signals, drives the clock and the tick, and reads the
+ *  partial surface, the lapses, and the remedies. geas_attrs reads the
+ *  declared settings.
+ *
+ *  The host links libgeasrt by its SONAME, -l:libgeasrt.so.0, so build with
+ *  LIBRARY_PATH and run with LD_LIBRARY_PATH pointing at the directory that
+ *  holds it. Naming the versioned file keeps an unversioned libgeasrt.so in a
+ *  system directory, which the linker searches before LIBRARY_PATH, from
+ *  answering for it. No dlopen happens; the module's own NEEDED entry names
+ *  the same file, so both resolve to one runtime.
+ *  geas_shim.c holds the GeasValue union, the trampolines, and the calls that
+ *  take a NULL; every other runtime call is declared here and called as is.
+ *  Handles cross as int64 bit patterns, the opaque handle convention, since a
+ *  dusk pointer cannot be compared against NULL and an int64 rides the same
+ *  register a C pointer does on x86_64, the one target dusk emits.
+ *
+ *  Threads. A bound handler and a clock run on whatever thread the runtime
+ *  calls them from, a pool worker for a pledge body, the breaking thread for
+ *  a remedy, any thread for the clock, the way a dusk C callback always runs
+ *  on its caller's thread. The dusk heap is thread safe there, the collector
+ *  is not, so a handler or clock must not mint a collector<T> or force a
+ *  collection. The state a handler reads is shared with the host thread: the
+ *  host thread is blocked inside the runtime while a synchronous fulfillment
+ *  runs, which orders the two, and a host that fulfills through futures and
+ *  reads that state before the wait guards it with a std.concurrent Mutex.
+ *
+ *  Handlers. geas_bind takes a state pointer and a top level function, or a
+ *  lambda that captures nothing, of shape (Contract, args, *S) -> (*Value,
+ *  error). A dusk closure that captures a local cannot outlive its frame, so
+ *  state rides the pointer rather than a capture. The state must live until
+ *  geas_shutdown. The args frame is freed when the handler returns, so copy
+ *  what you keep. The handler's answer is copied onto the instance and freed.
+ *  A handler error is printed to stderr and reported to the runtime as
+ *  GEAS_ERR_TYPE, the thunk produced no value.
+ *
+ *  Errors are values: a non OK status comes back as an error whose message
+ *  ends in the status name, and geas_is_status tells which one it was. */
+
+@paradigm procedural
+
+@import std.string
+@import std.vector
+@import geas_value
+@link ":libgeasrt.so.0"
+@csource "geas_shim.c"
+
+foreign "C" {
+    func gd_copy(dst: *void, src: *void, n: int64) -> void
+    func gd_values_new(n: int64) -> int64
+    func gd_values_free(arr: int64, n: int64) -> void
+    func gd_slot_free(slot: int64) -> void
+    func gd_value_at(arr: int64, i: int64) -> int64
+    func geas_value_deep_copy(c: int64, src: int64, dst: int64) -> int32
+    func gd_vows_new(n: int64) -> int64
+    func gd_vow_slot(vows: int64, i: int64, name: *raw char) -> int64
+    func gd_vows_free(vows: int64, n: int64) -> void
+    func gd_bind(rt: int64, name: *raw char, slot: *void, size: int64, fn: (*void, int64, int64, int64, int64, int64) -> int64) -> int64
+    func gd_set_clock(rt: int64, slot: *void, size: int64, now: (*void, int64) -> int64, sleep: (*void, int64, int64) -> void) -> int64
+    func gd_default_clock(rt: int64) -> int64
+    func gd_runtime_release(rt: int64) -> void
+    func gd_fulfill_sync(c: int64, pledge: *raw char, args: int64, nargs: int64, out: int64) -> int64
+    func gd_fulfill(c: int64, pledge: *raw char, args: int64, nargs: int64) -> int64
+    func geas_runtime_init(cfg: *raw RuntimeConfig, out: *raw int64) -> int32
+    func geas_runtime_shutdown(rt: int64) -> void
+    func geas_module_load(rt: int64, path: *raw char) -> int32
+    func geas_runtime_freeze(rt: int64) -> int32
+    func geas_runtime_tick(rt: int64) -> int32
+    func geas_contract_sign(rt: int64, name: *raw char, vows: int64, n: int64, hash: uint64, out: *raw int64) -> int32
+    func geas_instance_resume(rt: int64, dsn: *raw char, key: *raw char, hash: uint64, out: *raw int64) -> int32
+    func geas_instance_park(c: int64, dsn: *raw char, key: *raw char) -> int32
+    func geas_contract_state(c: int64) -> int32
+    func geas_contract_hash(c: int64) -> uint64
+    func geas_contract_signed_at(c: int64) -> int64
+    func geas_contract_break(c: int64) -> int32
+    func geas_cancel_requested(c: int64) -> int32
+    func geas_instance_tick(c: int64) -> int32
+    func geas_vow_ref(c: int64, name: *raw char) -> int64
+    func geas_future_wait(f: int64, out: int64) -> int32
+    func geas_future_poll(f: int64, ready: *raw int32) -> int32
+    func geas_future_release(f: int64) -> int32
+    func geas_signal(c: int64, name: *raw char, args: int64, n: int64) -> int32
+    func geas_signal_payload(c: int64, name: *raw char, out: *raw int64) -> int32
+    func geas_partial_count(c: int64, kind: int32) -> int64
+    func geas_partial_name(c: int64, kind: int32, i: int64) -> int64
+    func geas_partial_nerrors(c: int64) -> int64
+    func geas_partial_error(c: int64, i: int64, name: *raw int64, err: *raw int64) -> int32
+    func geas_partial_lapsed(c: int64, name: *raw char) -> int32
+    func geas_contract_term_lapsed(c: int64) -> int32
+    func geas_remedy_state(c: int64, name: *raw char) -> int32
+    func geas_partial_remedy_count(c: int64) -> int64
+    func geas_partial_remedy_name(c: int64, i: int64) -> int64
+    func geas_partial_remedy_status(c: int64, i: int64) -> int32
+    func geas_partial_remedy_lapsed(c: int64, i: int64) -> int32
+    func geas_partial_remedy_error(c: int64, i: int64, err: *raw int64) -> int32
+}
+
+/** GeasRuntimeConfig, eight bytes, handshake_ms reserved at zero */
+struct RuntimeConfig {
+    max_threads: uint32,
+    handshake_ms: uint32,
+}
+
+/** One loaded runtime and its worker pool */
+export struct Runtime {
+    h: int64,
+}
+
+/** One signed instance. Inside a handler it is the instance the body runs on */
+export struct Contract {
+    h: int64,
+}
+
+/** One fulfillment's receipt, delivered exactly once by geas_wait */
+export struct Receipt {
+    h: int64,
+}
+
+/** A vow override at sign, the value handed over to the list that holds it */
+export struct Vow {
+    name: string,
+    value: *Value,
+}
+
+/** The partial surface read in one pass: item names by state, and each
+ *  broken pledge with its Err payload, Unit for a lapse */
+export struct Partial {
+    pending: *Vector<string>,
+    fulfilled: *Vector<string>,
+    broken: *Vector<string>,
+    error_names: *Vector<string>,
+    errors: *Vector<*Value>,
+}
+
+/** A remedy that failed: the last attempt's status, whether its deadline
+ *  stopped it, and its Err payload, which exists only when has_err is true */
+export struct RemedyFailure {
+    name: string,
+    status: int64,
+    is_lapsed: bool,
+    has_err: bool,
+    err: *Value,
+}
+
+// The bytes a pledge binding hands the shim: the handler and its state
+struct PledgeSlot<S> {
+    state: *S,
+    run: (Contract, *Vector<*Value>, *S) -> (*Value, error),
+}
+
+// The bytes a clock hands the shim
+struct ClockSlot<S> {
+    state: *S,
+    now: (*S) -> int64,
+    sleep: (*S, int64) -> void,
+}
+
+/* ---- statuses and states ---- */
+
+/** Runtime statuses, docs/abi.md, Status codes */
+export func status_ok() -> int64 { return 0 }
+export func status_err_state() -> int64 { return 1 }
+export func status_err_type() -> int64 { return 2 }
+export func status_err_version() -> int64 { return 3 }
+export func status_err_unbound() -> int64 { return 4 }
+export func status_err_name() -> int64 { return 5 }
+export func status_err_oom() -> int64 { return 7 }
+export func status_err_load() -> int64 { return 8 }
+export func status_err_store() -> int64 { return 10 }
+
+/** Instance states */
+export func state_unsigned() -> int64 { return 0 }
+export func state_signed() -> int64 { return 1 }
+export func state_fulfilled() -> int64 { return 2 }
+export func state_partial() -> int64 { return 3 }
+export func state_broken() -> int64 { return 4 }
+export func state_remedying() -> int64 { return 5 }
+
+/** Remedy states */
+export func remedy_idle() -> int64 { return 0 }
+export func remedy_running() -> int64 { return 1 }
+export func remedy_done() -> int64 { return 2 }
+export func remedy_failed() -> int64 { return 3 }
+
+/** Kinds of partial list */
+export func item_pending() -> int64 { return 0 }
+export func item_fulfilled() -> int64 { return 1 }
+export func item_broken() -> int64 { return 2 }
+
+/** The lowercase spelling of an instance state */
+export func state_name(state: int64) -> string {
+    names: string[6] = ["unsigned", "signed", "fulfilled", "partial", "broken", "remedying"]
+    if state >= 0 && state < 6 {
+        return names[state]
+    }
+    return "unknown"
+}
+
+/** The canonical name of a status, GEAS_ERR_STATE and the rest */
+export func status_name(status: int64) -> string {
+    names: string[11] = ["GEAS_OK", "GEAS_ERR_STATE", "GEAS_ERR_TYPE", "GEAS_ERR_VERSION", "GEAS_ERR_UNBOUND", "GEAS_ERR_NAME", "GEAS_ERR_DEADLOCK", "GEAS_ERR_OOM", "GEAS_ERR_LOAD", "GEAS_ERR_NET", "GEAS_ERR_STORE"]
+    if status >= 0 && status < 11 {
+        return names[status]
+    }
+    return "status " + int_to_string(status)
+}
+
+/** Turns a status into an error naming what failed, empty for GEAS_OK */
+export func status_error(status: int64, what: string) -> error {
+    if status == 0 {
+        return error {}
+    }
+    return error { message: what + ": " + status_name(status) }
+}
+
+/** Whether e is the error a call reported with this status */
+export func is_status(e: error, status: int64) -> bool {
+    if !e.exists() {
+        return status == 0
+    }
+    return ends_with(e.toString(), ": " + status_name(status))
+}
+
+/* ---- the runtime ---- */
+
+/** Starts a runtime with max_threads workers, 0 for the default four */
+export func runtime_start(max_threads: int64) -> (Runtime, error) {
+    cfg: *raw RuntimeConfig = alloc_bytes(sizeof(RuntimeConfig))
+    cfg[0] = RuntimeConfig { max_threads: uint32(max_threads), handshake_ms: uint32(0) }
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    st: int32 = geas_runtime_init(cfg, out)
+    rt: Runtime = Runtime { h: out[0] }
+    free(cfg)
+    free(out)
+    return (rt, status_error(int64(st), "geas_runtime_init"))
+}
+
+/** Loads a compiled contract module, the path handed to dlopen as it stands */
+export func runtime_load(rt: Runtime, path: string) -> error {
+    p: *raw char = cbuf(path)
+    st: int32 = geas_module_load(rt.h, p)
+    free(p)
+    return status_error(int64(st), "geas_module_load " + path)
+}
+
+/** Latches registration shut, after which load and bind are GEAS_ERR_STATE */
+export func runtime_freeze(rt: Runtime) -> error {
+    return status_error(int64(geas_runtime_freeze(rt.h)), "geas_runtime_freeze")
+}
+
+/** Applies every passed deadline over every instance */
+export func runtime_tick(rt: Runtime) -> error {
+    return status_error(int64(geas_runtime_tick(rt.h)), "geas_runtime_tick")
+}
+
+/** Shuts the runtime down, then frees every binding and clock it held */
+export func runtime_shutdown(rt: Runtime) -> void {
+    geas_runtime_shutdown(rt.h)
+    gd_runtime_release(rt.h)
+}
+
+/* ---- binding handlers ---- */
+
+/** Binds a pledge or a remedy, "Contract.name" or its mangled symbol, to a
+ *  dusk handler over state. Bind before sign; an instance keeps the binding
+ *  it was signed with */
+export func runtime_bind<S>(rt: Runtime, name: string, state: *S, run: (Contract, *Vector<*Value>, *S) -> (*Value, error)) -> error {
+    slot: PledgeSlot<S> = PledgeSlot { state: state, run: run }
+    bytes: *raw PledgeSlot<S> = alloc_bytes(sizeof(slot))
+    bytes[0] = slot
+    p: *raw char = cbuf(name)
+    st: int64 = gd_bind(rt.h, p, bytes, sizeof(slot), lambda (user: *void, size: int64, ctx: int64, args: int64, nargs: int64, out: int64) -> int64 {
+        copy: *raw PledgeSlot<S> = alloc_bytes(size)
+        gd_copy(copy, user, size)
+        held: PledgeSlot<S> = copy[0]
+        free(copy)
+        return run_pledge(held, ctx, args, nargs, out)
+    })
+    free(p)
+    free(bytes)
+    return status_error(st, "geas_pledge_bind_user " + name)
+}
+
+// Decodes the frame, runs the handler, and copies its answer onto the instance
+func run_pledge<S>(slot: PledgeSlot<S>, ctx: int64, args: int64, nargs: int64, out: int64) -> int64 {
+    frame, e := decode_frame(args, nargs)
+    if e.exists() {
+        values_free(frame)
+        printerr("[geas] bound handler frame: " + e.toString())
+        return status_err_type()
+    }
+    answer, he := slot.run(Contract { h: ctx }, frame, slot.state)
+    values_free(frame)
+    if he.exists() {
+        printerr("[geas] bound handler failed: " + he.toString())
+        return status_err_type()
+    }
+    st: int64 = deliver(ctx, answer, out)
+    value_free(answer)
+    return st
+}
+
+// Encodes the answer on the C heap and deep copies it onto the instance
+func deliver(ctx: int64, answer: *Value, out: int64) -> int64 {
+    arr: int64 = gd_values_new(1)
+    if arr == 0 {
+        return status_err_oom()
+    }
+    e := value_encode(arr, answer)
+    if e.exists() {
+        gd_values_free(arr, 1)
+        printerr("[geas] bound handler answer: " + e.toString())
+        return status_err_type()
+    }
+    st: int64 = int64(geas_value_deep_copy(ctx, arr, out))
+    gd_values_free(arr, 1)
+    return st
+}
+
+/** Points the runtime at a dusk clock: now answers wall milliseconds and
+ *  sleep waits out a retry delay. Both run on any runtime thread, possibly
+ *  under an instance lock, so they must not call back into the runtime.
+ *  Set it before signing; state must live until geas_shutdown */
+export func runtime_set_clock<S>(rt: Runtime, state: *S, now: (*S) -> int64, sleep: (*S, int64) -> void) -> error {
+    slot: ClockSlot<S> = ClockSlot { state: state, now: now, sleep: sleep }
+    bytes: *raw ClockSlot<S> = alloc_bytes(sizeof(slot))
+    bytes[0] = slot
+    st: int64 = gd_set_clock(rt.h, bytes, sizeof(slot), lambda (user: *void, size: int64) -> int64 {
+        copy: *raw ClockSlot<S> = alloc_bytes(size)
+        gd_copy(copy, user, size)
+        held: ClockSlot<S> = copy[0]
+        free(copy)
+        return held.now(held.state)
+    }, lambda (user: *void, size: int64, ms: int64) -> void {
+        copy: *raw ClockSlot<S> = alloc_bytes(size)
+        gd_copy(copy, user, size)
+        held: ClockSlot<S> = copy[0]
+        free(copy)
+        held.sleep(held.state, ms)
+    })
+    free(bytes)
+    return status_error(st, "geas_runtime_set_clock")
+}
+
+/** Puts the runtime back on the wall clock and its own sleep */
+export func runtime_default_clock(rt: Runtime) -> error {
+    return status_error(gd_default_clock(rt.h), "geas_runtime_set_clock")
+}
+
+/* ---- signing ---- */
+
+/** Signs a contract over its declared vows and these overrides. The overrides
+ *  are copied at the call and stay the caller's */
+export func contract_sign(rt: Runtime, contract: string, vows: *Vector<Vow>) -> (Contract, error) {
+    return contract_sign_pinned(rt, contract, vows, uint64(0))
+}
+
+/** Signs and refuses with GEAS_ERR_VERSION unless the module's shape hash is hash */
+export func contract_sign_pinned(rt: Runtime, contract: string, vows: *Vector<Vow>, hash: uint64) -> (Contract, error) {
+    n: int64 = vec_len(vows)
+    rows: int64 = gd_vows_new(n)
+    if rows == 0 {
+        return (Contract { h: 0 }, status_error(status_err_oom(), "sign " + contract))
+    }
+    e := encode_vows(rows, vows)
+    if e.exists() {
+        gd_vows_free(rows, n)
+        return (Contract { h: 0 }, e)
+    }
+    p: *raw char = cbuf(contract)
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    st: int32 = geas_contract_sign(rt.h, p, rows, n, hash, out)
+    c: Contract = Contract { h: out[0] }
+    free(p)
+    free(out)
+    gd_vows_free(rows, n)
+    return (c, status_error(int64(st), "geas_contract_sign " + contract))
+}
+
+func encode_vows(rows: int64, vows: *Vector<Vow>) -> error {
+    mut i: int64 = 0
+    while i < vec_len(vows) {
+        vow: Vow = vec_get(vows, i)
+        p: *raw char = cbuf(vow.name)
+        slot: int64 = gd_vow_slot(rows, i, p)
+        free(p)
+        if slot == 0 {
+            return status_error(status_err_oom(), "vow " + vow.name)
+        }
+        e := value_encode(slot, vow.value)
+        if e.exists() {
+            return e
+        }
+        i = i + 1
+    }
+    return error {}
+}
+
+/** Stands a parked instance back up from the store behind dsn. Bind every
+ *  handler on this runtime first; hash 0 skips the shape check */
+export func contract_resume(rt: Runtime, dsn: string, key: string, hash: uint64) -> (Contract, error) {
+    d: *raw char = cbuf(dsn)
+    k: *raw char = cbuf(key)
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    st: int32 = geas_instance_resume(rt.h, d, k, hash, out)
+    c: Contract = Contract { h: out[0] }
+    free(d)
+    free(k)
+    free(out)
+    return (c, status_error(int64(st), "geas_instance_resume " + key))
+}
+
+/** Writes the instance under key into the store behind dsn */
+export func contract_park(c: Contract, dsn: string, key: string) -> error {
+    d: *raw char = cbuf(dsn)
+    k: *raw char = cbuf(key)
+    st: int32 = geas_instance_park(c.h, d, k)
+    free(d)
+    free(k)
+    return status_error(int64(st), "geas_instance_park " + key)
+}
+
+/* ---- the instance ---- */
+
+export func contract_state(c: Contract) -> int64 {
+    return int64(geas_contract_state(c.h))
+}
+
+export func contract_hash(c: Contract) -> uint64 {
+    return geas_contract_hash(c.h)
+}
+
+export func contract_signed_at(c: Contract) -> int64 {
+    return geas_contract_signed_at(c.h)
+}
+
+/** Breaks the instance, cancel included: remedies run for a contract still
+ *  Signed or Partial, then the heap is reclaimed */
+export func contract_break(c: Contract) -> error {
+    return status_error(int64(geas_contract_break(c.h)), "geas_contract_break")
+}
+
+/** Whether a break or a shutdown has been requested, the poll a long body makes */
+export func contract_cancel_requested(c: Contract) -> bool {
+    return geas_cancel_requested(c.h) != int32(0)
+}
+
+/** Applies every passed deadline of this instance */
+export func contract_tick(c: Contract) -> error {
+    return status_error(int64(geas_instance_tick(c.h)), "geas_instance_tick")
+}
+
+/** A vow's value, copied out */
+export func contract_vow(c: Contract, name: string) -> (*Value, error) {
+    p: *raw char = cbuf(name)
+    h: int64 = geas_vow_ref(c.h, p)
+    free(p)
+    if h == 0 {
+        return (value_unit(), status_error(status_err_name(), "vow " + name))
+    }
+    return value_decode(h)
+}
+
+/* ---- fulfillment ---- */
+
+/** Fulfills a pledge and waits, answering its value; a pledge's Err is a
+ *  value, the error exists only when the fulfillment did not run. args is
+ *  consumed, copied onto the instance and freed */
+export func contract_fulfill_sync(c: Contract, pledge: string, args: *Vector<*Value>) -> (*Value, error) {
+    frame: *Vector<*Value> = adopt(args)
+    n: int64 = vec_len(frame)
+    arr, e := values_encode(frame)
+    values_free(frame)
+    if e.exists() {
+        gd_values_free(arr, n)
+        return (value_unit(), e)
+    }
+    out: int64 = gd_values_new(1)
+    p: *raw char = cbuf(pledge)
+    st: int64 = gd_fulfill_sync(c.h, p, arr, n, out)
+    free(p)
+    gd_values_free(arr, n)
+    return take_out(out, st, "fulfill " + pledge)
+}
+
+// Decodes an out slot the runtime filled, then frees the slot alone
+func take_out(out: int64, st: int64, what: string) -> (*Value, error) {
+    if st != 0 {
+        gd_slot_free(out)
+        return (value_unit(), status_error(st, what))
+    }
+    v, e := value_decode(out)
+    gd_slot_free(out)
+    return (v, e)
+}
+
+/** Starts a fulfillment on a pool worker and answers its receipt. args is
+ *  consumed at the call; every fulfillment error arrives through the wait */
+export func contract_fulfill(c: Contract, pledge: string, args: *Vector<*Value>) -> (Receipt, error) {
+    frame: *Vector<*Value> = adopt(args)
+    n: int64 = vec_len(frame)
+    arr, e := values_encode(frame)
+    values_free(frame)
+    if e.exists() {
+        gd_values_free(arr, n)
+        return (Receipt { h: 0 }, e)
+    }
+    p: *raw char = cbuf(pledge)
+    f: int64 = gd_fulfill(c.h, p, arr, n)
+    free(p)
+    gd_values_free(arr, n)
+    if f == 0 {
+        return (Receipt { h: 0 }, status_error(status_err_oom(), "fulfill " + pledge))
+    }
+    return (Receipt { h: f }, error {})
+}
+
+/** Whether the outcome exists, without delivering it */
+export func future_poll(f: Receipt) -> (bool, error) {
+    ready: *raw int32 = alloc_bytes(4)
+    ready[0] = int32(0)
+    st: int32 = geas_future_poll(f.h, ready)
+    is_ready: bool = ready[0] != int32(0)
+    free(ready)
+    return (is_ready, status_error(int64(st), "geas_future_poll"))
+}
+
+/** Blocks until the outcome exists and delivers it, exactly once */
+export func future_wait(f: Receipt) -> (*Value, error) {
+    out: int64 = gd_values_new(1)
+    st: int32 = geas_future_wait(f.h, out)
+    return take_out(out, int64(st), "geas_future_wait")
+}
+
+/** Releases a waited or forfeited receipt; the handle is dead afterwards */
+export func future_release(f: Receipt) -> error {
+    return status_error(int64(geas_future_release(f.h)), "geas_future_release")
+}
+
+/* ---- signals ---- */
+
+/** Delivers a signal. A repeat of one that landed is quietly a no op. args
+ *  is consumed */
+export func contract_signal(c: Contract, name: string, args: *Vector<*Value>) -> error {
+    frame: *Vector<*Value> = adopt(args)
+    n: int64 = vec_len(frame)
+    arr, e := values_encode(frame)
+    values_free(frame)
+    if e.exists() {
+        gd_values_free(arr, n)
+        return e
+    }
+    p: *raw char = cbuf(name)
+    st: int32 = geas_signal(c.h, p, arr, n)
+    free(p)
+    gd_values_free(arr, n)
+    return status_error(int64(st), "signal " + name)
+}
+
+/** The payload a signal was delivered with, copied out */
+export func contract_signal_payload(c: Contract, name: string) -> (*Value, error) {
+    p: *raw char = cbuf(name)
+    out: *raw int64 = alloc_bytes(8)
+    out[0] = 0
+    st: int32 = geas_signal_payload(c.h, p, out)
+    h: int64 = out[0]
+    free(p)
+    free(out)
+    if st != int32(0) {
+        return (value_unit(), status_error(int64(st), "geas_signal_payload " + name))
+    }
+    return value_decode(h)
+}
+
+/* ---- the partial surface ---- */
+
+/** Item names by state and every broken pledge's payload, one read */
+export func contract_partial(c: Contract) -> (*Partial, error) {
+    error_names: *Vector<string> = alloc(vec_new())
+    errors: *Vector<*Value> = alloc(vec_new())
+    part: *Partial = alloc(Partial {
+        pending: item_names(c, item_pending()),
+        fulfilled: item_names(c, item_fulfilled()),
+        broken: item_names(c, item_broken()),
+        error_names: error_names,
+        errors: errors,
+    })
+    e := read_errors(c, part)
+    return (part, e)
+}
+
+func item_names(c: Contract, kind: int64) -> *Vector<string> {
+    names: *Vector<string> = alloc(vec_new())
+    n: int64 = geas_partial_count(c.h, int32(kind))
+    mut i: int64 = 0
+    while i < n {
+        vec_push(names, c_string(geas_partial_name(c.h, int32(kind), i)))
+        i = i + 1
+    }
+    return names
+}
+
+func read_errors(c: Contract, part: *Partial) -> error {
+    name_out: *raw int64 = alloc_bytes(8)
+    err_out: *raw int64 = alloc_bytes(8)
+    defer free(name_out)
+    defer free(err_out)
+    n: int64 = geas_partial_nerrors(c.h)
+    mut i: int64 = 0
+    while i < n {
+        st: int32 = geas_partial_error(c.h, i, name_out, err_out)
+        if st != int32(0) {
+            return status_error(int64(st), "geas_partial_error")
+        }
+        payload, e := decode_or_unit(err_out[0])
+        if e.exists() {
+            value_free(payload)
+            return e
+        }
+        vec_push((*part).error_names, c_string(name_out[0]))
+        vec_push((*part).errors, payload)
+        i = i + 1
+    }
+    return error {}
+}
+
+func decode_or_unit(h: int64) -> (*Value, error) {
+    if h == 0 {
+        return (value_unit(), error {})
+    }
+    return value_decode(h)
+}
+
+/** Frees a partial read and everything in it */
+export func partial_free(part: *Partial) -> void {
+    owned: *Partial = adopt(part)
+    strings_free((*owned).pending)
+    strings_free((*owned).fulfilled)
+    strings_free((*owned).broken)
+    strings_free((*owned).error_names)
+    values_free((*owned).errors)
+    free(owned)
+}
+
+/** Frees a vector of owned strings */
+export func strings_free(names: *Vector<string>) -> void {
+    owned: *Vector<string> = adopt(names)
+    while vec_len(owned) > 0 {
+        free(vec_take(owned, vec_len(owned) - 1))
+    }
+    vec_free(owned)
+    free(owned)
+}
+
+// Takes ownership of a pointer the caller hands over to be freed
+owning func adopt<T>(p: *T) -> *T {
+    return p
+}
+
+/** Whether a pledge, signal, or subcontract broke by its deadline rather than an Err */
+export func contract_lapsed(c: Contract, name: string) -> bool {
+    p: *raw char = cbuf(name)
+    lapsed: int32 = geas_partial_lapsed(c.h, p)
+    free(p)
+    return lapsed != int32(0)
+}
+
+/** Whether the contract's own term is what broke it */
+export func contract_term_lapsed(c: Contract) -> bool {
+    return geas_contract_term_lapsed(c.h) != int32(0)
+}
+
+/** A remedy's progress, one of the remedy_* states, idle for an unknown name */
+export func contract_remedy_state(c: Contract, name: string) -> int64 {
+    p: *raw char = cbuf(name)
+    state: int32 = geas_remedy_state(c.h, p)
+    free(p)
+    return int64(state)
+}
+
+/** Every failed remedy in declaration order */
+export func contract_remedy_failures(c: Contract) -> (*Vector<*RemedyFailure>, error) {
+    failures: *Vector<*RemedyFailure> = alloc(vec_new())
+    err_out: *raw int64 = alloc_bytes(8)
+    defer free(err_out)
+    n: int64 = geas_partial_remedy_count(c.h)
+    mut i: int64 = 0
+    while i < n {
+        err_out[0] = 0
+        est: int32 = geas_partial_remedy_error(c.h, i, err_out)
+        has_err: bool = est == int32(0) && err_out[0] != 0
+        payload, e := decode_or_unit(has_err ? err_out[0] : 0)
+        if e.exists() {
+            value_free(payload)
+            return (failures, e)
+        }
+        vec_push(failures, alloc(RemedyFailure {
+            name: c_string(geas_partial_remedy_name(c.h, i)),
+            status: int64(geas_partial_remedy_status(c.h, i)),
+            is_lapsed: geas_partial_remedy_lapsed(c.h, i) != int32(0),
+            has_err: has_err,
+            err: payload,
+        }))
+        i = i + 1
+    }
+    return (failures, error {})
+}
+
+/** Frees what geas_remedy_failures answered */
+export func remedy_failures_free(failures: *Vector<*RemedyFailure>) -> void {
+    while vec_len(failures) > 0 {
+        failure: *RemedyFailure = vec_take(failures, vec_len(failures) - 1)
+        free((*failure).name)
+        value_free((*failure).err)
+        free(failure)
+    }
+    owned: *Vector<*RemedyFailure> = adopt(failures)
+    vec_free(owned)
+    free(owned)
+}
+
+/* ---- frames ---- */
+
+// Decodes the n argument slots a body was handed
+func decode_frame(args: int64, nargs: int64) -> (*Vector<*Value>, error) {
+    frame: *Vector<*Value> = alloc(vec_new())
+    mut i: int64 = 0
+    while i < nargs {
+        v, e := value_decode(gd_value_at(args, i))
+        vec_push(frame, v)
+        if e.exists() {
+            return (frame, e)
+        }
+        i = i + 1
+    }
+    return (frame, error {})
+}

@@ -4,6 +4,39 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v0.8.3] the watched job
+
+The runtime now lets a host watch an obligation as it moves, park work while a
+retry or remedy pass is still in flight, and launch a program as an ordinary
+contract step. Every transition crosses one ordered event hook after the
+instance lock is released, live progress rides the park row without granting a
+retry or running a remedy twice, and the same host surface reaches Python and
+dusk while the runtime keeps failure on its status paths instead of aborting.
+
+- add `geas_runtime_set_event_hook`, delivering every latch, lapse, signal,
+  remedy start and outcome, state change, term lapse, park, resume, cancel,
+  and reclaim exactly once and in order per instance, on the producing thread
+  after the instance lock is released
+- let an event hook read its instance without mutating it, count an event that
+  cannot be queued, and report that count through `GEAS_EVENT_LOST`, with
+  Python exposing the same stream through `rt.on_event`
+- park during a pledge retry wait with the attempts and due time carried in
+  the row, then resume within the original retry budget, and park during a
+  remedy pass, including from a remedy body or host sleep callback, so the
+  resumed copy runs only remedies not yet started
+- move the workflow blob to version 3 for live retry and remedy progress while
+  continuing to resume rows written in the earlier formats
+- add `std.process`, where `Process.run(Command)` launches an argv list with no
+  shell, returns `Ok` on exit zero, redirects output to files when requested,
+  reports `Exited`, `Signaled`, or `SpawnFailed` otherwise, and terminates and
+  reaps the child on cancel
+- add `skeleton/steps.geas` and the `test-process` gate for program steps in a
+  pledge, clause, and remedy
+- add the dusk host binding under `interop/dusk`, its value and attribute
+  modules, thin C shim, saga demo, and `test-dusk` gate, with host handlers
+  running on the runtime worker threads through `geas_pledge_bind_user`
+- keep every runtime failure on an error or status path, with no call to abort
+
 ## [v0.8.2] the declared setting
 
 Geas carries the settings and the bytes a durable obligation needs without

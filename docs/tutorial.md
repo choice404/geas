@@ -642,7 +642,30 @@ steps in whatever order it likes, and the runtime enforces the terms. Calling
 runs; that is the whole point, the order lives in the contract and not in the
 host's discipline.
 
+Now a step that just launches a program can use `std.process` directly. After
+`import std.process`, put this pledge in the contract, and the host calls it
+like every other step:
+
+```text
+pledge copy(target: String) -> Result<Unit, ExitError> {
+    return Process.run(Command {
+        program: "/bin/cp", args: [target, target + ".copy"],
+        stdout_path: "", stderr_path: ""
+    })
+}
+```
+
+The path runs with those exact arguments, an argument containing spaces stays
+one argument, and the two empty paths inherit stdout and stderr. Exit zero is
+`Ok`, other outcomes are `Exited`, `Signaled`, or `SpawnFailed`. The same call
+works inside a clause or a remedy, so an undo program can live beside its step.
+Breaking the instance requests SIGTERM and then SIGKILL after 200 ms if needed,
+and the runtime waits for the child before it reclaims the instance.
+
 ### From C
+
+For a dusk host, `interop/dusk` carries the same runtime surface through a thin
+C shim, and its demo binds dusk pledge and remedy handlers to the order saga.
 
 `tests/runtime/test_saga.c` drives every road the saga can take. The host binds
 the four abstract steps, `authorize`, `capture`, `ship`, and `refund`, the same

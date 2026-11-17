@@ -26,6 +26,52 @@ typedef struct GeasRuntime  GeasRuntime;
 typedef struct GeasContract GeasContract;
 typedef struct GeasFuture   GeasFuture;
 
+/* ---- events ---- */
+
+typedef enum GeasEventKind {
+    GEAS_EVENT_LATCH_FULFILLED = 1,
+    GEAS_EVENT_LATCH_BROKEN = 2,
+    GEAS_EVENT_LATCH_LAPSED = 3,
+    GEAS_EVENT_SIGNAL_DELIVERED = 4,
+    GEAS_EVENT_REMEDY_STARTED = 5,
+    GEAS_EVENT_REMEDY_DONE = 6,
+    GEAS_EVENT_REMEDY_FAILED = 7,
+    GEAS_EVENT_STATE_CHANGED = 8,
+    GEAS_EVENT_TERM_LAPSED = 9,
+    GEAS_EVENT_PARKED = 10,
+    GEAS_EVENT_RESUMED = 11,
+    GEAS_EVENT_CANCELLED = 12,
+    GEAS_EVENT_RECLAIMED = 13,
+    GEAS_EVENT_LOST = 14
+} GeasEventKind;
+
+/* The prefix through seq is permanent, later fields append after it
+ * size is the producer's byte size, strings and instance borrow runtime life
+ * The event itself is borrowed only for the duration of the callback
+ * LOST carries the dropped count in new_state; delivered seq stays gapless */
+typedef struct GeasEvent {
+    uint32_t size;
+    uint32_t kind;
+    GeasContract* instance;
+    const char* contract;
+    const char* item;
+    uint32_t old_state;
+    uint32_t new_state;
+    int64_t at_ms;
+    uint64_t seq;
+} GeasEvent;
+
+typedef void (*GeasEventFn)(void* user, const GeasEvent* event);
+
+/* May be set or cleared before or after freeze, NULL fn clears
+ * Captured callbacks survive replacement, keep fn and user alive until all
+ * producers finish, including workers joined by shutdown
+ * Delivery holds no runtime locks and reads do not tick during delivery
+ * Fulfill, signal, break and park during callback delivery return GEAS_ERR_STATE
+ * A park during a remedy wait leaves event delivery to its owner
+ * See docs/abi.md Events */
+GeasStatus geas_runtime_set_event_hook(GeasRuntime* rt, GeasEventFn fn, void* user);
+
 /* A borrowed attribute row, valid until runtime shutdown */
 typedef struct GeasAttrInfo {
     uint32_t owner;
@@ -248,6 +294,10 @@ GeasStatus geas_contract_break(GeasContract* c);
  * Break waits for a running body to return and latch before undoing it */
 int geas_cancel_requested(void* ctx);
 
+/* Runs one std.process Command in the caller's thunk frame */
+GeasStatus geas_process_run(void* ctx, const GeasValue* args, size_t nargs,
+                            GeasValue* out);
+
 /* ---- the partial result ---- */
 
 /* The PartialResult surface: which items landed, which are pending, which
@@ -355,14 +405,16 @@ GeasStatus  geas_partial_remedy_error(GeasContract* c, size_t i,
  * is untouched: parking is a write, not an ending, and the caller still
  * holds a live signature it may keep driving or break.
  *
- * A park is a state between walks, never a snapshot of one mid flight: an
- * instance with an unwaited future or an open transactional episode is
- * GEAS_ERR_STATE. An unsigned instance is
+ * A queued or completed but unwaited future and an open transactional
+ * episode refuse with GEAS_ERR_STATE. A retry wait and the fulfillment
+ * driving a remedy pass can park, leaving the original future waiting
+ * for its normal result. An unsigned instance is
  * GEAS_ERR_STATE, and so is one the caller already ended: an explicit break
  * reclaimed the heap the vows and payloads live on, so there is nothing
  * left to write down, while an automatically broken instance keeps that
- * heap and parks with its errors readable. A fulfillment waiting out a retry
- * delay is a walk in the air too and refuses the same way. A Remedying
+ * heap and parks with its errors readable. A retry wait records completed
+ * attempts and its absolute due time; resume keeps that budget, requires
+ * arguments again, and refuses an attempt before it is due. A Remedying
  * instance parks: the remedies that finished are recorded with their
  * outcomes, the ones not yet started resume where the pass left off, and the
  * one in flight, if the park came from inside its body or during its retry

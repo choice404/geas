@@ -278,6 +278,9 @@ TyId Checker::callValue(const Expr& expr, const CallExpr& call, TyId callee) {
 
 TyId Checker::callMember(const Expr& expr, const CallExpr& call, const Expr& callee,
                          const MemberExpr& member) {
+    if (isProcessNamespace(member.base)) {
+        return checkProcessCall(expr, call, member.name);
+    }
     if (isStoreNamespace(member.base)) {
         return checkStoreOp(expr, call, member.name);
     }
@@ -304,6 +307,67 @@ TyId Checker::inferCall(const Expr& expr, const CallExpr& call) {
     }
     const TyId calleeType = inferExpr(call.callee, TyId{});
     return callValue(expr, call, calleeType);
+}
+
+bool Checker::isProcessNamespace(ExprId base) const {
+    const auto* identifier = std::get_if<Identifier>(&ast_.expr(base).kind);
+    return identifier != nullptr && identifier->name == "Process" &&
+           lookup(identifier->name) == nullptr && resolved_.global(identifier->name) == nullptr;
+}
+
+// The runtime reads fields and variants in declaration order
+bool Checker::hasProcessTypes() {
+    const RecordSig* command = sigs_.record("Command");
+    const TyId stringType = scalar(TyKind::String);
+    const std::vector<FieldSig> fields = {{"program", stringType},
+        {"args", types_.list(stringType)}, {"stdout_path", stringType}, {"stderr_path", stringType}};
+    if (command == nullptr || command->fields.size() != fields.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < fields.size(); ++i) {
+        if (command->fields[i].name != fields[i].name || command->fields[i].type != fields[i].type) {
+            return false;
+        }
+    }
+    return hasProcessErrorType();
+}
+
+bool Checker::hasProcessErrorType() {
+    const GlobalEntry* error = resolved_.global("ExitError");
+    if (error == nullptr || error->kind != GlobalKind::Sum) {
+        return false;
+    }
+    const auto& sum = std::get<SumDecl>(ast_.decls[static_cast<std::size_t>(error->declIndex)]);
+    const std::vector<std::string> names = {"Exited", "Signaled", "SpawnFailed"};
+    const std::vector<FieldSig> payloads = {{"code", scalar(TyKind::Int)},
+        {"number", scalar(TyKind::Int)}, {"reason", scalar(TyKind::String)}};
+    if (sum.variants.size() != names.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        const VariantSig* variant = sigs_.variant(names[i]);
+        if (sum.variants[i].name != names[i] || variant == nullptr || variant->fields.size() != 1 ||
+            variant->fields[0].name != payloads[i].name || variant->fields[0].type != payloads[i].type) {
+            return false;
+        }
+    }
+    return true;
+}
+
+TyId Checker::checkProcessCall(const Expr& expr, const CallExpr& call,
+                              const std::string& operation) {
+    if (operation != "run") {
+        walkArgs(call.args);
+        emitAt(expr, "Process has no operation " + quoted(operation));
+        return unknown();
+    }
+    if (!hasProcessTypes()) {
+        walkArgs(call.args);
+        emitAt(expr, "Process.run requires Command and ExitError from std.process");
+        return unknown();
+    }
+    checkArgs({types_.named("Command")}, call, expr, "operation", "Process.run");
+    return types_.result(scalar(TyKind::Unit), types_.named("ExitError"));
 }
 
 }  // namespace geas

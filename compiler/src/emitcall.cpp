@@ -72,6 +72,9 @@ std::optional<CValue> CEmitter::genStaticCall(const Expr& expr, const CallExpr& 
         return std::nullopt;
     }
     const GlobalEntry* global = lookup_.resolved().global(base->name);
+    if (global == nullptr && base->name == "Process") {
+        return genProcessCall(call);
+    }
     if (global == nullptr || global->kind != GlobalKind::Contract) {
         if (base->name == "Store") {
             return genStoreOp(expr, call, callee.name);
@@ -166,6 +169,17 @@ CValue CEmitter::genBytesConversion(const CallExpr& call, std::string_view name)
     line(joined("GeasStatus ", status, " = ", helper, "(cc, &", subject.name, ", &", value, ");"));
     returnUnlessOk(status);
     return CValue{std::move(value), result};
+}
+
+CValue CEmitter::genProcessCall(const CallExpr& call) {
+    const CValue command = genExpr(call.args.front().value, types().named("Command"));
+    std::string value = newValue();
+    const std::string status = freshName();
+    line(joined("GeasStatus ", status, " = geas_process_run(cc, &", command.name,
+                ", 1, &", value, ");"));
+    returnUnlessOk(status);
+    return CValue{std::move(value), types().result(types().scalar(TyKind::Unit),
+                                                types().named("ExitError"))};
 }
 
 // A bare clause call. The arguments land in one stack array and the static

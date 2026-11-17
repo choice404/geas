@@ -25,6 +25,7 @@ instance memory at all.
 """
 
 import ctypes as C
+import traceback
 
 # ---------------------------------------------------------------------------
 # The ABI constants. docs/abi.md, Values and Status codes: the numeric values
@@ -107,6 +108,21 @@ REMEDY_STATE_NAMES = {
 GEAS_ITEM_PENDING = 0
 GEAS_ITEM_FULFILLED = 1
 GEAS_ITEM_BROKEN = 2
+
+GEAS_EVENT_LATCH_FULFILLED = 1
+GEAS_EVENT_LATCH_BROKEN = 2
+GEAS_EVENT_LATCH_LAPSED = 3
+GEAS_EVENT_SIGNAL_DELIVERED = 4
+GEAS_EVENT_REMEDY_STARTED = 5
+GEAS_EVENT_REMEDY_DONE = 6
+GEAS_EVENT_REMEDY_FAILED = 7
+GEAS_EVENT_STATE_CHANGED = 8
+GEAS_EVENT_TERM_LAPSED = 9
+GEAS_EVENT_PARKED = 10
+GEAS_EVENT_RESUMED = 11
+GEAS_EVENT_CANCELLED = 12
+GEAS_EVENT_RECLAIMED = 13
+GEAS_EVENT_LOST = 14
 
 GEAS_INAME_CONTRACT = 0
 GEAS_INAME_PLEDGE = 1
@@ -202,6 +218,39 @@ GeasWriteBackFn = C.CFUNCTYPE(None, C.c_void_p, C.POINTER(GeasValue), C.c_void_p
 # tick: now in wall clock milliseconds, and a sleep through a retry delay.
 GeasClockFn = C.CFUNCTYPE(C.c_int64, C.c_void_p)
 GeasSleepFn = C.CFUNCTYPE(None, C.c_void_p, C.c_uint64)
+
+
+class GeasEvent(C.Structure):
+    """The permanent event prefix, followed by any future producer fields."""
+
+    _fields_ = [
+        ("size", C.c_uint32),
+        ("kind", C.c_uint32),
+        ("instance", C.c_void_p),
+        ("contract", C.c_char_p),
+        ("item", C.c_char_p),
+        ("old_state", C.c_uint32),
+        ("new_state", C.c_uint32),
+        ("at_ms", C.c_int64),
+        ("seq", C.c_uint64),
+    ]
+
+
+GeasEventFn = C.CFUNCTYPE(None, C.c_void_p, C.POINTER(GeasEvent))
+
+
+class Event:
+    """One transition, copied into Python with its borrowed Contract handle."""
+
+    def __init__(self, runtime, event):
+        self.kind = event.kind
+        self.instance = Contract(runtime, event.instance)
+        self.contract = event.contract.decode()
+        self.item = event.item.decode() if event.item else None
+        self.old_state = event.old_state
+        self.new_state = event.new_state
+        self.at_ms = event.at_ms
+        self.seq = event.seq
 
 
 class GeasRef(C.Structure):
@@ -472,6 +521,8 @@ class Runtime:
         lib.geas_runtime_init.restype = i
         lib.geas_runtime_shutdown.argtypes = [v]
         lib.geas_runtime_shutdown.restype = None
+        lib.geas_runtime_set_event_hook.argtypes = [v, GeasEventFn, v]
+        lib.geas_runtime_set_event_hook.restype = i
         lib.geas_module_load.argtypes = [v, s]
         lib.geas_module_load.restype = i
         lib.geas_runtime_freeze.argtypes = [v]
@@ -588,6 +639,25 @@ class Runtime:
 
     def freeze(self):
         _check(self._lib.geas_runtime_freeze(self._rt), "geas_runtime_freeze")
+
+    def on_event(self, callback):
+        """Observes transitions on their delivery thread, None clears the hook.
+
+        Reads on event.instance do not tick during delivery. Fulfill, signal,
+        break and park on that instance raise GEAS_ERR_STATE. Captured callbacks
+        can finish after replacement, so their trampolines live until shutdown.
+        Callback exceptions are printed and delivery continues.
+        """
+        def event_tramp(user, pointer):
+            try:
+                callback(Event(self, pointer.contents))
+            except Exception:
+                traceback.print_exc()
+
+        event_fn = GeasEventFn(event_tramp) if callback is not None else GeasEventFn()
+        self._thunks.append(event_fn)
+        _check(self._lib.geas_runtime_set_event_hook(self._rt, event_fn, None),
+               "geas_runtime_set_event_hook")
 
     def set_clock(self, now=None, sleep=None):
         """Points the runtime at a Python clock: now() answers wall clock
@@ -996,7 +1066,11 @@ class Contract:
         return bool(self._rt._lib.geas_cancel_requested(self._ptr))
 
     def park(self, dsn, key):
-        """Writes this instance under key in the park store behind dsn."""
+        """Snapshots this instance, including retry waits and remedy progress.
+
+        Original futures keep waiting. Resumed pending pledges need arguments
+        again and retain their retry budget and absolute due time.
+        """
         _check(self._rt._lib.geas_instance_park(self._ptr, dsn.encode(),
                                                 key.encode()),
                f"geas_instance_park {key}")

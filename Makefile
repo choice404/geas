@@ -25,8 +25,8 @@ OUT     := target/geas-out
 # the remedy pass, signal.c signal delivery, and flowpark.c the workflow blob
 # of the park row, all over the structs runtime_internal.h shares out.
 RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
-    runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
-    runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c
+    runtime/src/events.c runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
+    runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -62,10 +62,10 @@ MODULE_SVC := $(OUT)/libservice.geas.so
 HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
-.PHONY: test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
+.PHONY: test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan-workflow
 .PHONY: test-requirements
-.PHONY: test-soname test-future test-cancel
-.PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
+.PHONY: test-soname test-future test-cancel test-process test-dusk tsan-process
+.PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-supervisor test-supervisor-watch tsan install uninstall clean
 
 # The full suite, one gate per surface the language carries: the walking
 # skeleton, the runtime's own units, the compiled language, and the store, with
@@ -73,7 +73,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-saga test-saga-python tsan tsan-workflow
+all: test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python tsan tsan-workflow tsan-process
 
 runtime: $(RT_SO)
 
@@ -376,6 +376,16 @@ test-bind-user: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c
 	    tests/runtime/test_bind_user.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_bind_user
 	./$(OUT)/test_bind_user
 
+# Events preserve instance order and run with runtime locks released
+test-events: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_events.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -DGEAS_RUNTIME_TESTING -g -pthread $(RT_INC) \
+	    tests/runtime/test_events.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_events
+	./$(OUT)/test_events
+
+test-events-python: $(RT_SO) $(MODULE_PAY)
+	python3 interop/python/test_events.py
+
 # The signal gate: delivery latches, the payload is the instance's own copy
 # and the first one wins, a signal is an atom and an after target, its own
 # after and within hold, and the pledge and signal surfaces refuse each
@@ -396,6 +406,14 @@ test-workflow-park: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_workflow_park.c
 	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
 	    tests/runtime/test_workflow_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_workflow_park
 	./$(OUT)/test_workflow_park
+
+# Retry progress and remedy snapshots across a host shutdown
+.PHONY: test-park-inflight
+test-park-inflight: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_park_inflight.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_park_inflight.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_park_inflight
+	./$(OUT)/test_park_inflight
 
 # The saga gate, the workflow surface end to end: the compiler builds the
 # order saga and the flowdesk contracts, and the C host loads both, binds
@@ -428,7 +446,7 @@ test-saga-python: $(GEAS) $(RT_SO)
 
 # The workflow gates under ThreadSanitizer: retries with the instance lock
 # released, remedy passes and signals across threads, and user bindings
-tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c tests/runtime/test_cancel.c
+tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_events.c tests/runtime/test_bind_user.c tests/runtime/test_cancel.c tests/runtime/test_workflow_park.c tests/runtime/test_park_inflight.c
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_terms.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_terms_tsan
@@ -447,7 +465,13 @@ tsan-workflow: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_bind_user.c tests/run
 	./$(OUT)/test_signal_tsan
 	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
 	    tests/runtime/test_workflow_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_workflow_park_tsan
-	./$(OUT)/test_workflow_park_tsan
+	@for round in $$(seq 1 20); do ./$(OUT)/test_workflow_park_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_park_inflight.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_park_inflight_tsan
+	@for round in $$(seq 1 20); do ./$(OUT)/test_park_inflight_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -DGEAS_RUNTIME_TESTING -g -pthread $(RT_INC) \
+	    tests/runtime/test_events.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_events_tsan
+	@for round in $$(seq 1 20); do ./$(OUT)/test_events_tsan || exit $$?; done
 
 # The threading gate under ASan: the pool, the per-instance serialization,
 # out-of-order waits, and the break race, with every allocation watched.
@@ -504,6 +528,23 @@ test-std: $(MODULE_STD)
 	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic $(RT_INC) \
 	    tests/runtime/test_std.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_std
 	./$(OUT)/test_std
+
+# Program steps and their cancellation run through a compiled std.process consumer
+$(OUT)/libsteps.geas.so: $(GEAS) $(RT_SO) skeleton/steps.geas lib/std/process.geas
+	$(GEAS) build skeleton/steps.geas
+
+test-process: $(OUT)/libsteps.geas.so $(SQLITE_OBJ)
+	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_process.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_process
+	./$(OUT)/test_process
+
+test-dusk:
+	interop/dusk/run_demo.sh
+
+tsan-process: $(OUT)/libsteps.geas.so $(SQLITE_OBJ)
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_process.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_process_tsan
+	./$(OUT)/test_process_tsan
 
 # The Python interop gate: the ctypes binding drives the payment walk and
 # the by reference protocol with no C written and no generated code, which

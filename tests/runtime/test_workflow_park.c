@@ -305,6 +305,7 @@ static GeasStatus write_old_row(const char* dsn, const char* key) {
         params[9] = blob_val(NULL, 0);
         st = geas_store_exec_params(s,
             "INSERT OR REPLACE INTO geas_park "
+            "(pkey, contract, version, shape_hash, state, signed_at, vows, latches, errs, subtxn) "
             "VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)", params, 10, NULL);
     }
     geas_store_close(s);
@@ -357,6 +358,60 @@ static void test_old_row(const char* dsn) {
     geas_runtime_shutdown(rt);
 }
 
+/* ---- the version 2 workflow blob ---- */
+
+#define LE32(value) (uint8_t)(value), (uint8_t)((value) >> 8), \
+    (uint8_t)((value) >> 16), (uint8_t)((value) >> 24)
+#define LE64(value) LE32(value), 0, 0, 0, 0
+
+/* Tour after seat finished, while pay was running, with book still owed
+ * These bytes are the version 2 layout, independent of today's encoder */
+static const uint8_t v2_flow[] = {
+    'G', 'F', 'L', 'W', LE32(2), LE64(7000), 0, LE32(3), LE32(5),
+    LE64(7000), 0, LE32(1), 1, LE32(7), LE32(0), LE64(5), 'B', '-', 'o', 'l', 'd',
+    LE64(7010), 0, LE32(2), 1, LE32(7), LE32(0), LE64(5), 'P', '-', 'o', 'l', 'd',
+    LE64(7000), 0, LE32(0), 0,
+    LE64(7000), 1, LE32(0), 0,
+    LE64(7000), 0, LE32(3), 1, LE32(1), LE32(0), LE64(7),
+    LE32(0), LE32(3),
+    GEAS_REMEDY_IDLE, LE32(0), 0, 0,
+    GEAS_REMEDY_RUNNING, LE32(0), 0, 0,
+    GEAS_REMEDY_DONE, LE32(0), 0, 0
+};
+
+#undef LE32
+#undef LE64
+
+static void test_v2_row(const char* dsn) {
+    calls_reset();
+    clock_set(7200);
+    CHECK(write_old_row(dsn, "v2") == GEAS_OK, "write the version 2 base row");
+    GeasStore* store = NULL;
+    CHECK(geas_store_open(dsn, &store) == GEAS_OK, "open the version 2 store");
+    GeasValue flow = blob_val(v2_flow, sizeof(v2_flow));
+    CHECK(geas_store_exec_params(store,
+        "UPDATE geas_park SET contract=CAST('Tour' AS BLOB), shape_hash=162, state=5, "
+        "latches=X'0101000201', flow=?1 WHERE pkey=CAST('v2' AS BLOB)",
+        &flow, 1, NULL) == GEAS_OK, "write the version 2 workflow fixture");
+    geas_store_close(store);
+    GeasRuntime* runtime = runtime_with_contracts();
+    if (!runtime) return;
+    GeasContract* resumed = NULL;
+    CHECK(geas_instance_resume(runtime, dsn, "v2", 0, &resumed) == GEAS_OK, "version 2 resumes");
+    if (resumed) {
+        CHECK(geas_instance_tick(resumed) == GEAS_OK, "version 2 pass continues");
+        CHECK(geas_contract_state(resumed) == GEAS_BROKEN, "version 2 pass ends Broken");
+        CHECK(atomic_load(&g_unbook_calls) == 1 && strcmp(g_unbook_arg, "B-old") == 0,
+              "version 2 keeps the Ok argument for the unfinished remedy");
+        CHECK(atomic_load(&g_unpay_calls) == 0 && atomic_load(&g_unseat_calls) == 0,
+              "version 2 never repeats a running or finished remedy");
+        CHECK(geas_partial_remedy_status(resumed, 0) == GEAS_ERR_STATE,
+              "version 2 keeps the running remedy rule");
+        CHECK(geas_partial_lapsed(resumed, "late"), "version 2 keeps the lapse");
+    }
+    geas_runtime_shutdown(runtime);
+}
+
 /* ---- a workflow blob from the future ---- */
 
 static void test_unknown_version(const char* dsn) {
@@ -402,6 +457,7 @@ int main(void) {
     test_live_state(dsn);
     test_mid_pass(dsn);
     test_old_row(old_dsn);
+    test_v2_row(old_dsn);
     test_unknown_version(dsn);
 
     unlink(dsn);

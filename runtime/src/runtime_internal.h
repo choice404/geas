@@ -85,6 +85,9 @@ typedef struct GeasFlow {
     uint32_t*      latch_seq;          /* 1 based order of the fulfilled
                                         * latches, 0 for a pledge not fulfilled */
     uint32_t       next_seq;
+    uint32_t*      retry_attempts;      /* attempts completed before a retry */
+    int64_t*       retry_due_ms;        /* absolute due time, valid with attempts */
+    uint8_t*       retry_waiting;       /* a live fulfillment is in its delay */
     uint8_t*       remedy_state;       /* REMEDY_*, one per remedy */
     int32_t*       remedy_status;      /* last attempt's status when FAILED */
     uint8_t*       remedy_lapsed;      /* 1 when the remedy's within ran out */
@@ -153,6 +156,21 @@ struct GeasContract {
 
     /* Binding snapshot fixed at sign or resume, terminated by a NULL key */
     struct GeasBinding*    bindings;
+
+    /* The event queue is owned by its producer until delivery ends
+     * owner is atomic so cancellation can refuse before publishing its flag */
+    void*                  event_owner;
+    struct GeasEventNode*  event_head;
+    struct GeasEventNode*  event_tail;
+    struct GeasContract*   event_next;
+    uint64_t               event_seq;
+    uint32_t               event_lost;
+    GeasEvent              event_lost_value;
+    uint8_t                event_enqueued;
+    uint8_t                event_delivering;
+    uint32_t               break_callers;       /* atomic */
+    int32_t                event_cancel_status; /* atomic */
+    uint8_t                event_cancelled;
 };
 
 /* A future is the receipt of one fulfillment. Between the fulfill and the
@@ -169,6 +187,7 @@ struct GeasFuture {
     GeasContract*      c;
     GeasPledgeFn       fn;
     uint32_t          pidx;    /* descriptor index of the pledge, for latch */
+    uint8_t           is_running; /* under the instance lock */
     GeasValue*         frame;   /* instance owned, one slot per parameter */
     size_t            frame_nargs;
     GeasStatus         status;
@@ -228,6 +247,8 @@ struct GeasRuntime {
     GeasClockFn             now_fn;
     GeasSleepFn             sleep_fn;
     void*                  clock_user;
+    GeasEventFn            event_fn;  /* atomic, paired with user under lock */
+    void*                  event_user;
     pthread_mutex_t        lock;      /* guards the tables above */
 
     /* The pool: nworkers threads draining one unbounded intrusive queue of
@@ -243,6 +264,38 @@ struct GeasRuntime {
 };
 
 /* ---- shared by every unit ---- */
+
+/* ---- events.c ---- */
+
+/* Instance locks track nesting so callbacks run after every hold is released */
+GEAS_INTERNAL void geas_rt_lock(GeasContract* c);
+GEAS_INTERNAL int geas_rt_trylock(GeasContract* c);
+GEAS_INTERNAL void geas_rt_unlock(GeasContract* c);
+GEAS_INTERNAL int geas_rt_events_blocked(const GeasContract* c);
+GEAS_INTERNAL int geas_rt_event_read(const GeasContract* c);
+GEAS_INTERNAL int geas_rt_event_park_blocked(const GeasContract* c);
+GEAS_INTERNAL void geas_rt_event_cancel(GeasContract* c);
+GEAS_INTERNAL void geas_rt_event_queue(GeasContract* c, uint32_t kind,
+                                     const char* item, uint32_t old_state);
+
+#ifdef GEAS_RUNTIME_TESTING
+extern uint32_t geas_test_event_alloc_failures;
+#endif
+
+/* Emission with no hook is one pointer check and never reads the clock */
+static inline void geas_rt_event(GeasContract* c, uint32_t kind,
+                                 const char* item, uint32_t old_state) {
+    if (__atomic_load_n(&c->rt->event_fn, __ATOMIC_ACQUIRE))
+        geas_rt_event_queue(c, kind, item, old_state);
+}
+
+/* A state assignment emits only when the value changes, under the instance lock */
+static inline void geas_rt_set_state(GeasContract* c, GeasContractState state) {
+    GeasContractState old_state = c->state;
+    c->state = state;
+    if (old_state != state)
+        geas_rt_event(c, GEAS_EVENT_STATE_CHANGED, NULL, old_state);
+}
 
 /* Whether the contract still takes fulfillments and signals: Signed, Partial,
  * or Fulfilled. Remedying and Broken are past that. */

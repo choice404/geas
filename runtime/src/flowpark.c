@@ -8,8 +8,8 @@
  * where each remedy stands.
  *
  * The blob is versioned. It opens with the four bytes "GFLW" and a version
- * number, and this file reads version 2 and nothing else: a blob of any
- * other version is refused, not guessed at. Version 1 of the park format is
+ * number, and this file reads versions 2 and 3. Version 3 adds the attempts
+ * completed and the absolute retry due time for each pledge. Version 1 is
  * the row with no blob at all, the row every runtime before the workflow
  * state wrote, and an empty blob is how it reads here; such a row resumes
  * with the workflow state rebuilt from what the row does hold.
@@ -25,7 +25,7 @@
 #include <string.h>
 
 #define FLOW_MAGIC   "GFLW"
-#define FLOW_VERSION 2u
+#define FLOW_VERSION 3u
 
 /* ---- writing ---- */
 
@@ -102,6 +102,8 @@ static GeasStatus encode_pledges(const GeasContract* c, FlowOut* o) {
         out_u32(o, f->latch_seq[i]);
         GeasStatus st = out_value(o, &f->pledge_ok[i], f->pledge_ok_set[i]);
         if (st != GEAS_OK) return st;
+        out_u32(o, f->retry_attempts[i]);
+        out_i64(o, f->retry_due_ms[i]);
     }
     return GEAS_OK;
 }
@@ -205,7 +207,7 @@ static GeasStatus in_value(FlowIn* in, GeasContract* c, GeasValue* v,
     return st;
 }
 
-static GeasStatus decode_pledges(GeasContract* c, FlowIn* in) {
+static GeasStatus decode_pledges(GeasContract* c, FlowIn* in, uint32_t version) {
     GeasFlow* f = &c->flow;
     uint32_t n = in_u32(in);
     if (in->bad || n != c->desc->npledges) return GEAS_ERR_TYPE;
@@ -215,6 +217,15 @@ static GeasStatus decode_pledges(GeasContract* c, FlowIn* in) {
         f->latch_seq[i] = in_u32(in);
         GeasStatus st = in_value(in, c, &f->pledge_ok[i], &f->pledge_ok_set[i]);
         if (st != GEAS_OK) return st;
+        if (version >= 3) {
+            f->retry_attempts[i] = in_u32(in);
+            f->retry_due_ms[i] = in_i64(in);
+            const GeasTermDesc* terms = geas_rt_pledge_term(c->desc, i);
+            if (f->retry_attempts[i] &&
+                (!terms || f->retry_attempts[i] > terms->retry_count ||
+                 geas_rt_is_signal(c->desc, i))) return GEAS_ERR_TYPE;
+            if (!f->retry_attempts[i] && f->retry_due_ms[i]) return GEAS_ERR_TYPE;
+        }
         /* A lapse is a broken latch and nothing else. */
         if (f->pledge_lapsed[i] > 1) return GEAS_ERR_TYPE;
         if (f->pledge_lapsed[i] && c->pledge_state[i] != PLEDGE_BROKEN) {
@@ -289,13 +300,14 @@ GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf, size_t len,
     FlowIn in = { buf, len, 0, 0 };
     const uint8_t* magic = in_take(&in, 4);
     if (!magic || memcmp(magic, FLOW_MAGIC, 4) != 0) return GEAS_ERR_TYPE;
-    if (in_u32(&in) != FLOW_VERSION || in.bad) return GEAS_ERR_TYPE;
+    uint32_t version = in_u32(&in);
+    if ((version != 2 && version != FLOW_VERSION) || in.bad) return GEAS_ERR_TYPE;
     GeasFlow* f = &c->flow;
     f->signed_ms = in_i64(&in);
     f->term_lapsed = in_u8(&in);
     f->next_seq = in_u32(&in);
     if (in.bad || f->term_lapsed > 1) return GEAS_ERR_TYPE;
-    GeasStatus st = decode_pledges(c, &in);
+    GeasStatus st = decode_pledges(c, &in, version);
     if (st != GEAS_OK) return st;
     uint32_t nsubs = in_u32(&in);
     if (in.bad || nsubs != c->desc->nsubs) return GEAS_ERR_TYPE;

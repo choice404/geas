@@ -1,6 +1,6 @@
 # Maintainer: Austin Choi <austin.c.percussion@gmail.com>
 pkgname=geas
-pkgver=0.8.2
+pkgver=0.8.3
 pkgrel=1
 pkgdesc="Language for durable obligations: contracts with deadlines, remedies, and signals, enforced by a C runtime any language can load"
 arch=('x86_64')

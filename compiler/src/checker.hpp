@@ -190,6 +190,10 @@ private:
     TyId callMember(const Expr& expr, const CallExpr& call, const Expr& callee,
                     const MemberExpr& member);
     TyId inferCall(const Expr& expr, const CallExpr& call);
+    bool isProcessNamespace(ExprId base) const;
+    bool hasProcessTypes();
+    bool hasProcessErrorType();
+    TyId checkProcessCall(const Expr& expr, const CallExpr& call, const std::string& operation);
 
     // Contract names, signed instances, and member access, checkinstance.cpp
     void checkSignArg(const ContractDecl& target, const Argument& arg,

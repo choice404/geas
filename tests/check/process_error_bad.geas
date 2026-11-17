@@ -1,0 +1,14 @@
+record Command {
+    program: String
+    args: List<String>
+    stdout_path: String
+    stderr_path: String
+}
+
+ExitError is either Signaled(number: Int) or Exited(code: Int) or SpawnFailed(reason: String)
+
+contract WrongExitErrorShape {
+    pledge run(command: Command) -> Result<Unit, ExitError> {
+        return Process.run(command)
+    }
+}

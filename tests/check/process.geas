@@ -1,0 +1,19 @@
+import std.process
+
+contract ProcessStep {
+    pledge run(command: Command) -> Result<Unit, ExitError> {
+        return execute(command)
+    }
+
+    clause execute(command: Command) -> Result<Unit, ExitError> {
+        return Process.run(command)
+    }
+
+    clause exit_code(error: ExitError) -> Int {
+        match error {
+            Exited(code) -> { return code }
+            Signaled(number) -> { return number }
+            SpawnFailed(reason) -> { return -1 }
+        }
+    }
+}

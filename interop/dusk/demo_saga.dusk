@@ -1,0 +1,352 @@
+/** demo_saga: the order saga from dusk. The same module tests/runtime/
+ *  test_saga.c drives in C and demo_saga.py drives from Python, built from
+ *  skeleton/saga.geas, loaded through the geas binding with dusk functions
+ *  bound over the abstract steps and a dusk clock the runtime reads instead
+ *  of the wall, so a three day deadline is a number this file moves.
+ *
+ *  Two walks. The happy path signs, authorizes through one Timeout the retry
+ *  term absorbs, captures through a future, reserves through the compiled
+ *  Geas body, ships, and delivers the signal, landing Fulfilled. The break
+ *  path does the same up to ship, has the carrier refuse, and watches the
+ *  remedies undo what landed, release first since reserve landed last, then
+ *  refund handed the receipt capture produced, the saga reading Remedying
+ *  while they run and Broken once they are done.
+ *
+ *  GEAS_OUT names the directory holding libsaga.geas.so, target/geas-out by
+ *  default. Exit status 0 means every check held. */
+
+@paradigm procedural
+
+@import std.string
+@import std.vector
+@import std.os
+@import geas
+@import geas_value
+
+/** The fake clock: now is a number, and a sleep moves it and is logged */
+struct FakeClock {
+    ms: int64,
+    sleeps: *Vector<int64>,
+}
+
+/** The dusk side of the saga, what the four abstract steps answer and a log
+ *  of what refund saw */
+struct SagaHost {
+    timeouts: int64,
+    is_ship_failing: bool,
+    refunds: *Vector<string>,
+}
+
+/** How many checks failed */
+struct Checks {
+    failures: int64,
+}
+
+// The variant tags of the saga's sums, their declaration order
+func pay_timeout() -> int64 { return 1 }
+func ship_no_carrier() -> int64 { return 0 }
+
+func check(checks: *Checks, is_holding: bool, what: string) -> void {
+    if is_holding {
+        return
+    }
+    printerr("[demo_saga_dusk] FAIL: " + what)
+    (*checks).failures = (*checks).failures + 1
+}
+
+func say(line: string) -> void {
+    println("[demo_saga_dusk] " + line)
+}
+
+/* ---- the clock ---- */
+
+func clock_now(clock: *FakeClock) -> int64 {
+    return (*clock).ms
+}
+
+func clock_sleep(clock: *FakeClock, ms: int64) -> void {
+    vec_push((*clock).sleeps, ms)
+    (*clock).ms = (*clock).ms + ms
+}
+
+/* ---- the steps ---- */
+
+func authorize(inst: Contract, args: *Vector<*Value>, host: *SagaHost) -> (*Value, error) {
+    if (*host).timeouts > 0 {
+        (*host).timeouts = (*host).timeouts - 1
+        return (value_err(value_variant(pay_timeout(), values())), error {})
+    }
+    card, e := value_at(vec_get(args, 0), 0)
+    if e.exists() {
+        return (value_unit(), e)
+    }
+    number, te := value_as_text(card)
+    if te.exists() {
+        return (value_unit(), te)
+    }
+    token: string = "AUTH-" + number
+    answer: *Value = value_ok(value_record(values1(value_text(token))))
+    free(token)
+    return (answer, error {})
+}
+
+func capture(inst: Contract, args: *Vector<*Value>, host: *SagaHost) -> (*Value, error) {
+    amount, e := contract_vow(inst, "amount")
+    if e.exists() {
+        return (amount, e)
+    }
+    return (value_ok(value_record(values2(value_text("RC-7"), amount))), error {})
+}
+
+func ship(inst: Contract, args: *Vector<*Value>, host: *SagaHost) -> (*Value, error) {
+    if (*host).is_ship_failing {
+        return (value_err(value_variant(ship_no_carrier(), values())), error {})
+    }
+    return (value_ok(value_record(values2(value_text("ACME"), value_text("T-1")))), error {})
+}
+
+// Logs the receipt it was handed, the state the saga read mid pass, and
+// whether release already ran
+func refund(inst: Contract, args: *Vector<*Value>, host: *SagaHost) -> (*Value, error) {
+    id_field, e := value_at(vec_get(args, 0), 0)
+    if e.exists() {
+        return (value_unit(), e)
+    }
+    id, te := value_as_text(id_field)
+    if te.exists() {
+        return (value_unit(), te)
+    }
+    released: string = int_to_string(contract_remedy_state(inst, "release"))
+    seen: string = id + " " + state_name(contract_state(inst)) + " " + released
+    free(released)
+    vec_push((*host).refunds, seen)
+    return (value_ok(value_unit()), error {})
+}
+
+/* ---- the walks ---- */
+
+func saga_runtime(host: *SagaHost, clock: *FakeClock) -> (Runtime, error) {
+    rt, e := runtime_start(0)
+    if e.exists() {
+        return (rt, e)
+    }
+    ce := runtime_set_clock(rt, clock, clock_now, clock_sleep)
+    if ce.exists() {
+        return (rt, ce)
+    }
+    out: string = env("GEAS_OUT")
+    dir: string = str_len(out) > 0 ? out : "target/geas-out"
+    le := runtime_load(rt, dir + "/libsaga.geas.so")
+    if le.exists() {
+        return (rt, le)
+    }
+    return (rt, bind_steps(rt, host))
+}
+
+func bind_steps(rt: Runtime, host: *SagaHost) -> error {
+    e1 := runtime_bind(rt, "OrderSaga.authorize", host, authorize)
+    if e1.exists() { return e1 }
+    e2 := runtime_bind(rt, "OrderSaga.capture", host, capture)
+    if e2.exists() { return e2 }
+    e3 := runtime_bind(rt, "OrderSaga.ship", host, ship)
+    if e3.exists() { return e3 }
+    e4 := runtime_bind(rt, "OrderSaga.refund", host, refund)
+    if e4.exists() { return e4 }
+    return runtime_freeze(rt)
+}
+
+// Captures through a future: start it, wait, poll the delivered receipt, release
+func capture_by_future(checks: *Checks, saga: Contract, auth: *Value) -> (*Value, error) {
+    receipt, e := contract_fulfill(saga, "capture", values1(auth))
+    if e.exists() {
+        return (value_unit(), e)
+    }
+    v, we := future_wait(receipt)
+    if we.exists() {
+        return (v, we)
+    }
+    is_ready, pe := future_poll(receipt)
+    check(checks, !pe.exists() && is_ready, "a waited receipt polls ready")
+    return (v, future_release(receipt))
+}
+
+// Authorize, capture, and reserve, answering the reservation record
+func through_reserve(checks: *Checks, saga: Contract) -> (*Value, error) {
+    card: *Value = value_record(values1(value_text("4111")))
+    auth, e := contract_fulfill_sync(saga, "authorize", values1(card))
+    if e.exists() {
+        return (auth, e)
+    }
+    check(checks, value_is_ok(auth), "authorize lands, got " + value_render(auth))
+    auth_id, pe := value_payload(auth)
+    if pe.exists() {
+        return (auth, pe)
+    }
+    auth_copy, ce := value_clone(auth_id)
+    value_free(auth)
+    if ce.exists() {
+        return (auth_copy, ce)
+    }
+    captured, fe := capture_by_future(checks, saga, auth_copy)
+    if fe.exists() {
+        return (captured, fe)
+    }
+    check(checks, value_is_ok(captured), "capture lands, got " + value_render(captured))
+    value_free(captured)
+    check(checks, contract_state(saga) == state_partial(), "Payment alone is partial")
+    return reserve(checks, saga)
+}
+
+func reserve(checks: *Checks, saga: Contract) -> (*Value, error) {
+    hour_ms: int64 = 3600000
+    res, e := contract_fulfill_sync(saga, "reserve", values2(value_text("sku-1"), value_int(hour_ms)))
+    if e.exists() {
+        return (res, e)
+    }
+    check(checks, value_is_ok(res), "reserve lands, got " + value_render(res))
+    record, pe := value_payload(res)
+    if pe.exists() {
+        return (res, pe)
+    }
+    copy, ce := value_clone(record)
+    value_free(res)
+    return (copy, ce)
+}
+
+func happy_path(checks: *Checks) -> error {
+    sleeps: *Vector<int64> = alloc(vec_new())
+    refunds: *Vector<string> = alloc(vec_new())
+    clock: *FakeClock = alloc(FakeClock { ms: 1000, sleeps: sleeps })
+    host: *SagaHost = alloc(SagaHost { timeouts: 1, is_ship_failing: false, refunds: refunds })
+    rt, e := saga_runtime(host, clock)
+    if e.exists() {
+        return e
+    }
+    vows: *Vector<Vow> = alloc(vec_new())
+    saga, se := contract_sign(rt, "OrderSaga", vows)
+    if se.exists() {
+        return se
+    }
+    res, re := through_reserve(checks, saga)
+    if re.exists() {
+        return re
+    }
+    say("authorize retried after a Timeout, slept " + int_to_string(vec_len(sleeps)) + " time(s), " + int_to_string(vec_get(sleeps, 0)) + "ms")
+    check(checks, vec_len(sleeps) == 1 && vec_get(sleeps, 0) == 2000, "one 2s delay before the second attempt")
+    say("reserved " + value_render(res))
+    hold, he := value_at(res, 2)
+    hold_ms, ie := value_as_int(hold)
+    check(checks, !he.exists() && !ie.exists() && hold_ms == 5400000, "the hold is the hour plus the thirty minute grace")
+    return finish_happy(checks, rt, saga, host, res)
+}
+
+func finish_happy(checks: *Checks, rt: Runtime, saga: Contract, host: *SagaHost, res: *Value) -> error {
+    tracking: *Value = value_record(values2(value_text("ACME"), value_text("T-1")))
+    early := contract_signal(saga, "delivered", values1(tracking))
+    check(checks, is_status(early, status_err_state()), "an early delivery is a state error, got " + early.toString())
+    shipped, e := contract_fulfill_sync(saga, "ship", values1(res))
+    if e.exists() {
+        return e
+    }
+    check(checks, value_is_ok(shipped), "ship lands, got " + value_render(shipped))
+    tracking_record, pe := value_payload(shipped)
+    if pe.exists() {
+        return pe
+    }
+    tracking_copy, ce := value_clone(tracking_record)
+    value_free(shipped)
+    if ce.exists() {
+        return ce
+    }
+    de := contract_signal(saga, "delivered", values1(tracking_copy))
+    if de.exists() {
+        return de
+    }
+    payload, ple := contract_signal_payload(saga, "delivered")
+    if ple.exists() {
+        return ple
+    }
+    say("happy path ends " + state_name(contract_state(saga)) + ", delivered with " + value_render(payload))
+    value_free(payload)
+    check(checks, contract_state(saga) == state_fulfilled(), "the saga is fulfilled")
+    be := contract_break(saga)
+    if be.exists() {
+        return be
+    }
+    check(checks, vec_len((*host).refunds) == 0, "a fulfilled saga undoes nothing")
+    runtime_shutdown(rt)
+    return error {}
+}
+
+func break_path(checks: *Checks) -> error {
+    sleeps: *Vector<int64> = alloc(vec_new())
+    refunds: *Vector<string> = alloc(vec_new())
+    clock: *FakeClock = alloc(FakeClock { ms: 1000, sleeps: sleeps })
+    host: *SagaHost = alloc(SagaHost { timeouts: 0, is_ship_failing: true, refunds: refunds })
+    rt, e := saga_runtime(host, clock)
+    if e.exists() {
+        return e
+    }
+    vows: *Vector<Vow> = alloc(vec_new())
+    saga, se := contract_sign(rt, "OrderSaga", vows)
+    if se.exists() {
+        return se
+    }
+    res, re := through_reserve(checks, saga)
+    if re.exists() {
+        return re
+    }
+    shipped, fe := contract_fulfill_sync(saga, "ship", values1(res))
+    if fe.exists() {
+        return fe
+    }
+    say("ship answered " + value_render(shipped))
+    check(checks, value_is_err(shipped), "the carrier refused")
+    value_free(shipped)
+    return read_break(checks, rt, saga, host)
+}
+
+func read_break(checks: *Checks, rt: Runtime, saga: Contract, host: *SagaHost) -> error {
+    refunds: *Vector<string> = (*host).refunds
+    seen: string = vec_len(refunds) > 0 ? vec_get(refunds, 0) : "nothing"
+    say("break path ends " + state_name(contract_state(saga)) + ", refund saw " + seen)
+    check(checks, contract_state(saga) == state_broken(), "the saga is broken")
+    check(checks, vec_len(refunds) == 1 && seen == "RC-7 remedying 2", "refund ran once with the receipt, mid pass, after release")
+    check(checks, contract_remedy_state(saga, "release") == remedy_done(), "release's Geas body accepted the reservation")
+    check(checks, !contract_lapsed(saga, "ship"), "ship broke by its Err, not by a deadline")
+    failures, fe := contract_remedy_failures(saga)
+    if fe.exists() {
+        return fe
+    }
+    check(checks, vec_len(failures) == 0, "no remedy failed")
+    remedy_failures_free(failures)
+    part, pe := contract_partial(saga)
+    if pe.exists() {
+        return pe
+    }
+    say("partial: fulfilled " + str_join((*part).fulfilled, ", ") + ", broken " + str_join((*part).broken, ", ") + ", errors " + str_join((*part).error_names, ", "))
+    check(checks, vec_len((*part).error_names) == 1 && vec_get((*part).error_names, 0) == "ship", "ship is the one broken pledge")
+    check(checks, vec_len((*part).errors) == 1 && value_sum_tag(vec_get((*part).errors, 0)) == ship_no_carrier(), "ship's error is NoCarrier")
+    partial_free(part)
+    runtime_shutdown(rt)
+    return error {}
+}
+
+func main() -> int32 {
+    checks: *Checks = alloc(Checks { failures: 0 })
+    he := happy_path(checks)
+    if he.exists() {
+        printerr("[demo_saga_dusk] happy path: " + he.toString())
+        return 1
+    }
+    be := break_path(checks)
+    if be.exists() {
+        printerr("[demo_saga_dusk] break path: " + be.toString())
+        return 1
+    }
+    if (*checks).failures > 0 {
+        return 1
+    }
+    say("ok")
+    return 0
+}

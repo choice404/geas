@@ -1,0 +1,15 @@
+// The runtime consumes the fields and variants in their declared order
+record Command {
+    args: List<String>
+    program: String
+    stdout_path: String
+    stderr_path: String
+}
+
+ExitError is either Exited(code: Int) or Signaled(number: Int) or SpawnFailed(reason: String)
+
+contract WrongCommandShape {
+    pledge run(command: Command) -> Result<Unit, ExitError> {
+        return Process.run(command)
+    }
+}
