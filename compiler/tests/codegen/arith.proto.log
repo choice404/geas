@@ -1,0 +1,10 @@
+exit 1
+compiler/tests/codegen/src/arith.geas: 17:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge bytes(a: Byte, b: Byte) -> Result<Byte, E> {
+      ^~~~~~~~~~~~
+compiler/tests/codegen/src/arith.geas: 17:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge bytes(a: Byte, b: Byte) -> Result<Byte, E> {
+      ^~~~~~~~~~~~
+compiler/tests/codegen/src/arith.geas: 17:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Byte
+      pledge bytes(a: Byte, b: Byte) -> Result<Byte, E> {
+      ^~~~~~~~~~~~

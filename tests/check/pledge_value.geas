@@ -1,5 +1,8 @@
-// The accept twin: a pledge type is legal where the value never leaves the
-// module, a clause parameter and a let annotation.
+// Pledge values are not part of this version of the language: the pledge
+// type is refused in a clause parameter and a let annotation, where no value
+// crosses the boundary, and a pledge named on an instance without a call is
+// refused as the value it would be. The syntax still parses, so the spelling
+// stays reserved
 
 contract Vault {
     pledge ping() -> Result<Int, Int> {

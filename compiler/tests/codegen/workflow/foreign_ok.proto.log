@@ -1,0 +1,4 @@
+exit 1
+tests/check/foreign_ok.geas: 9:5: error: codegen: not yet supported: a pledge on the gRPC surface returning outside Result and Option
+      pledge audit() -> Unit
+      ^~~~~~~~~~~~

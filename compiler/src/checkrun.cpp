@@ -1,13 +1,17 @@
 // Contracts and their bodies. Every incorporated signature must match its
 // implementing clause exactly, every vow initializer is a constant literal
 // of the vow type, and every pledge, clause, and remedy body checks under
-// its declared return type with its parameters in scope
+// its declared return type with its parameters in scope, then is held to
+// a return on every path when that type is not Unit
 #include "checker.hpp"
+
+#include "magnitude.hpp"
 
 namespace geas {
 
-// A vow initializer is a constant literal, or a negated numeric literal.
-// Everything else is supplied at sign time instead
+// A vow initializer is a constant literal, or a negated numeric literal
+// other than the least Int, whose negation leaves the Int range. Everything
+// else is supplied at sign time instead
 bool Checker::isConstantLiteral(ExprId id) const {
     const ExprKind& kind = ast_.expr(id).kind;
     const auto isNumber = [](const ExprKind& candidate) {
@@ -23,7 +27,8 @@ bool Checker::isConstantLiteral(ExprId id) const {
     if (unary == nullptr || unary->op != UnaryOp::Neg) {
         return false;
     }
-    return isNumber(ast_.expr(unary->operand).kind);
+    const ExprKind& operand = ast_.expr(unary->operand).kind;
+    return isNumber(operand) && !isLeastLiteral(operand);
 }
 
 void Checker::checkVow(const VowDecl& vow) {
@@ -109,12 +114,14 @@ void Checker::checkPledgeBody(const PledgeDecl& pledge) {
     const CallableSig& sig = pledgeSig(pledge);
     const TyId ret = sig.ret.isSet() ? sig.ret : unknown();
     checkBody(pledge.params, sig.params, ret, *pledge.body, pledge.lo, pledge.hi);
+    checkEveryPathReturns(pledge.name, ret, *pledge.body, pledge.lo, pledge.hi);
 }
 
 void Checker::checkClauseBody(const ClauseDecl& clause) {
     const CallableSig& sig = clauseSig(clause);
     const TyId ret = sig.ret.isSet() ? sig.ret : unknown();
     checkBody(clause.params, sig.params, ret, clause.body, clause.lo, clause.hi);
+    checkEveryPathReturns(clause.name, ret, clause.body, clause.lo, clause.hi);
 }
 
 // Whether the contract declares a schema, the test for store backed
@@ -130,6 +137,11 @@ bool Checker::hasSchema(const ContractDecl& contract) const {
 // A transactional subcontract groups durable writes, so it only means
 // something over a contract that binds a database
 void Checker::checkSubcontract(const ContractDecl& contract, const SubcontractDecl& sub) {
+    // A subcontract is fulfilled when all of its pledges and signals are, so
+    // one that holds neither would never be
+    if (sub.members.empty()) {
+        emit(sub.lo, sub.hi, "a subcontract must hold at least one pledge or signal");
+    }
     if (sub.isTransactional && !hasSchema(contract)) {
         emit(sub.lo, sub.hi, "transactional requires a store-backed contract");
     }

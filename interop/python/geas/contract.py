@@ -320,8 +320,7 @@ class Contract:
         length of every foreign call, so pool workers running Python bodies,
         the clock, and the event hook all take the GIL while this thread sits
         in the wait. The call returns only after the events of the run it
-        waited on were delivered, which makes it the point after which a
-        signal on this instance does not race a delivery in flight."""
+        waited on were delivered."""
         info = GeasCourseInfo(size=C.sizeof(GeasCourseInfo))
         status = self._rt._lib.geas_course_wait(self._ptr, int(timeout_ms),
                                                 C.byref(info))

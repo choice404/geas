@@ -129,7 +129,11 @@ typedef struct GeasRuntimeConfig {
 GeasStatus geas_runtime_init(const GeasRuntimeConfig* cfg, GeasRuntime** out);
 
 /* Drains the task queue, joins every worker, then frees every instance and
- * future and unloads every module. Nothing else may be calling in. */
+ * future and unloads every module. Nothing else may be calling in. Called
+ * from a body, an event hook, a ref write back callback, the body of a
+ * together call, the ticker thread, or any thread holding an instance lock,
+ * none of which it could wait out, it returns at once with a line on stderr
+ * and leaves the runtime running. */
 void      geas_runtime_shutdown(GeasRuntime* rt);
 
 /* dlopens a compiled module and calls its geas_module_register. The module
@@ -505,6 +509,24 @@ GeasStatus geas_contract_request_cancel(GeasContract* c);
  * delivery ends, as a break does. See docs/abi.md Handing an instance off */
 GeasStatus geas_contract_release(GeasContract* c);
 
+/* Frees the handle of an instance that is over, the one call that gives its
+ * memory back before geas_runtime_shutdown. The instance must have been
+ * ended by geas_contract_break or geas_contract_release, an automatic break
+ * followed by geas_contract_break included, and nothing may still run on
+ * it: no body, retry wait, remedy pass, event delivery, course entry, pool
+ * task, ref write back, or break or release call still returning. Every
+ * receipt of the instance not yet released is freed with it. Answers
+ * GEAS_OK, after which the handle and its receipts are gone and any call on
+ * them is a use after free, the way free(3) leaves a pointer; GEAS_ERR_STATE
+ * for a live instance, for work still in flight on it, which a later call
+ * finds drained, when called from a body, a hook, or a thread holding an
+ * instance lock, and for an instance a body signed, resumed, or claimed,
+ * a pledge or remedy body, a course, or a together body, whose frame keeps
+ * the handle until shutdown; GEAS_ERR_TYPE for NULL. A handle never freed
+ * lives until shutdown, as every handle always has. See docs/abi.md
+ * Lifecycle */
+GeasStatus geas_contract_free(GeasContract* c);
+
 /* Runs one std.process Command in the caller's thunk frame */
 GeasStatus geas_process_run(void* ctx, const GeasValue* args, size_t nargs,
                             GeasValue* out);
@@ -692,7 +714,7 @@ GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* ke
  * instance is discarded and the call answers GEAS_ERR_NAME, the row being
  * gone. A row rewritten between the read and the delete is read again. A
  * build that fails, GEAS_ERR_VERSION, GEAS_ERR_TYPE, GEAS_ERR_UNBOUND, an
- * amends block's own status, or a full instance table, leaves the row where
+ * amends block's own status, or an instance table that cannot grow, leaves the row where
  * it was and answers that status: all or nothing. Every other status follows
  * geas_instance_resume. geas_instance_resume itself never deletes a row */
 GeasStatus geas_instance_claim(GeasRuntime* rt, const char* dsn, const char* key,
@@ -735,7 +757,16 @@ GeasStatus geas_state_value_into(const GeasContract* c, GeasValue* out);
  * A remedy binds through the same call under "Contract.remedy" or its
  * mangled symbol, and an abstract remedy nothing bound refuses the sign with
  * GEAS_ERR_UNBOUND exactly as an abstract pledge does. A signal has no body,
- * so binding one is GEAS_ERR_TYPE. */
+ * so binding one is GEAS_ERR_TYPE.
+ *
+ * An abstract pledge or remedy declared with [abi: "c", symbol: "NAME"]
+ * resolves at sign, resume, and claim in one order: a binding made here
+ * first, then the function the process exports under NAME, found with
+ * dlsym(RTLD_DEFAULT, NAME). The function has the GeasPledgeFn signature and
+ * runs in the same frame a bound fn does. A host executable exports it by
+ * linking with -rdynamic, a shared object by being loaded with RTLD_GLOBAL;
+ * a NAME the process does not export leaves the entry unbound and the sign
+ * answers GEAS_ERR_UNBOUND */
 GeasStatus geas_pledge_bind(GeasRuntime* rt, const char* pledge_name,
                           GeasPledgeFn fn);
 
@@ -917,7 +948,10 @@ GeasStatus geas_list_new(GeasContract* c, uint32_t elem_ty, uint64_t cap,
  * the one-walk reclaim. The element struct is copied as is: its contents
  * must already be instance owned or otherwise outlive their use, and
  * geas_value_deep_copy is the tool when they are not. GEAS_ERR_TYPE when list
- * is not a list or the element's tag disagrees with elem_ty. */
+ * is not a list or the element's tag disagrees with elem_ty; GEAS_ERR_OOM when
+ * the list already holds GEAS_VALUE_MAX_NODES - 1 elements, the most a value
+ * may hold and still cross a boundary or park, or when its storage cannot
+ * grow. */
 GeasStatus geas_list_push(GeasContract* c, GeasValue* list, const GeasValue* elem);
 
 /* The element at idx of a list or tuple, or NULL when out of range or the
@@ -960,7 +994,9 @@ GeasStatus geas_map_new_into(GeasContract* c, uint32_t key_ty, GeasValue* out);
  * by geas_value_eq, has its value replaced in place and keeps its insertion
  * position; a new key appends. The scan is linear in the pair count, the v1
  * tradeoff for a one arm repr. GEAS_ERR_TYPE when m is not a map or the key's
- * tag disagrees with the map's key tag. */
+ * tag disagrees with the map's key tag; GEAS_ERR_OOM when a new pair would
+ * take the map past GEAS_VALUE_MAX_NODES, the map counting as one node and
+ * each key and value as one more, or when an allocation fails. */
 GeasStatus geas_map_set(GeasContract* c, GeasValue* m, const GeasValue* k,
                       const GeasValue* v);
 
@@ -978,9 +1014,11 @@ GeasStatus geas_tuple_new(GeasContract* c, uint64_t count, GeasValue* out);
  * string bytes copied, list, map, tuple, record, and sum payloads copied
  * element by element, Option and Result payloads reboxed. After it returns,
  * nothing in dst aliases memory the instance does not own. A source that
- * claims a length with no data behind it, a list longer than its capacity,
- * or nesting deeper than 4096 levels, a cyclic value among them, is
- * GEAS_ERR_TYPE; None copies with no box whatever its box held. */
+ * claims a length with no data behind it, a list or a map longer than its
+ * capacity, or nesting deeper than 4096 levels, a cyclic value among them,
+ * is GEAS_ERR_TYPE; a source of more than GEAS_VALUE_MAX_NODES nodes, counted
+ * as the tree it unfolds to, is GEAS_ERR_OOM. None copies with no box
+ * whatever its box held. */
 GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
                               GeasValue* dst);
 

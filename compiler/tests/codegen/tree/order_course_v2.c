@@ -12,7 +12,7 @@ static GeasStatus geas_clause11_OrderCourse_released(GeasContract* cc, const Gea
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_OrderCourse_plan_30ee672754834e1e_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_11OrderCourse_4plan_30ee672754834e1e_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -24,7 +24,7 @@ static GeasStatus __geas_ash_OrderCourse_plan_30ee672754834e1e_v2(void* ctx, con
     GeasValue t1 = *t0;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_INT;
-    t2.as.i = args[0].as.i + t1.as.i;
+    if (__builtin_add_overflow(args[0].as.i, t1.as.i, &t2.as.i)) return GEAS_ERR_TYPE;
     GeasValue t3 = t2;
     GeasValue t4 = {0};
     t4.ty = GEAS_TY_INT;
@@ -59,7 +59,7 @@ static GeasStatus __geas_ash_OrderCourse_plan_30ee672754834e1e_v2(void* ctx, con
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_OrderCourse_release_193ad2efdb97ef80_v2(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_11OrderCourse_7release_193ad2efdb97ef80_v2(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -340,12 +340,12 @@ static const GeasVowDesc k11_OrderCourse_vows[] = {
 };
 
 static const GeasPledgeDesc k11_OrderCourse_pledges[] = {
-    { "authorize", "__geas_ash_OrderCourse_authorize_3d078794604bf824_v2", 1, NULL, 0 },
-    { "capture", "__geas_ash_OrderCourse_capture_5f7fe51731b3dd09_v2", 1, NULL, 0 },
-    { "plan", "__geas_ash_OrderCourse_plan_30ee672754834e1e_v2", 1, __geas_ash_OrderCourse_plan_30ee672754834e1e_v2, -1 },
-    { "reserve", "__geas_ash_OrderCourse_reserve_164137f834809cbf_v2", 2, NULL, -1 },
-    { "dispatch", "__geas_ash_OrderCourse_dispatch_ad537d643b4ebed9_v2", 1, NULL, -1 },
-    { "notify", "__geas_ash_OrderCourse_notify_ff1ceb266be45f1f_v2", 1, NULL, -1 },
+    { "authorize", "__geas_ash_11OrderCourse_9authorize_3d078794604bf824_v2", 1, NULL, 0 },
+    { "capture", "__geas_ash_11OrderCourse_7capture_5f7fe51731b3dd09_v2", 1, NULL, 0 },
+    { "plan", "__geas_ash_11OrderCourse_4plan_30ee672754834e1e_v2", 1, __geas_ash_11OrderCourse_4plan_30ee672754834e1e_v2, -1 },
+    { "reserve", "__geas_ash_11OrderCourse_7reserve_164137f834809cbf_v2", 2, NULL, -1 },
+    { "dispatch", "__geas_ash_11OrderCourse_8dispatch_ad537d643b4ebed9_v2", 1, NULL, -1 },
+    { "notify", "__geas_ash_11OrderCourse_6notify_ff1ceb266be45f1f_v2", 1, NULL, -1 },
     { "delivered", NULL, 1, NULL, -1 },
 };
 
@@ -439,9 +439,9 @@ static const GeasTermDesc k11_OrderCourse_terms[] = {
 };
 
 static const GeasRemedyDesc k11_OrderCourse_remedies[] = {
-    { "refund", "__geas_ash_OrderCourse_refund_2a5cbc30109a1eac_v2", 1, 1, NULL, { .retry_count = 2, .retry_every_ms = 60000 } },
-    { "release", "__geas_ash_OrderCourse_release_193ad2efdb97ef80_v2", 3, 1, __geas_ash_OrderCourse_release_193ad2efdb97ef80_v2, { 0 } },
-    { "recall", "__geas_ash_OrderCourse_recall_ff1ceb266be45f1f_v2", 4, 1, NULL, { 0 } },
+    { "refund", "__geas_ash_11OrderCourse_6refund_2a5cbc30109a1eac_v2", 1, 1, NULL, { .retry_count = 2, .retry_every_ms = 60000 } },
+    { "release", "__geas_ash_11OrderCourse_7release_193ad2efdb97ef80_v2", 3, 1, __geas_ash_11OrderCourse_7release_193ad2efdb97ef80_v2, { 0 } },
+    { "recall", "__geas_ash_11OrderCourse_6recall_ff1ceb266be45f1f_v2", 4, 1, NULL, { 0 } },
 };
 
 static GeasStatus k11_OrderCourse_amend1_vows(void* ctx, const GeasValue* prior_vows, size_t nprior,
@@ -456,7 +456,7 @@ static GeasStatus k11_OrderCourse_amend1_vows(void* ctx, const GeasValue* prior_
     t1.as.i = 100;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_INT;
-    t2.as.i = t0.as.i * t1.as.i;
+    if (__builtin_mul_overflow(t0.as.i, t1.as.i, &t2.as.i)) return GEAS_ERR_TYPE;
     GeasStatus t3 = geas_value_deep_copy(cc, &t2, &vows[1]);
     if (t3 != GEAS_OK) return t3;
     return GEAS_OK;
@@ -523,7 +523,7 @@ static const GeasAmendLatch k11_OrderCourse_amend1_latches[] = {
 static const GeasAmendDesc k11_OrderCourse_amends[] = {
     {
         .from_version = 1, .restart_course = 1,
-        .from_shape_hash = 0x4861f0a9753d79d4ULL, .from_course_hash = 0xd0e7aba0f862d5a6ULL,
+        .from_shape_hash = 0xa5fa4f6bf483ba55ULL, .from_course_hash = 0x9fb3ca94771a30a3ULL,
         .nold_vows = 5, .old_vows = k11_OrderCourse_amend1_old_vows,
         .nold_items = 7, .old_items = k11_OrderCourse_amend1_old_items,
         .nold_subs = 1, .old_subs = k11_OrderCourse_amend1_old_subs,
@@ -621,8 +621,10 @@ static const GeasItemTypes k11_OrderCourse_remedy_types[] = {
     { 1, k11_OrderCourse_remedy_params_2, 15 },
 };
 
+static const uint32_t k11_OrderCourse_course_slot_types[] = { 1, 8, 1, 2, 3, 4, 4, 6, 7, 0, 1, 10, 11, 11, 12, 13, 13, 15, 13 };
+
 static const GeasContractDesc k11_OrderCourse = {
-    "OrderCourse", 0xd2e12027cdd6fb97ULL,
+    "OrderCourse", 0x3b674157a3ce36f3ULL,
     2, 7, k11_OrderCourse_pledges,
     5, k11_OrderCourse_vows,
     1, k11_OrderCourse_subs, 5,
@@ -634,11 +636,12 @@ static const GeasContractDesc k11_OrderCourse = {
     k11_OrderCourse_kinds, k11_OrderCourse_terms, NULL,
     3, k11_OrderCourse_remedies,
     604800000,
-    .course_fn = k11_OrderCourse_course, .course_nslots = 19, .course_hash = 0x2cc75c58e8131d2cULL,
+    .course_fn = k11_OrderCourse_course, .course_nslots = 19, .course_hash = 0x56e41a5d5d0a55f9ULL,
     .namends = 1, .amends = k11_OrderCourse_amends,
     .ntypes = 19, .types = k11_OrderCourse_types,
     .item_types = k11_OrderCourse_item_types, .vow_types = k11_OrderCourse_vow_types,
     .remedy_types = k11_OrderCourse_remedy_types,
+    .course_slot_types = k11_OrderCourse_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

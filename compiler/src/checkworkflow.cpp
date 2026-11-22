@@ -1,25 +1,43 @@
 // Attributes, transactions, and remedies. The term attribute is a
-// contract's total lifetime and belongs nowhere else. A transactional
-// subcontract holds no signal and no pledge with a retry. A remedy undoes
-// one pledge of its own contract, takes that pledge's Ok value or nothing,
-// and answers Result<Unit, E> or Unit
+// contract's total lifetime and belongs nowhere else. The version attribute
+// is an integer the descriptor carries in 32 bits, so it runs from 1 to
+// 4294967295. A transactional subcontract holds no signal and no pledge
+// with a retry. A remedy undoes one pledge of its own contract, takes that
+// pledge's Ok value or nothing, and answers Result<Unit, E> or Unit
 #include "checker.hpp"
+
+#include <cstdint>
+#include <limits>
 
 namespace geas {
 
 namespace {
 
 constexpr std::string_view termKey = "term";
+constexpr std::string_view versionKey = "version";
+constexpr std::int64_t firstVersion = 1;
+constexpr std::int64_t lastVersion = std::numeric_limits<std::uint32_t>::max();
 
 }  // namespace
 
-// The term attribute, a duration on a contract, a lifetime longer than nothing
+// The term attribute, a duration on a contract, a lifetime longer than
+// nothing. A version that is an integer stays in the range the descriptor
+// carries; one that is no integer at all is a build fault the emitter names
 void Checker::checkContractAttrs(const ContractDecl& contract) {
     for (const Attr& attr : contract.attrs) {
+        const Expr& value = ast_.expr(attr.value);
+        if (attr.key == versionKey) {
+            const auto* number = std::get_if<IntLiteral>(&value.kind);
+            const bool isOutside = number != nullptr &&
+                                   (number->value < firstVersion || number->value > lastVersion);
+            if (isOutside) {
+                emitAt(value, "the version attribute must be an integer from 1 to 4294967295");
+            }
+            continue;
+        }
         if (attr.key != termKey) {
             continue;
         }
-        const Expr& value = ast_.expr(attr.value);
         const auto* duration = std::get_if<DurationLiteral>(&value.kind);
         if (duration == nullptr || duration->milliseconds <= 0) {
             emitAt(value, "the term attribute must be a duration greater than zero");
@@ -139,6 +157,7 @@ void Checker::checkRemedyBody(const RemedyDecl& remedy) {
     const CallableSig& sig = remedySig(remedy);
     const TyId ret = sig.ret.isSet() ? sig.ret : unknown();
     checkBody(params, sig.params, ret, *remedy.body, remedy.lo, remedy.hi);
+    checkEveryPathReturns(remedy.name, ret, *remedy.body, remedy.lo, remedy.hi);
 }
 
 }  // namespace geas

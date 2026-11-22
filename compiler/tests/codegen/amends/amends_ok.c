@@ -8,8 +8,8 @@ static const GeasVowDesc k4_Saga_vows[] = {
 };
 
 static const GeasPledgeDesc k4_Saga_pledges[] = {
-    { "capture", "__geas_ash_Saga_capture_0e2ba22315b89a85_v3", 0, NULL, 0 },
-    { "ship", "__geas_ash_Saga_ship_0e2ba22315b89a85_v3", 0, NULL, -1 },
+    { "capture", "__geas_ash_4Saga_7capture_0e2ba22315b89a85_v3", 0, NULL, 0 },
+    { "ship", "__geas_ash_4Saga_4ship_0e2ba22315b89a85_v3", 0, NULL, -1 },
     { "delivered", NULL, 0, NULL, -1 },
 };
 
@@ -73,7 +73,7 @@ static GeasStatus k4_Saga_amend1_vows(void* ctx, const GeasValue* prior_vows, si
     t5.as.i = 1800000;
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_INT;
-    t6.as.i = t4.as.i + t5.as.i;
+    if (__builtin_add_overflow(t4.as.i, t5.as.i, &t6.as.i)) return GEAS_ERR_TYPE;
     GeasStatus t7 = geas_value_deep_copy(cc, &t6, &vows[2]);
     if (t7 != GEAS_OK) return t7;
     return GEAS_OK;
@@ -97,7 +97,7 @@ static const char* const k4_Saga_amend1_old_subs[] = {
 
 static const int32_t k4_Saga_amend1_vow_map[] = {
     -1,
-    0,
+    -1,
     2,
 };
 
@@ -143,7 +143,7 @@ static const GeasAmendLatch k4_Saga_amend2_latches[] = {
 static const GeasAmendDesc k4_Saga_amends[] = {
     {
         .from_version = 1, .restart_course = 0,
-        .from_shape_hash = 0x7e86d13f72aa73f8ULL, .from_course_hash = 0x0000000000000000ULL,
+        .from_shape_hash = 0x4d7c37624831d212ULL, .from_course_hash = 0x0000000000000000ULL,
         .nold_vows = 3, .old_vows = k4_Saga_amend1_old_vows,
         .nold_items = 3, .old_items = k4_Saga_amend1_old_items,
         .nold_subs = 1, .old_subs = k4_Saga_amend1_old_subs,
@@ -182,7 +182,7 @@ static const GeasItemTypes k4_Saga_item_types[] = {
 static const uint32_t k4_Saga_vow_types[] = { 0, 0, 1 };
 
 static const GeasContractDesc k4_Saga = {
-    "Saga", 0xaab8a3e6f543e723ULL,
+    "Saga", 0xfff7b85fcfdf5202ULL,
     3, 3, k4_Saga_pledges,
     3, k4_Saga_vows,
     1, k4_Saga_subs, 6,

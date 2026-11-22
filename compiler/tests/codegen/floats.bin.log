@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/floats.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Float literals by their value: a spelling with underscore separators, one
+  ^

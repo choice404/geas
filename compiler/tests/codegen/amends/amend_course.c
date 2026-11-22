@@ -85,8 +85,8 @@ static const GeasVowDesc k10_CourseFlow_vows[] = {
 };
 
 static const GeasPledgeDesc k10_CourseFlow_pledges[] = {
-    { "first", "__geas_ash_CourseFlow_first_a821ae9487abd245_v3", 1, NULL, -1 },
-    { "second", "__geas_ash_CourseFlow_second_a821ae9487abd245_v3", 1, NULL, -1 },
+    { "first", "__geas_ash_10CourseFlow_5first_a821ae9487abd245_v3", 1, NULL, -1 },
+    { "second", "__geas_ash_10CourseFlow_6second_a821ae9487abd245_v3", 1, NULL, -1 },
     { "ready", NULL, 1, NULL, -1 },
 };
 
@@ -162,7 +162,7 @@ static const int32_t k10_CourseFlow_amend2_item_map[] = {
 static const GeasAmendDesc k10_CourseFlow_amends[] = {
     {
         .from_version = 1, .restart_course = 1,
-        .from_shape_hash = 0x839974295897f8d3ULL, .from_course_hash = 0x485c3fd083a55f76ULL,
+        .from_shape_hash = 0x839974295897f8d3ULL, .from_course_hash = 0x91d024ebd3c48affULL,
         .nold_vows = 1, .old_vows = k10_CourseFlow_amend1_old_vows,
         .nold_items = 2, .old_items = k10_CourseFlow_amend1_old_items,
         .nold_subs = 0, .old_subs = NULL,
@@ -174,7 +174,7 @@ static const GeasAmendDesc k10_CourseFlow_amends[] = {
     },
     {
         .from_version = 2, .restart_course = 0,
-        .from_shape_hash = 0x9fb217616a51c67bULL, .from_course_hash = 0xb2b1948a9046f314ULL,
+        .from_shape_hash = 0x9fb217616a51c67bULL, .from_course_hash = 0x55ec60db20c08801ULL,
         .nold_vows = 1, .old_vows = k10_CourseFlow_amend2_old_vows,
         .nold_items = 3, .old_items = k10_CourseFlow_amend2_old_items,
         .nold_subs = 0, .old_subs = NULL,
@@ -206,6 +206,8 @@ static const GeasItemTypes k10_CourseFlow_item_types[] = {
 
 static const uint32_t k10_CourseFlow_vow_types[] = { 0, 1 };
 
+static const uint32_t k10_CourseFlow_course_slot_types[] = { 0, 2, 0, 0, 2, 0, 1, 1 };
+
 static const GeasContractDesc k10_CourseFlow = {
     "CourseFlow", 0x65f615aa23e82d85ULL,
     3, 3, k10_CourseFlow_pledges,
@@ -219,11 +221,12 @@ static const GeasContractDesc k10_CourseFlow = {
     k10_CourseFlow_kinds, NULL, NULL,
     0, NULL,
     0,
-    .course_fn = k10_CourseFlow_course, .course_nslots = 8, .course_hash = 0xb2b1948a9046f314ULL,
+    .course_fn = k10_CourseFlow_course, .course_nslots = 8, .course_hash = 0x55ec60db20c08801ULL,
     .namends = 2, .amends = k10_CourseFlow_amends,
     .ntypes = 3, .types = k10_CourseFlow_types,
     .item_types = k10_CourseFlow_item_types, .vow_types = k10_CourseFlow_vow_types,
     .remedy_types = NULL,
+    .course_slot_types = k10_CourseFlow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

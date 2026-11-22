@@ -159,7 +159,7 @@ GeasStatus geas_rt_map_keys_distinct(const GeasValue* data, uint64_t npairs) {
 /* ---- the walk ---- */
 
 static GeasStatus conform_rec(const GeasContractDesc* d, uint32_t ty, const GeasValue* v,
-                              uint32_t depth);
+                              uint32_t depth, uint64_t* nodes);
 
 /* The node behind an index, NULL for GEAS_NO_TYPE. The registrar checked
  * every index the table holds, so a miss here is a caller's index */
@@ -182,18 +182,18 @@ static GeasStatus conform_text(const GeasValue* v, int is_utf8) {
 /* The slots of a tuple, a record, or a sum's variant, each against its own
  * index, or each held to the structural facts when kids is NULL */
 static GeasStatus conform_slots(const GeasContractDesc* d, const uint32_t* kids,
-                                const GeasValue* v, uint32_t depth) {
+                                const GeasValue* v, uint32_t depth, uint64_t* nodes) {
     if (!arm_present(v)) return GEAS_ERR_TYPE;
     const GeasValue* e = (const GeasValue*)v->as.list.data;
     for (uint64_t i = 0; i < v->as.list.len; i++) {
-        GeasStatus st = conform_rec(d, kids ? kids[i] : GEAS_NO_TYPE, &e[i], depth + 1);
+        GeasStatus st = conform_rec(d, kids ? kids[i] : GEAS_NO_TYPE, &e[i], depth + 1, nodes);
         if (st != GEAS_OK) return st;
     }
     return GEAS_OK;
 }
 
 static GeasStatus conform_list(const GeasContractDesc* d, const GeasTypeNode* n,
-                               const GeasValue* v, uint32_t depth) {
+                               const GeasValue* v, uint32_t depth, uint64_t* nodes) {
     if (!arm_present(v) || v->as.list.len > v->as.list.cap) return GEAS_ERR_TYPE;
     if (!tag_crosses(v->as.list.elem_ty)) return GEAS_ERR_TYPE;
     uint32_t elem = n ? n->kids[0] : GEAS_NO_TYPE;
@@ -201,15 +201,16 @@ static GeasStatus conform_list(const GeasContractDesc* d, const GeasTypeNode* n,
     const GeasValue* e = (const GeasValue*)v->as.list.data;
     for (uint64_t i = 0; i < v->as.list.len; i++) {
         if (e[i].ty != v->as.list.elem_ty) return GEAS_ERR_TYPE;
-        GeasStatus st = conform_rec(d, elem, &e[i], depth + 1);
+        GeasStatus st = conform_rec(d, elem, &e[i], depth + 1, nodes);
         if (st != GEAS_OK) return st;
     }
     return GEAS_OK;
 }
 
 static GeasStatus conform_map(const GeasContractDesc* d, const GeasTypeNode* n,
-                              const GeasValue* v, uint32_t depth) {
+                              const GeasValue* v, uint32_t depth, uint64_t* nodes) {
     if (!arm_present(v) || v->as.list.len % 2) return GEAS_ERR_TYPE;
+    if (v->as.list.len > v->as.list.cap) return GEAS_ERR_TYPE;
     if (!tag_keyable(v->as.list.elem_ty)) return GEAS_ERR_TYPE;
     uint32_t key = n ? n->kids[0] : GEAS_NO_TYPE;
     uint32_t val = n ? n->kids[1] : GEAS_NO_TYPE;
@@ -217,26 +218,26 @@ static GeasStatus conform_map(const GeasContractDesc* d, const GeasTypeNode* n,
     const GeasValue* e = (const GeasValue*)v->as.list.data;
     for (uint64_t i = 0; i < v->as.list.len; i += 2) {
         if (e[i].ty != v->as.list.elem_ty) return GEAS_ERR_TYPE;
-        GeasStatus st = conform_rec(d, key, &e[i], depth + 1);
-        if (st == GEAS_OK) st = conform_rec(d, val, &e[i + 1], depth + 1);
+        GeasStatus st = conform_rec(d, key, &e[i], depth + 1, nodes);
+        if (st == GEAS_OK) st = conform_rec(d, val, &e[i + 1], depth + 1, nodes);
         if (st != GEAS_OK) return st;
     }
     return geas_rt_map_keys_distinct(e, v->as.list.len / 2);
 }
 
 static GeasStatus conform_fields(const GeasContractDesc* d, const GeasTypeNode* n,
-                                 const GeasValue* v, uint32_t depth) {
+                                 const GeasValue* v, uint32_t depth, uint64_t* nodes) {
     if (n && v->as.list.len != n->nkids) return GEAS_ERR_TYPE;
-    return conform_slots(d, n ? n->kids : NULL, v, depth);
+    return conform_slots(d, n ? n->kids : NULL, v, depth, nodes);
 }
 
 static GeasStatus conform_sum(const GeasContractDesc* d, const GeasTypeNode* n,
-                              const GeasValue* v, uint32_t depth) {
-    if (!n) return conform_slots(d, NULL, v, depth);
+                              const GeasValue* v, uint32_t depth, uint64_t* nodes) {
+    if (!n) return conform_slots(d, NULL, v, depth, nodes);
     if (v->tag >= n->nvariants) return GEAS_ERR_TYPE;
     const GeasTypeVariant* var = &n->variants[v->tag];
     if (v->as.list.len != var->nfields) return GEAS_ERR_TYPE;
-    return conform_slots(d, var->fields, v, depth);
+    return conform_slots(d, var->fields, v, depth, nodes);
 }
 
 /* None carries a NULL box and nothing else, the spelling the wire codec
@@ -246,31 +247,39 @@ static GeasStatus conform_sum(const GeasContractDesc* d, const GeasTypeNode* n,
  * had such a box dropped by the copy; a body's answer is not copied and is
  * held to the rule as written */
 static GeasStatus conform_option(const GeasContractDesc* d, const GeasTypeNode* n,
-                                 const GeasValue* v, uint32_t depth) {
+                                 const GeasValue* v, uint32_t depth, uint64_t* nodes) {
     if (v->tag > 1) return GEAS_ERR_TYPE;
     if (v->tag == 0) return v->as.box ? GEAS_ERR_TYPE : GEAS_OK;
     if (!v->as.box) return GEAS_ERR_TYPE;
-    return conform_rec(d, n ? n->kids[0] : GEAS_NO_TYPE, v->as.box, depth + 1);
+    return conform_rec(d, n ? n->kids[0] : GEAS_NO_TYPE, v->as.box, depth + 1, nodes);
 }
 
 /* A Result arm of Unit may ride with no box, the way a body answers Ok or
  * Err of Unit; every other arm carries its payload in the box */
 static GeasStatus conform_result(const GeasContractDesc* d, const GeasTypeNode* n,
-                                 const GeasValue* v, uint32_t depth) {
+                                 const GeasValue* v, uint32_t depth, uint64_t* nodes) {
     if (v->tag > 1) return GEAS_ERR_TYPE;
     uint32_t inner = n ? n->kids[v->tag] : GEAS_NO_TYPE;
     if (!v->as.box) {
+        /* The wire codec writes the missing box as the boxed Unit it stands
+         * for, one level further down, so that level must be one a park can
+         * still write */
+        if (depth + 1 >= GEAS_VALUE_MAX_DEPTH) return GEAS_ERR_TYPE;
         if (!n || d->types[inner].tag == GEAS_TY_UNIT) return GEAS_OK;
         return GEAS_ERR_TYPE;
     }
-    return conform_rec(d, inner, v->as.box, depth + 1);
+    return conform_rec(d, inner, v->as.box, depth + 1, nodes);
 }
 
 static GeasStatus conform_rec(const GeasContractDesc* d, uint32_t ty, const GeasValue* v,
-                              uint32_t depth) {
+                              uint32_t depth, uint64_t* nodes) {
     /* The outermost value is depth 0, so this admits exactly
      * GEAS_VALUE_MAX_DEPTH levels, the count the wire codec admits too */
     if (depth >= GEAS_VALUE_MAX_DEPTH) return GEAS_ERR_TYPE;
+    /* A value sharing its substructure is walked as the tree it unfolds to,
+     * so the walk counts every node and stops at the budget */
+    if (*nodes >= GEAS_VALUE_MAX_NODES) return GEAS_ERR_OOM;
+    (*nodes)++;
     const GeasTypeNode* n = node_of(d, ty);
     if (ty != GEAS_NO_TYPE && !n) return GEAS_ERR_TYPE;
     if (n && v->ty != n->tag) return GEAS_ERR_TYPE;
@@ -291,27 +300,35 @@ static GeasStatus conform_rec(const GeasContractDesc* d, uint32_t ty, const Geas
     case GEAS_TY_BYTES:
         return conform_text(v, 0);
     case GEAS_TY_LIST:
-        return conform_list(d, n, v, depth);
+        return conform_list(d, n, v, depth, nodes);
     case GEAS_TY_MAP:
-        return conform_map(d, n, v, depth);
+        return conform_map(d, n, v, depth, nodes);
     case GEAS_TY_TUPLE:
     case GEAS_TY_RECORD:
-        return conform_fields(d, n, v, depth);
+        return conform_fields(d, n, v, depth, nodes);
     case GEAS_TY_SUM:
-        return conform_sum(d, n, v, depth);
+        return conform_sum(d, n, v, depth, nodes);
     case GEAS_TY_OPTION:
-        return conform_option(d, n, v, depth);
+        return conform_option(d, n, v, depth, nodes);
     case GEAS_TY_RESULT:
-        return conform_result(d, n, v, depth);
+        return conform_result(d, n, v, depth, nodes);
     default:
         /* A pledge reference, an instance handle, or no tag at all */
         return GEAS_ERR_TYPE;
     }
 }
 
-GeasStatus geas_rt_conform(const GeasContractDesc* d, uint32_t ty, const GeasValue* v) {
+/* The walk from a value that sits depth levels down in what is parked, the
+ * one slot of a signal's payload Tuple among them */
+static GeasStatus conform_at(const GeasContractDesc* d, uint32_t ty, const GeasValue* v,
+                             uint32_t depth) {
     if (!d || !v) return GEAS_ERR_TYPE;
-    return conform_rec(d, ty, v, 0);
+    uint64_t nodes = 0;
+    return conform_rec(d, ty, v, depth, &nodes);
+}
+
+GeasStatus geas_rt_conform(const GeasContractDesc* d, uint32_t ty, const GeasValue* v) {
+    return conform_at(d, ty, v, 0);
 }
 
 /* ---- the registrar's check of the table ---- */
@@ -474,7 +491,8 @@ GeasStatus geas_rt_check_return(const GeasContract* c, uint32_t pidx, const Geas
 }
 
 /* A signal's payload is Unit for no parameter, the value for one, and a
- * Tuple of the arguments for several */
+ * Tuple of the arguments for several. The Tuple is a level of its own in the
+ * park row, so each of its slots is held to the depth one below it */
 GeasStatus geas_rt_check_payload(const GeasContract* c, uint32_t pidx,
                                  const GeasValue* payload) {
     const GeasContractDesc* d = c->desc;
@@ -488,7 +506,7 @@ GeasStatus geas_rt_check_payload(const GeasContract* c, uint32_t pidx,
     if (!payload->as.list.data) return GEAS_ERR_TYPE;
     const GeasValue* slots = (const GeasValue*)payload->as.list.data;
     for (uint32_t i = 0; i < it->nparams; i++) {
-        GeasStatus st = geas_rt_conform(d, it->params[i], &slots[i]);
+        GeasStatus st = conform_at(d, it->params[i], &slots[i], 1);
         if (st != GEAS_OK) return st;
     }
     return GEAS_OK;
@@ -556,13 +574,16 @@ static GeasStatus check_item(const GeasContract* c, uint32_t i) {
     return is_ok_set ? check_ok(d, ret, &f->pledge_ok[i]) : GEAS_OK;
 }
 
-/* A course's slots carry no declared type, so they are held to the
- * structural facts; a together's outcomes are held to their pledge's return */
+/* Each course slot is held to the type the descriptor's slot table names
+ * for it, or to the structural facts for GEAS_NO_TYPE and for a descriptor
+ * with no slot table; a together's outcomes are held to their pledge's
+ * return */
 static GeasStatus check_course(const GeasContract* c) {
     const GeasCourse* k = c->course;
     if (!k) return GEAS_OK;
     for (uint32_t s = 0; k->frame.slots && s < k->frame.nslots; s++) {
-        GeasStatus st = geas_rt_conform(c->desc, GEAS_NO_TYPE, &k->frame.slots[s]);
+        uint32_t ty = geas_rt_course_slot_type(c->desc, s);
+        GeasStatus st = geas_rt_conform(c->desc, ty, &k->frame.slots[s]);
         if (st != GEAS_OK) return st;
     }
     for (uint32_t i = 0; k->join && i < k->join_n; i++) {

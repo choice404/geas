@@ -85,7 +85,7 @@ func (s *StepsSession) Close() { s.cancel() }
 // ProgramRemedyShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const ProgramRemedyShapeHash uint64 = 0xafa477785f6fee52
+const ProgramRemedyShapeHash uint64 = 0x05d011f668f80da4
 
 // ProgramRemedySession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

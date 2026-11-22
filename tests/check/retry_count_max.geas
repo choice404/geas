@@ -1,0 +1,7 @@
+// A retry counts at most a million attempts
+PayError is either Declined
+
+contract Shop {
+    pledge pay() -> Result<Unit, PayError> retry 1000000
+    pledge charge() -> Result<Unit, PayError> retry 4294967297
+}

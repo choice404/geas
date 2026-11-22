@@ -490,6 +490,306 @@ export function resumeAmendCourseNoneSession(
   });
 }
 
+// AmendCourseRetypedShapeHash is the contract's shape hash, the same value the
+// compiled module registers. Sending its decimal spelling as expected_hash
+// pins the wire to this build; leaving the field unset skips the check.
+export const AmendCourseRetypedShapeHash: bigint = 0x30c0220593fe83b7n;
+
+export interface AmendCourseRetypedSignRequest {
+  expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
+}
+
+export interface AmendCourseRetypedResumeRequest {
+  park_token: string;  // the resume key a park enabled server issued at sign
+  expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
+}
+
+export interface AmendCourseRetypedSigned {
+  instance_id: string;
+  shape_hash: string;
+  signed_at: string;
+  park_token: string;  // empty when the server runs without a park store
+}
+
+// AmendCourseRetypedSession holds a signed instance open. The instance lives
+// exactly as long as this handle: close ends the stream, and the server
+// breaks and drops the instance.
+export interface AmendCourseRetypedSession {
+  signed: AmendCourseRetypedSigned;
+  close(): void;
+}
+
+// openAmendCourseRetypedSession signs the contract and holds the session stream.
+// The signature is read off the stream before the promise settles, so the
+// caller holds a live, addressable instance or an error, never a maybe.
+export function openAmendCourseRetypedSession(
+  client: { Session(req: AmendCourseRetypedSignRequest): SessionStream },
+  req: AmendCourseRetypedSignRequest,
+): Promise<AmendCourseRetypedSession> {
+  return new Promise((resolve, reject) => {
+    const stream = client.Session(req);
+    let opened = false;
+    stream.on("data", (ev) => {
+      if (opened) { return; }
+      const signed = (ev as { signed?: AmendCourseRetypedSigned }).signed;
+      if (!signed) {
+        stream.cancel();
+        reject(new Error("the session stream opened without the signature"));
+        return;
+      }
+      opened = true;
+      resolve({ signed, close: () => stream.cancel() });
+    });
+    stream.on("error", (err) => {
+      // After the signature the stream's end is the session's end, the
+      // cancel the close asked for; before it, the sign itself refused.
+      if (!opened) { reject(err); }
+    });
+  });
+}
+
+// resumeAmendCourseRetypedSession stands a parked instance back up and holds its new
+// session stream, the same handle open answers; close is once again the
+// ending.
+export function resumeAmendCourseRetypedSession(
+  client: { Resume(req: AmendCourseRetypedResumeRequest): SessionStream },
+  req: AmendCourseRetypedResumeRequest,
+): Promise<AmendCourseRetypedSession> {
+  return new Promise((resolve, reject) => {
+    const stream = client.Resume(req);
+    let opened = false;
+    stream.on("data", (ev) => {
+      if (opened) { return; }
+      const signed = (ev as { signed?: AmendCourseRetypedSigned }).signed;
+      if (!signed) {
+        stream.cancel();
+        reject(new Error("the session stream opened without the signature"));
+        return;
+      }
+      opened = true;
+      resolve({ signed, close: () => stream.cancel() });
+    });
+    stream.on("error", (err) => {
+      if (!opened) { reject(err); }
+    });
+  });
+}
+
+// getAmendCourseRetypedCourse reads where the session's instance's course stands.
+// state is the CourseState number, status the GeasStatus that halted it,
+// and wait_due_ms the decimal runtime clock time its wait falls due, "0"
+// when nothing is due. It never waits on the course.
+export function getAmendCourseRetypedCourse(
+  client: { GetCourse(req: object, done: (err: Error | null, reply?: CourseReply) => void): unknown },
+  session: AmendCourseRetypedSession,
+): Promise<CourseReply> {
+  return new Promise((resolve, reject) => {
+    client.GetCourse({ instance_id: session.signed.instance_id }, (err, reply) => {
+      if (err || !reply) { reject(err ?? new Error("GetCourse answered nothing")); } else { resolve(reply); }
+    });
+  });
+}
+
+// AmendCourseLiteralShapeHash is the contract's shape hash, the same value the
+// compiled module registers. Sending its decimal spelling as expected_hash
+// pins the wire to this build; leaving the field unset skips the check.
+export const AmendCourseLiteralShapeHash: bigint = 0xbd9d3c638ac3a5a7n;
+
+export interface AmendCourseLiteralSignRequest {
+  expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
+}
+
+export interface AmendCourseLiteralResumeRequest {
+  park_token: string;  // the resume key a park enabled server issued at sign
+  expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
+}
+
+export interface AmendCourseLiteralSigned {
+  instance_id: string;
+  shape_hash: string;
+  signed_at: string;
+  park_token: string;  // empty when the server runs without a park store
+}
+
+// AmendCourseLiteralSession holds a signed instance open. The instance lives
+// exactly as long as this handle: close ends the stream, and the server
+// breaks and drops the instance.
+export interface AmendCourseLiteralSession {
+  signed: AmendCourseLiteralSigned;
+  close(): void;
+}
+
+// openAmendCourseLiteralSession signs the contract and holds the session stream.
+// The signature is read off the stream before the promise settles, so the
+// caller holds a live, addressable instance or an error, never a maybe.
+export function openAmendCourseLiteralSession(
+  client: { Session(req: AmendCourseLiteralSignRequest): SessionStream },
+  req: AmendCourseLiteralSignRequest,
+): Promise<AmendCourseLiteralSession> {
+  return new Promise((resolve, reject) => {
+    const stream = client.Session(req);
+    let opened = false;
+    stream.on("data", (ev) => {
+      if (opened) { return; }
+      const signed = (ev as { signed?: AmendCourseLiteralSigned }).signed;
+      if (!signed) {
+        stream.cancel();
+        reject(new Error("the session stream opened without the signature"));
+        return;
+      }
+      opened = true;
+      resolve({ signed, close: () => stream.cancel() });
+    });
+    stream.on("error", (err) => {
+      // After the signature the stream's end is the session's end, the
+      // cancel the close asked for; before it, the sign itself refused.
+      if (!opened) { reject(err); }
+    });
+  });
+}
+
+// resumeAmendCourseLiteralSession stands a parked instance back up and holds its new
+// session stream, the same handle open answers; close is once again the
+// ending.
+export function resumeAmendCourseLiteralSession(
+  client: { Resume(req: AmendCourseLiteralResumeRequest): SessionStream },
+  req: AmendCourseLiteralResumeRequest,
+): Promise<AmendCourseLiteralSession> {
+  return new Promise((resolve, reject) => {
+    const stream = client.Resume(req);
+    let opened = false;
+    stream.on("data", (ev) => {
+      if (opened) { return; }
+      const signed = (ev as { signed?: AmendCourseLiteralSigned }).signed;
+      if (!signed) {
+        stream.cancel();
+        reject(new Error("the session stream opened without the signature"));
+        return;
+      }
+      opened = true;
+      resolve({ signed, close: () => stream.cancel() });
+    });
+    stream.on("error", (err) => {
+      if (!opened) { reject(err); }
+    });
+  });
+}
+
+// getAmendCourseLiteralCourse reads where the session's instance's course stands.
+// state is the CourseState number, status the GeasStatus that halted it,
+// and wait_due_ms the decimal runtime clock time its wait falls due, "0"
+// when nothing is due. It never waits on the course.
+export function getAmendCourseLiteralCourse(
+  client: { GetCourse(req: object, done: (err: Error | null, reply?: CourseReply) => void): unknown },
+  session: AmendCourseLiteralSession,
+): Promise<CourseReply> {
+  return new Promise((resolve, reject) => {
+    client.GetCourse({ instance_id: session.signed.instance_id }, (err, reply) => {
+      if (err || !reply) { reject(err ?? new Error("GetCourse answered nothing")); } else { resolve(reply); }
+    });
+  });
+}
+
+// AmendCourseCommentShapeHash is the contract's shape hash, the same value the
+// compiled module registers. Sending its decimal spelling as expected_hash
+// pins the wire to this build; leaving the field unset skips the check.
+export const AmendCourseCommentShapeHash: bigint = 0x9bc9227ad7cc7895n;
+
+export interface AmendCourseCommentSignRequest {
+  expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
+}
+
+export interface AmendCourseCommentResumeRequest {
+  park_token: string;  // the resume key a park enabled server issued at sign
+  expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
+}
+
+export interface AmendCourseCommentSigned {
+  instance_id: string;
+  shape_hash: string;
+  signed_at: string;
+  park_token: string;  // empty when the server runs without a park store
+}
+
+// AmendCourseCommentSession holds a signed instance open. The instance lives
+// exactly as long as this handle: close ends the stream, and the server
+// breaks and drops the instance.
+export interface AmendCourseCommentSession {
+  signed: AmendCourseCommentSigned;
+  close(): void;
+}
+
+// openAmendCourseCommentSession signs the contract and holds the session stream.
+// The signature is read off the stream before the promise settles, so the
+// caller holds a live, addressable instance or an error, never a maybe.
+export function openAmendCourseCommentSession(
+  client: { Session(req: AmendCourseCommentSignRequest): SessionStream },
+  req: AmendCourseCommentSignRequest,
+): Promise<AmendCourseCommentSession> {
+  return new Promise((resolve, reject) => {
+    const stream = client.Session(req);
+    let opened = false;
+    stream.on("data", (ev) => {
+      if (opened) { return; }
+      const signed = (ev as { signed?: AmendCourseCommentSigned }).signed;
+      if (!signed) {
+        stream.cancel();
+        reject(new Error("the session stream opened without the signature"));
+        return;
+      }
+      opened = true;
+      resolve({ signed, close: () => stream.cancel() });
+    });
+    stream.on("error", (err) => {
+      // After the signature the stream's end is the session's end, the
+      // cancel the close asked for; before it, the sign itself refused.
+      if (!opened) { reject(err); }
+    });
+  });
+}
+
+// resumeAmendCourseCommentSession stands a parked instance back up and holds its new
+// session stream, the same handle open answers; close is once again the
+// ending.
+export function resumeAmendCourseCommentSession(
+  client: { Resume(req: AmendCourseCommentResumeRequest): SessionStream },
+  req: AmendCourseCommentResumeRequest,
+): Promise<AmendCourseCommentSession> {
+  return new Promise((resolve, reject) => {
+    const stream = client.Resume(req);
+    let opened = false;
+    stream.on("data", (ev) => {
+      if (opened) { return; }
+      const signed = (ev as { signed?: AmendCourseCommentSigned }).signed;
+      if (!signed) {
+        stream.cancel();
+        reject(new Error("the session stream opened without the signature"));
+        return;
+      }
+      opened = true;
+      resolve({ signed, close: () => stream.cancel() });
+    });
+    stream.on("error", (err) => {
+      if (!opened) { reject(err); }
+    });
+  });
+}
+
+// getAmendCourseCommentCourse reads where the session's instance's course stands.
+// state is the CourseState number, status the GeasStatus that halted it,
+// and wait_due_ms the decimal runtime clock time its wait falls due, "0"
+// when nothing is due. It never waits on the course.
+export function getAmendCourseCommentCourse(
+  client: { GetCourse(req: object, done: (err: Error | null, reply?: CourseReply) => void): unknown },
+  session: AmendCourseCommentSession,
+): Promise<CourseReply> {
+  return new Promise((resolve, reject) => {
+    client.GetCourse({ instance_id: session.signed.instance_id }, (err, reply) => {
+      if (err || !reply) { reject(err ?? new Error("GetCourse answered nothing")); } else { resolve(reply); }
+    });
+  });
+}
+
 // What GetCourse answers, the CourseReply message as the loader hands it.
 export interface CourseReply {
   state: number;

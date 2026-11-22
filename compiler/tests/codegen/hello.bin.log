@@ -1,4 +1,4 @@
 exit 1
 skeleton/hello.geas: 1:1: error: a --bin build needs exactly one Main contract
-  // The walking skeleton. This contract is the program every milestone keeps
+  // The walking skeleton. This contract is the program every release keeps
   ^

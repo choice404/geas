@@ -236,17 +236,22 @@ static GeasStatus amend_vows(GeasContract* c, const GeasAmendDesc* a, const Geas
 /* ---- latches, subcontracts, remedies ---- */
 
 /* Retry progress held to M's budget for item j: none when M gives the item
- * no retry, a signal included, and never more attempts than M allows, the
- * saved due time kept */
-static void carry_retry(GeasContract* c, uint32_t j, uint32_t attempts, int64_t due_ms) {
+ * no retry, a signal included, and never more attempts than M allows. The
+ * saved due time is kept, held to no later than now plus the delay M's term
+ * gives the next attempt */
+static void carry_retry(GeasContract* c, uint32_t j, uint32_t attempts, int64_t due_ms,
+                        int64_t now) {
     const GeasTermDesc* t = geas_rt_pledge_term(c->desc, j);
     if (!attempts || !t || t->retry_count == 0 || geas_rt_is_signal(c->desc, j)) return;
-    c->flow.retry_attempts[j] = attempts < t->retry_count ? attempts : t->retry_count;
-    c->flow.retry_due_ms[j] = due_ms;
+    uint32_t kept = attempts < t->retry_count ? attempts : t->retry_count;
+    int64_t bound = geas_rt_ms_after(now, geas_rt_retry_delay(t, kept - 1));
+    c->flow.retry_attempts[j] = kept;
+    c->flow.retry_due_ms[j] = due_ms < bound ? due_ms : bound;
 }
 
 /* Step 4 */
-static void amend_items(GeasContract* c, const GeasAmendDesc* a, const GeasAmendImage* img) {
+static void amend_items(GeasContract* c, const GeasAmendDesc* a, const GeasAmendImage* img,
+                        int64_t now) {
     GeasFlow* f = &c->flow;
     for (uint32_t i = 0; i < a->nold_items; i++) {
         int32_t j = a->item_map[i];
@@ -259,7 +264,7 @@ static void amend_items(GeasContract* c, const GeasAmendDesc* a, const GeasAmend
         f->latch_seq[j] = img->latch_seq[i];
         f->pledge_ok[j] = img->ok[i];
         f->pledge_ok_set[j] = img->ok_set[i];
-        carry_retry(c, (uint32_t)j, img->retry_attempts[i], img->retry_due_ms[i]);
+        carry_retry(c, (uint32_t)j, img->retry_attempts[i], img->retry_due_ms[i], now);
     }
 }
 
@@ -357,7 +362,7 @@ static GeasStatus amend_flow(GeasContract* c, const GeasAmendDesc* a, const Geas
         c->flow.term_lapsed = img->term_lapsed;
         c->flow.next_seq = img->next_seq;
     }
-    amend_items(c, a, img);
+    amend_items(c, a, img, now);
     amend_subs(c, a, img);
     amend_remedies(c, a, img);
     amend_seeds(c, a, img);

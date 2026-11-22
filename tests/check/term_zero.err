@@ -1,0 +1,3 @@
+the within term must be a duration greater than zero
+retry every must be a duration greater than zero
+retry cap must be a duration greater than zero

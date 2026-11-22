@@ -1,0 +1,16 @@
+# exit code|text stderr holds, empty for none|arguments
+7||
+1|Main.run failed to deliver (status 2)|1
+1|Main.run failed to deliver (status 2)|1 2
+1|Main.run failed to deliver (status 2)|1 2 3
+1|Main.run failed to deliver (status 2)|1 2 3 4
+1|Main.run failed to deliver (status 2)|1 2 3 4 5
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8 9
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8 9 10
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8 9 10 11
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8 9 10 11 12
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8 9 10 11 12 13
+1|Main.run failed to deliver (status 2)|1 2 3 4 5 6 7 8 9 10 11 12 13 14

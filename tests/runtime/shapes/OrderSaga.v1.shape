@@ -1,9 +1,9 @@
-geas shape 2
+geas shape 3
 contract OrderSaga
 version 1
-hash 0xeef34448ebb6d73c
+hash 0x4636836322acf73d
 course 0x0000000000000000
-shape contract OrderSaga;vow amount:I;vow grace:D;pledge authorize:(NCard)->R(NAuthId,NPayError);pledge capture:(NAuthId)->R(NReceipt,NPayError);pledge reserve:(S,D)->R(NReservation,NStockError);pledge ship:(NReservation)->R(NTracking,NShipError);signal delivered:(NTracking)->V;remedy refund:capture:(NReceipt)->R(V,NPayError);remedy release:reserve:(NReservation)->R(V,NStockError);terms pledge authorize:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout+Gateway;terms pledge capture:after=authorize,within=60000;terms pledge ship:after=Payment+reserve;terms signal delivered:after=ship,within=259200000;terms remedy refund:retry=2/every=60000;term 604800000;type AuthId{token:S};type Card{number:S};type PayError=Declined(reason:S)|Timeout|Gateway(code:I);type Receipt{id:S,amount:I};type Reservation{id:S,sku:S,hold:D};type ShipError=NoCarrier|Refused(reason:S);type StockError=OutOfStock(sku:S)|Unavailable;type Tracking{carrier:S,code:S};
+shape contract OrderSaga;vow amount:I;vow grace:D;pledge authorize:(NCard)->R(NAuthId,NPayError);pledge capture:(NAuthId)->R(NReceipt,NPayError);pledge reserve:(S,D)->R(NReservation,NStockError);pledge ship:(NReservation)->R(NTracking,NShipError);signal delivered:(NTracking)->V;remedy refund:capture:(NReceipt)->R(V,NPayError);remedy release:reserve:(NReservation)->R(V,NStockError);terms pledge authorize:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout+Gateway;terms pledge capture:after=authorize,within=60000;terms pledge ship:after=Payment+reserve;terms signal delivered:after=ship,within=259200000;terms remedy refund:retry=2/every=60000;term 604800000;sub Payment:authorize,capture;requirements fulfill=(((Payment&reserve)&ship)&delivered),partial=(Payment|reserve),break=(((!Payment|!reserve)|!ship)|!delivered);type AuthId{token:S};type Card{number:S};type PayError=Declined(reason:S)|Timeout|Gateway(code:I);type Receipt{id:S,amount:I};type Reservation{id:S,sku:S,hold:D};type ShipError=NoCarrier|Refused(reason:S);type StockError=OutOfStock(sku:S)|Unavailable;type Tracking{carrier:S,code:S};
 vow amount I
 vow grace D
 pledge authorize (NCard)->R(NAuthId,NPayError) NAuthId

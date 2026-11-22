@@ -1,0 +1,9 @@
+// One operator of an expression the course evaluates changes
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    signal ready(value: Int)
+    course {
+        let first = await ready
+        visit(first - 2)?
+    }
+}

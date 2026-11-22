@@ -3,3 +3,6 @@ the course of version 2 differs from the course of version 1, so its frame canno
 version 2 adds a course version 1 did not have; add restart course to enter it at step 0
 restart course, but version 2 has no course; the frame of version 1 is dropped with no item
 restart course, but neither version 1 nor version 2 has a course
+63:5: error: the course of version 2 differs from the course of version 1, so its frame cannot carry; add restart course
+73:5: error: the course of version 2 differs from the course of version 1, so its frame cannot carry; add restart course
+84:5: error: restart course, but the course is the one version 1 had and its frame carries over

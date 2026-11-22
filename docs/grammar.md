@@ -33,9 +33,9 @@ So the way the line break works is simple once you see where it lives. The lexer
 - A line that starts with a binary operator does not continue the line above; the expression above ended at the line break. Break a long expression after the operator, never before it.
 - A few tokens continue the previous line even at its start: the term keywords `within`, `after`, and `retry` under a signature, `or` in a sum declaration, and `else` after an `if` block. That is what lets terms stack one per line under a pledge and lets `}` and `else {` sit on separate lines.
 - The options of a `retry` term, `every`, `backoff`, `cap`, and `on`, stay on the `retry`'s own line.
-- An attribute list `[...]` and a body `{` open on the line their declaration ends on, which for a pledge with terms is the line of its last term. A `{` on a line of its own is a stray block, not a body.
+- An attribute list `[...]`, and the body `{` of a pledge, a clause, or a remedy, open on the line their declaration ends on, which for a pledge with terms is the line of its last term. A pledge whose `{` sits on the next line has no body as far as the parser is concerned, so the brace is refused as a stray member, and a clause, which always has a body, says it is missing one. Every other `{`, the one that opens a record, a schema, a contract, a provisional clause, a subcontract, a `requirements` block, a `course`, an `amends` block, or the block of an `if`, `else`, `while`, `for`, or `match`, may sit on the line after its head as well as on the same one.
 
-Nesting depth is capped. A parser that hits the ceiling reports a diagnostic and stops rather than hanging or overflowing its stack.
+Nesting depth is capped at 500. The parser counts every block, bracket, and parenthesis it opens, every operator a chain of binary operators links, since each one nests the expression tree a level deeper, and every call, index, or member suffix after a primary, so a long `a + b + c + ...` chain counts against the cap the way deep parentheses do. A parser that hits the ceiling reports a diagnostic and stops rather than hanging or overflowing its stack, and no later walk of the tree ever recurses past it.
 
 ## Comments
 
@@ -117,7 +117,7 @@ BOOL     ::= "true" | "false"
 escape   ::= "\n" | "\t" | "\r" | "\0" | "\\" | "\"" | "\'" | "\u{" hex "}"
 ```
 
-An `INT` or `SIZE` literal types as `Int` unless the expected type at its position is `UInt` or `Byte` and the value fits. A `FLOAT` literal types as `Float`. `CHAR` holds one Unicode scalar value. There is no implicit numeric conversion anywhere, widening included.
+An `INT` or `SIZE` literal types as `Int` unless the expected type at its position is `UInt` or `Byte` and the value fits. Its magnitude must fit 64 bits signed, a lex error otherwise, save the magnitude of the least `Int`, `9223372036854775808`, which is legal only as the operand of a unary minus right before it, `-9223372036854775808`, and spells the least `Int` there; the least `Duration`, `-9223372036854775808ms`, and the least size, `-8388608T`, follow the same rule. A `FLOAT` literal types as `Float` and stands for the double nearest the decimal it spells, underscores ignored, so `1_000.5` and `1000.5` are one value; a literal whose value is past the largest finite double, `1.0e309`, is a lex error. `CHAR` holds one Unicode scalar value. There is no implicit numeric conversion anywhere, widening included, and there is no conversion syntax either: no cast, no `as`, and no call named after a type, so a value of one numeric type never becomes another inside the language. A host that needs a value in another width hands it in at that width.
 
 A `SIZE` is one token, `64M`, `512K`, `1G`, with no whitespace before its uppercase suffix. The suffix counts bytes in binary multiples: `K` is 1024, `M` is 1024 squared, `G` is 1024 cubed, and `T` is 1024 to the fourth power. A size is an integer spelling, legal wherever an integer literal is legal, including attributes, vow defaults, patterns, retry counts, and amendment versions. Unary minus applies the same way, so `-512K` is an `Int` value of -524288. The decoded value must fit `Int` before negation; `64Mb`, `1Gx`, and a suffix followed by any other identifier character are lex errors. The lex and parse dumps retain `Size(bytes)`, while emitted C carries the plain integer. Where a production below calls for `INT`, `SIZE` is accepted too.
 
@@ -143,10 +143,9 @@ The fixed representations, identical on every target:
 ## Types
 
 ```text
-Type       ::= NamedType | TupleType | PledgeType
+Type       ::= NamedType | TupleType
 NamedType  ::= IDENT [ "<" Type { "," Type } ">" ]
 TupleType  ::= "Tuple" "<" Type { "," Type } ">"
-PledgeType ::= "pledge" "(" [ Type { "," Type } ] ")" "->" Type
 ```
 
 The builtin named types are `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `String`, `Bytes`, `Unit`, `Duration`, `Time`, `List<T>`, `Map<K, V>`, `Option<T>`, `Result<T, E>`, and `Tuple<...>`. Type arguments belong to the builtin composites only. A user declaration does not take type parameters. Every instantiation is monomorphized, and only instantiations reachable from a pledge signature get an ABI descriptor.
@@ -167,7 +166,7 @@ The builtin named types are `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `Str
 
 Two `Duration` values or two `Time` values compare with `==`, `!=`, `<`, `<=`, `>`, and `>=`. Every other pairing is a type error: `Duration * Float`, `Duration + Int`, `Int * Duration`, `Time + Time`, and comparing a `Duration` with a `Time` among them. A `Time` comes from outside, a vow, a parameter, a signal payload, or `now()` inside a course; there is no `Time` literal.
 
-A `PledgeType` is the type of a first class pledge value. The value is always bound to a signed contract instance, so calling one fulfills that pledge on that instance. Like the instance it is bound to, a pledge value never crosses the boundary, so a `PledgeType` is rejected at every position a contract type is, listed below, and lives in clause parameters, clause returns, and local bindings.
+Every other type name has to be declared: a record, a sum, a schema's row, or a contract. A name nothing declares is a compile error wherever an annotation spells it, `unknown type 'Strng'`, so a typo never turns into a type that takes any value. The one name the compiler brings in with no declaration behind it is `StoreError`, the `Err` side of every Store answer.
 
 A contract name used as a type denotes a signed instance, and an instance never crosses the boundary. A contract type is therefore rejected anywhere a value would cross it: a pledge, remedy, or signal parameter or return, a vow, a record or sum field, and a provisional clause signature, at any nesting depth. Clause parameters, clause returns, and local bindings may carry contract types freely, since they never leave the module.
 
@@ -187,9 +186,11 @@ A file is a module. A directory is a package. `import std.math` brings a module 
 AttributeDecl ::= [ "internal" ] "attribute" IDENT ":" AttrType "on" AttrTarget
 AttrType      ::= "Int" | "Float" | "Bool" | "String" | "Duration"
 AttrTarget    ::= "contract" | "subcontract" | "pledge" | "signal" | "remedy"
-Attrs         ::= "[" IDENT ":" AttrValue { "," IDENT ":" AttrValue } "]"
+Attrs         ::= "[" IDENT ":" AttrValue { "," IDENT ":" AttrValue } [ "," ] "]"
 AttrValue     ::= [ "-" ] ( INT | SIZE | FLOAT | DURATION ) | BOOL | STRING
 ```
+
+A trailing comma before the closing `]` is accepted, so `[version: 2,]` and `[version: 2]` are the same list.
 
 An attribute declaration occupies one line and follows the module rules: declarations in loaded modules are visible across their package and through `import`, and `internal` keeps one inside its package. Attribute names have one namespace per target. A name may be declared on several targets, but a second declaration for the same target is an error, and a declaration cannot shadow a builtin key on a target that owns that key.
 
@@ -202,6 +203,8 @@ attribute program: String on pledge
 attribute region: Int on pledge
 attribute queue: String on contract
 
+CopyError is either Failed(code: Int)
+
 contract Job [queue: "batch"] {
     pledge copy(target: String) -> Result<Unit, CopyError> [program: "/bin/copy", region: 64M]
 }
@@ -209,9 +212,9 @@ contract Job [queue: "batch"] {
 
 The builtin keys:
 
-- `version: INT` on a contract. Defaults to 1. Baked into every mangled name the contract produces.
+- `version: INT` on a contract, from 1 through 4294967295. Defaults to 1. Baked into every mangled name the contract produces.
 - `term: DURATION` on a contract, its whole lifetime counted from sign. The duration must be greater than zero, and this builtin key belongs on a contract only. A pledge or remedy needs its own declared attribute to use the name `term`. When the term runs out while the contract is Signed or Partial, the contract breaks the way a matched break line breaks it, remedies included; a contract already Fulfilled met its terms and is left alone.
-- `abi: STRING` and `symbol: STRING` on a pledge or a remedy. Binds it to a foreign symbol. `"c"` is the only ABI.
+- `abi: STRING` and `symbol: STRING` on a pledge or a remedy with no body. Binds it to a function the host process exports under that symbol. `"c"` is the only ABI, the symbol is a C identifier that does not start with `geas_`, `__geas_`, or `GEAS_`, the prefixes the runtime and the emitted code own, and the two keys always appear together. A pledge or a remedy with a body takes neither, and a signal, a subcontract, or a contract takes neither.
 
 ## Data declarations
 
@@ -280,10 +283,11 @@ Semantic notes.
 
 - A pledge return type must be `Result<T, E>`, `Option<T>`, `Unit`, or `Bytes`. A bare `Bytes` return latches fulfilled on delivery.
 - A pledge with a `Block` is implemented in Geas. A pledge without one is abstract: it must be bound to a foreign symbol through `[abi: ..., symbol: ...]` or bound by the host through the runtime before the contract signs. Signing with an unbound pledge is an error.
-- A vow initializer must be a constant expression of the vow type. A vow without an initializer must be supplied at sign time.
+- A vow initializer is a literal of the vow type, a unary minus in front of a number or a duration included, `vow retries: Int = -1` or `vow grace: Duration = 30m`; anything else, `1 + 2` or another vow's name, is `vow 'NAME' initializer must be a constant literal`. A vow without an initializer must be supplied at sign time.
 - A vow's type is one the contract descriptor carries as a single value: `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, `String`, `Bytes`, `Duration`, or `Time`. A vow of a record, a sum, a `List`, a `Map`, an `Option`, a `Result`, or `Unit` checks, and `geas build` refuses it with `codegen: not yet supported: a vow of this type in a compiled module`; carrying composite vows in the descriptor is a later step on the roadmap.
 - Clauses are not first class. A clause is callable by bare name only inside its own contract.
 - Subcontracts do not nest. An anonymous subcontract cannot be named in a `requirements` block.
+- A subcontract holds at least one pledge or signal. It is fulfilled when every member inside it is, so an empty one would never be, and the checker refuses it.
 - A `schema` names a table and its columns for a store-backed contract. A column type is one of the seven scalars a flat row holds, `Int`, `UInt`, `Float`, `Bool`, `Byte`, `Char`, or `String`; a composite column type is a type error. The first column is the schema's primary key. A contract may declare more than one schema, one per table it touches, and the schema is vow shaped: it joins the shape hash and locks at sign. A contract that declares at least one schema is store-backed and must carry a `dsn` vow, or the sign fails unbound.
 - The `transactional` modifier runs a subcontract's pledges as one all-or-nothing episode and is allowed only on a subcontract in a store-backed contract. Its pledges commit together when the subcontract completes and roll back on the first `Err` or at a break before the commit; a subcontract without the modifier groups for the policy alone, its pledges autocommit. A transactional subcontract holds no signal and no pledge with a `retry`: a signal arrives from outside and never belongs inside an open transaction, and a retry would run a failed attempt's writes and the next attempt's inside one episode, so both are compile errors rather than given a meaning.
 - Names are unique across a contract's pledges, signals, remedies, vows, schemas, clauses, and named subcontracts.
@@ -321,8 +325,8 @@ Semantic notes.
 
 - **Eligibility.** Every pledge, signal, and subcontract becomes eligible at some moment. With no `after` that moment is the sign. With an `after` it is the moment every item it names has latched fulfilled, a named subcontract counting when every member inside it has. An `Err` or a lapse never satisfies an `after`, so an item waiting on something that broke never becomes eligible. A subcontract's own `after` and `within` cover its members: a member is eligible once its subcontract is and its own `after` has landed too.
 - **`after`** names pledges, subcontracts, or signals of the same contract, never a vow, a clause, or a remedy. An item cannot be ordered after itself, a member after its own subcontract, or a subcontract after one of its own members, and the checker rejects a cycle through the `after` graph and names the path. Fulfilling or delivering an item before it is eligible is a state error and runs nothing.
-- **`within`** is a deadline counted from eligibility. An item still pending when it passes lapses: it latches broken with no `Err` payload, because the pledge's own error type has no say over a deadline, and the runtime marks the latch as a lapse. A lapse is the cause of a latch, never the status of a call. A body started before the deadline lands its outcome even if it returns after it. A subcontract's `within` lapses every member inside it that has not latched.
-- **`retry`** is the number of attempts after the first, at least 1. The delay before retry number n, counting from 0, is `every` times `backoff` to the power n, held at `cap` when one is given; `backoff` is a `FLOAT` literal of at least `1.0`, written with its decimal point, `2.0` and never `2`. Without `on`, only a lifecycle failure retries, a lost worker or a lapsed attempt, never a business `Err`. With `on`, the pledge's return must be a `Result` whose error type is a declared sum, and the listed names must be distinct variants of it; an `Err` carrying one of them retries too. A remedy's `retry` follows the same rules over the remedy's own return.
+- **`within`** is a deadline counted from eligibility, a duration greater than zero; `within 0s` would read as no deadline at all, so it is a compile error. An item still pending when it passes lapses: it latches broken with no `Err` payload, because the pledge's own error type has no say over a deadline, and the runtime marks the latch as a lapse. A lapse is the cause of a latch, never the status of a call. A body started before the deadline lands its outcome even if it returns after it. A subcontract's `within` lapses every member inside it that has not latched.
+- **`retry`** is the number of attempts after the first, at least 1 and at most 1,000,000. The delay before retry number n, counting from 0, is `every` times `backoff` to the power n, held at `cap` when one is given; `every` and `cap` are durations greater than zero, since a zero one would read as no delay or no cap, and `backoff` is a `FLOAT` literal of at least `1.0`, written with its decimal point, `2.0` and never `2`. Without `on`, only a lifecycle failure retries, a lost worker or a lapsed attempt, never a business `Err`. With `on`, the pledge's return must be a `Result` whose error type is a declared sum, and the listed names must be distinct variants of it; an `Err` carrying one of them retries too. A remedy's `retry` follows the same rules over the remedy's own return.
 - The options of a `retry` stay on its line and come in the order the production gives, `every`, `backoff`, `cap`, `on`, each optional.
 
 ## Remedies
@@ -371,11 +375,8 @@ Semantic notes.
 ## Requirements
 
 ```text
-RequirementsBlock ::= "requirements" "{" NL
-                        [ "fulfill" ":" ReqExpr NL ]
-                        [ "partial" ":" ReqExpr NL ]
-                        [ "break"   ":" ReqExpr NL ]
-                      "}"
+RequirementsBlock ::= "requirements" "{" NL { ReqLine NL } "}"
+ReqLine  ::= ( "fulfill" | "partial" | "break" ) ":" ReqExpr
 
 ReqExpr  ::= ReqOr
 ReqOr    ::= ReqAnd { "||" ReqAnd }
@@ -384,7 +385,7 @@ ReqNot   ::= [ "!" ] ReqAtom
 ReqAtom  ::= IDENT | "(" ReqExpr ")"
 ```
 
-A `ReqAtom` names a named subcontract, a pledge declared outside any subcontract, or a signal declared outside any subcontract. A remedy is never an atom. A bare name means that item is fulfilled, `!` negates it. A written requirements block names at most 64 distinct atoms across its three lines.
+The three lines come in any order, each at most once, and any of them may be left out; a second `fulfill` line is `duplicate 'fulfill' line in the requirements block`. A line a written block leaves out never matches, it does not fall back to its default, so a block with no `break` line is a contract no latch breaks, and only its term or an explicit break ends it. Writing them fulfill, partial, break is the convention every example follows. A `ReqAtom` names a named subcontract, a pledge declared outside any subcontract, or a signal declared outside any subcontract. A remedy is never an atom. A bare name means that item is fulfilled, `!` negates it. A written requirements block names at most 64 distinct atoms across its three lines.
 
 A pledge latches. It becomes fulfilled on its first `Ok` and broken on an `Err` that lands before any `Ok`, or on a lapse. Later calls still run and still return their results to the caller, but the latched state never changes, so contract state never regresses. A subcontract is fulfilled when every member inside it is, and broken when every member inside it is.
 
@@ -435,6 +436,7 @@ A suspending operation is one the course can stop at and come back to: a call of
 - The right operand of `&&` and `||` cannot hold one. Hoisting it would run it before the left operand decided whether it runs at all, so the checker refuses it and says to bind it with `let` first.
 - A clause called from a course is ordinary code and holds no suspending operation; only the course itself suspends.
 - A course binding never has a contract instance type, directly or inside a record, a list, an option, or any other composite, and neither does a hidden temporary the compiler makes. A frame must be able to park, and an instance handle does not survive a park, so signing another contract and holding its instance in a course is refused.
+- Every binding and every hidden temporary of a course lives in a slot of the frame, and a slot starts at the smallest value of its type when the instance signs: zero, empty, `None`, a record of smallest fields, the variant of a sum whose fields nest least, the first on a tie, and the arm of a `Result` that nests least, `Ok` on a tie. So a slot's type has a finite value, and its smallest value nests at most 256 levels and holds at most 4096 values. A record that holds itself with no `Option` or `List` between has no finite value and one that holds the next record twice passes the count in a dozen levels, and `geas build` refuses a course that holds either, saying to hold the value behind an `Option` or a `List`, whose smallest value is one value however large the type inside.
 - The values a course makes, the copies its bindings take, and every step's result live on the instance's heap until the instance is broken. A loop in a course that runs many times grows that heap with each pass, so a long running loop belongs in a pledge, or in a contract of its own, rather than in the course.
 
 ## Amendment
@@ -485,9 +487,9 @@ The checker diffs the recorded shape of N against M, and every difference has to
 - **Pledges and signals.** An item N and M both have under the same name, of the same kind, carries its latch, its `Err` payload, its stored `Ok` value or signal payload, its eligibility, its lapse, and its retry progress, even when its parameters or its error type changed. An item of N that M lacks needs `rename OLD -> NEW` or `retire OLD`. An item whose stored type changed, the `T` of a pledge's `Result<T, E>` or a signal's payload, cannot carry what it stored: it is retired and declared under a new name, and the error says so. A pledge of N that is a signal in M, or the other way round, is the same story. An item M adds starts pending, or in the state `latch NAME as STATE` gives it, and `latch` names only an item M adds.
 - **Subcontracts and remedies.** Renamed with `rename` or dropped with `retire` the same way. A remedy that already ran stays ran under its new name, and a remedy that undoes another pledge in M than it did in N is retired and declared under a new name. A remedy M adds for a pledge that already latched fulfilled is due like any other when the contract breaks.
 - **The course.** When N and M both have a course and the course hashes differ, or only M has one, the block holds `restart course`: the resumed instance enters M's course at step 0 with a fresh frame, and since every step is at least once, a step whose pledge already latched runs its body again, its result goes to the course, and its latch, its stored `Ok` value, and its place in the remedy order stay the ones it had. When the hashes agree the frame carries over and the course goes on at the step it parked at. When only N had a course its frame is dropped with no item.
-- **Nothing extra.** An item no difference calls for is an error: a `retire` or a `rename` of a name N never had, a `rename` onto a name M lacks or onto a name that is already carried, a `latch` on an item N already had, a second item for one name, and a `restart course` where the course did not change.
+- **Nothing extra.** An item no difference calls for is an error: a `retire` or a `rename` of a name N never had, a `rename` onto a name M lacks or onto a name that is already carried, a `latch` on an item N already had, a second item for one name, a `vow NAME = Expr` beside a `rename OLD -> NAME` among them, and a `restart course` where the course did not change.
 - **Layout is type.** A canonical type code names a declared record or sum and nothing more, so the comparison reads the layouts too: a vow, a pledge's stored `Ok` value, or a signal's payload whose declared type kept its name but changed its fields or its variants counts as a changed type, and the error names the type whose layout moved.
-- **A fulfilled seed has no value.** `latch NAME as fulfilled` latches the item with no `Ok` value behind it, so when NAME has a remedy that takes the `Ok` value, the seed is a compile error; latch it `pending`, or let the remedy take no parameter.
+- **A fulfilled seed has no value.** `latch NAME as fulfilled` latches the item with no value behind it, so it is a compile error for an item that carries one: a pledge whose `Ok` value or `Option` payload is anything but `Unit`, a pledge returning bare `Bytes`, and a signal with a payload. Whatever reads that value later, a course calling the pledge or awaiting the signal, or a remedy taking the `Ok` value, would have nothing to be handed. Latch such an item `pending`; a pledge of `Result<Unit, E>` or `Unit` and a signal with no parameters may start fulfilled.
 - Terms, requirements, the contract's own term, and attributes change freely and need no item. M's apply from the resume on, with the eligibility stamps and the signing time the row kept.
 
 #### Reading the older version
@@ -526,7 +528,11 @@ TogetherStmt ::= "together" Block
 
 The parser reads an assignment as an expression statement followed by `=` and the checker holds its left side to a place, which keeps the start of a statement decidable on one token.
 
-Bindings are immutable unless declared `let mut`. Assignment targets a `let mut` binding, a field of one, or an element of one. There are no compound assignment operators. `break` and `continue` are loop control only, so they appear inside a `while` or `for` body.
+Bindings are immutable unless declared `let mut`. Assignment targets a `let mut` binding, a field of one, or an element of one. There are no compound assignment operators.
+
+The right side of an assignment, and any index its target reads, may not assign the binding the target is rooted in, so `values[0] = match flag { ... }` with an arm that assigns `values` is a compile error. Ordinary code finds the target's slot before it runs the right side and a course finds it after, since a course reads its frame again once a step resumes, and this rule is what keeps the two from ever landing a value in different places. Bind the value with `let` first. A binding of the same name that a `let`, a `for` variable, or a pattern shadows inside the right side is another binding and does not count.
+
+A pledge, clause, or remedy whose return type is not `Unit` ends every path through its body with a `return`, since there is no value to fall off the end with; one that can reach its closing brace is `not every path of 'NAME' returns a value`. A path ends at a `return`, at an `if` with an `else` whose branches both end, at a `match` whose every arm ends, and at a `while true` no `break` leaves. A `for` may run zero times, so it never ends a path. A `Unit` body may fall off its end, and a course returns nothing and is never held to this. `break` and `continue` are loop control only, so they appear inside a `while` or `for` body.
 
 `for` walks a `List` or a `Map`. Over a `List<T>` the loop variable binds each element in order, type `T`. Over a `Map<K, V>` it binds each key in insertion order, type `K`, and the body reads a value back with `m[key]` where it needs one. The entry count is fixed when the loop begins, so a key the body inserts is not visited on the current pass, while updating the value of a key already present is seen through a later read, since an update moves the value and not the key's place.
 
@@ -534,9 +540,15 @@ Bindings are immutable unless declared `let mut`. Assignment targets a `let mut`
 
 `together { ... }` runs the contract's own pledges at the same time, as one step. Its block holds only single call statements of those pledges, in one of four forms, `name(args)`, `name(args)?`, `let x = name(args)`, and `let x = name(args)?`; anything else inside it, another statement, a nested block, a sleep, a return, is refused. The arguments are evaluated in order before any call starts, so an argument cannot read a binding made in the same block, and an argument cannot hold a suspending operation of its own; bind either with `let` before the block. Once every call has an outcome the `?`s apply in statement order, the first `Err` or `None` ending the course, and the bindings are visible after the block. A call that already latched before a `?` fires keeps its latch, and its remedy is due if the contract breaks.
 
-A block used as a value takes the type of its final expression statement, and `Unit` when it ends with anything else. Match arms must agree on one type wherever the match sits, so a statement position match with mixed arms ends each arm in a statement or returns.
+A block used as a value takes the type of its final expression statement, and `Unit` when it ends with anything else. Match arms must agree on one type wherever the match sits, so a statement position match with mixed arms ends each arm in a statement or returns. `if` is a statement and never a value, `let x = if c { 1 } else { 2 }` does not parse; a value that depends on a condition comes from a `match` on the `Bool`, its arms `true -> 1` and `false -> 2`, or from a `let mut` the branches assign.
+
+Integer arithmetic is checked. A `+`, `-`, `*`, or unary `-` on `Int`, `UInt`, `Byte`, `Duration`, or `Time` whose result leaves the range of its type, a `UInt` or `Byte` going below zero included, a `/` or `%` by zero, and the least `Int` divided by or taken modulo `-1` each fault the fulfillment with `GEAS_ERR_TYPE`, the status an out of range list index reports, and inside a course the fault stops the course the same way. Literal operands get no special treatment, `9223372036854775807 + 1` faults when it runs like any other sum. `Float` follows IEEE and never faults, and it has no `%`, so `%` on `Float` is a compile error.
+
+`Unit` in value position is the one value of type `Unit`, so `return Ok(Unit)` is how a `Result<Unit, E>` body says it succeeded. It compares like any value, `Unit == Unit` is `true` and `Unit != Unit` is `false`. A binding or a declaration named `Unit` claims the name first.
 
 `+` on two `String` values concatenates into a new `String`, and on two `Bytes` values into a new `Bytes`. The operands must have the same type. `Bytes` supports `==` and `!=`, comparing length then contents, and has no ordering comparisons.
+
+`<`, `<=`, `>`, and `>=` order two operands of one numeric type, `Int`, `UInt`, `Float`, or `Byte`, or two `Duration` values or two `Time` values, and nothing else: `Char`, `String`, `Bool`, and `Bytes` have no ordering, and comparing two of them is `operator '<' needs matching numeric operands`. `==` and `!=` take two operands of any one type, composites compared structurally and an instance by identity.
 
 `&&` and `||` short circuit: the right operand is not evaluated when the left already decides the answer, so a bounds guard like `i < n && xs[i] == 0` never touches `xs[i]` out of range.
 
@@ -633,7 +645,6 @@ let result = payment.validate_card(my_card)
 - `Contract.resume(dsn, key)` takes two positional `String` arguments and stands a parked instance back up, the signed instance the answer the way sign's is. A key nobody parked, a contract the runtime does not register, and a version or shape skew each fault the enclosing body with the runtime's own status.
 - `instance.pledge_name(args)` fulfills that pledge and returns exactly the pledge's declared type. A pledge that is not yet eligible under its `after`, or has lapsed, faults the body with the state status.
 - `instance.signal_name(args)` delivers that signal and returns `Unit`; a refusal faults the body.
-- `instance.pledge_name` with no call is a first class pledge value of the matching `PledgeType`, bound to that instance.
 - `instance.vow_name` reads a locked vow through the instance, typed as the vow's declared type, an independent copy the way every read is. A vow is read, never called.
 - `instance.break()` tears the contract down and returns `Unit`. A contract still Signed or Partial runs its due remedies first. Every later fulfillment on it returns the broken contract error.
 - `instance.status()` returns the state's canonical spelling as a `String`: `"Unsigned"`, `"Signed"`, `"Fulfilled"`, `"Partial"`, `"Remedying"`, or `"Broken"`.
@@ -665,6 +676,8 @@ Pattern   ::= Literal
 
 `match` is an expression. Arms are checked for exhaustiveness over sums, `Option`, `Result`, and `Bool`. A `_` or binding arm covers the rest. Non exhaustive matching over an open type like `Int` or `Duration` requires a final `_` arm.
 
+Coverage reads one level deep. An arm covers its case, `Some`, `Err`, or a variant, only when everything nested inside its pattern is a name or `_`; an arm with a refutable pattern nested inside, `Some(Ok(x))`, `Some(0)`, or `Gateway(500)`, covers nothing toward exhaustiveness, so a match over such arms still needs an arm that takes the case whole, or a `_` or binding arm. The rule only ever asks for an arm that turns out unreachable, it never lets a value through unmatched.
+
 ### Await and select
 
 These are course expressions, emitted with the course.
@@ -678,7 +691,7 @@ SelectArm  ::= "await" IDENT [ "as" Pattern ] "->" ( Expr | Block )
 
 `await sig` waits for a signal of the same contract and yields its payload: `Unit` for no parameters, the value for one, a `Tuple` for several. A signal delivered before the course reaches the `await` is not lost, the await answers at once with the payload the first delivery latched. `await sig within 24h` yields an `Option` of the payload, `None` when the time runs out, and the signal does not latch broken for it. An `await` on a signal whose own `within` already lapsed can never be answered: with `within` it yields `None` at once, and without one the course ends, cancelled when the lapse broke the contract and halted otherwise.
 
-`select` waits on several things and takes the first arm that is ready, in source order when more than one is: an `await` arm binds its payload with `as`, a `timeout` arm fires after its duration, counted from the moment the course reached the select, and the arms agree on one type the way match arms do. The `as` pattern is irrefutable, a name or `_`, since a select binds the payload of the arm it chose and has no next arm to fall to; a pattern that could fail to match, `Some(x)`, a variant, a literal, is a compile error, and the payload is matched inside the arm instead.
+`select` holds at least one arm, an empty `select {}` is a compile error, and it waits on several things and takes the first arm that is ready, in source order when more than one is: an `await` arm binds its payload with `as`, a `timeout` arm fires after its duration, counted from the moment the course reached the select, and the arms agree on one type the way match arms do. The `as` pattern is irrefutable, a name or `_`, since a select binds the payload of the arm it chose and has no next arm to fall to; a pattern that could fail to match, `Some(x)`, a variant, a literal, is a compile error, and the payload is matched inside the arm instead.
 
 ```text
 let parcel = select {
@@ -695,8 +708,15 @@ let parcel = select {
 A standalone program declares exactly one `Main`:
 
 ```text
+UsageError is either NoArgs
+
 contract Main {
-    pledge run(args: List<String>) -> Result<Int, E>
+    pledge run(args: List<String>) -> Result<Int, UsageError> {
+        if len(args) == 0 {
+            return Err(NoArgs)
+        }
+        return Ok(len(args))
+    }
 }
 ```
 
@@ -722,3 +742,4 @@ Kept out so the surface stays small. Each one has a reserved spelling or a state
 - A `Time` literal. A point in time comes from the host or from `now()`.
 - An async fulfillment surface in the language. The runtime API is shaped for it, the language keeps the synchronous call form.
 - Provisional clauses requiring pledges. Today they require clauses only, which makes them internal code sharing, not a public interface.
+- First class pledge values. The type `pledge(T, ...) -> R` and a bare `instance.pledge_name` with no call both parse, so the spelling stays reserved, but the checker refuses either wherever it appears with `pledge values are not part of this version of the language`. Call the pledge on its instance instead.

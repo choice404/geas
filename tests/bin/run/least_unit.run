@@ -1,0 +1,3 @@
+# exit code|text stderr holds, empty for none|arguments
+7||
+1|Main.run failed to deliver (status 2)|1

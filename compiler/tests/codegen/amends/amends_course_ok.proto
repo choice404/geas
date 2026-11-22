@@ -196,6 +196,105 @@ message AmendCourseNoneStepRequest {
   int64 n = 2;
 }
 
+// contract AmendCourseRetyped, version 2, shape 0x30c0220593fe83b7.
+// The sign surface: one optional field per vow, and the shape check,
+// where 0 skips it and the wrapper's pinned hash enforces this build.
+message AmendCourseRetypedSignRequest {
+  uint64 expected_hash = 1;
+}
+
+// The signature: the id the pledge rpcs are keyed by, the effective vows
+// after defaults and overrides, and the hash and timestamp an in process
+// host reads off the handle.
+message AmendCourseRetypedSigned {
+  uint64 instance_id = 1;
+  uint64 shape_hash = 2;
+  int64 signed_at = 3;
+  string park_token = 4;  // the resume key a park enabled server issues; empty when parking is off
+}
+
+// What the session stream carries. Signed is the first event; the stream's
+// other job is holding the session open, and anything a server later needs
+// to push arrives as another arm.
+message AmendCourseRetypedSessionEvent {
+  oneof event {
+    AmendCourseRetypedSigned signed = 1;
+  }
+}
+
+// The resume call: the token names a parked row on the server's park
+// store, and a 0 expected_hash skips the shape check the way sign's does.
+message AmendCourseRetypedResumeRequest {
+  string park_token = 1;
+  uint64 expected_hash = 2;
+}
+
+// contract AmendCourseLiteral, version 2, shape 0xbd9d3c638ac3a5a7.
+// The sign surface: one optional field per vow, and the shape check,
+// where 0 skips it and the wrapper's pinned hash enforces this build.
+message AmendCourseLiteralSignRequest {
+  uint64 expected_hash = 1;
+}
+
+// The signature: the id the pledge rpcs are keyed by, the effective vows
+// after defaults and overrides, and the hash and timestamp an in process
+// host reads off the handle.
+message AmendCourseLiteralSigned {
+  uint64 instance_id = 1;
+  uint64 shape_hash = 2;
+  int64 signed_at = 3;
+  string park_token = 4;  // the resume key a park enabled server issues; empty when parking is off
+}
+
+// What the session stream carries. Signed is the first event; the stream's
+// other job is holding the session open, and anything a server later needs
+// to push arrives as another arm.
+message AmendCourseLiteralSessionEvent {
+  oneof event {
+    AmendCourseLiteralSigned signed = 1;
+  }
+}
+
+// The resume call: the token names a parked row on the server's park
+// store, and a 0 expected_hash skips the shape check the way sign's does.
+message AmendCourseLiteralResumeRequest {
+  string park_token = 1;
+  uint64 expected_hash = 2;
+}
+
+// contract AmendCourseComment, version 2, shape 0x9bc9227ad7cc7895.
+// The sign surface: one optional field per vow, and the shape check,
+// where 0 skips it and the wrapper's pinned hash enforces this build.
+message AmendCourseCommentSignRequest {
+  uint64 expected_hash = 1;
+}
+
+// The signature: the id the pledge rpcs are keyed by, the effective vows
+// after defaults and overrides, and the hash and timestamp an in process
+// host reads off the handle.
+message AmendCourseCommentSigned {
+  uint64 instance_id = 1;
+  uint64 shape_hash = 2;
+  int64 signed_at = 3;
+  string park_token = 4;  // the resume key a park enabled server issues; empty when parking is off
+}
+
+// What the session stream carries. Signed is the first event; the stream's
+// other job is holding the session open, and anything a server later needs
+// to push arrives as another arm.
+message AmendCourseCommentSessionEvent {
+  oneof event {
+    AmendCourseCommentSigned signed = 1;
+  }
+}
+
+// The resume call: the token names a parked row on the server's park
+// store, and a 0 expected_hash skips the shape check the way sign's does.
+message AmendCourseCommentResumeRequest {
+  string park_token = 1;
+  uint64 expected_hash = 2;
+}
+
 // The lifecycle states, GEAS_UNSIGNED through GEAS_BROKEN, in the runtime's
 // own numbering.
 enum ContractState {
@@ -321,5 +420,53 @@ service AmendCourseNone {
   rpc Resume(AmendCourseNoneResumeRequest) returns (stream AmendCourseNoneSessionEvent);
   rpc Step(AmendCourseNoneStepRequest) returns (IntStringResult);
   rpc GetPartial(PartialRequest) returns (PartialReply);
+  rpc Break(BreakRequest) returns (BreakReply);
+}
+
+service AmendCourseRetyped {
+  // Signs, then holds. The first event carries the signature; the stream
+  // then stays open and empty for as long as the instance lives. Ending the
+  // stream, by close, by cancel, or by dying, ends the instance.
+  rpc Session(AmendCourseRetypedSignRequest) returns (stream AmendCourseRetypedSessionEvent);
+  // A parked instance stood back up: the stream is once again the
+  // instance's life, and its first event carries the signature.
+  rpc Resume(AmendCourseRetypedResumeRequest) returns (stream AmendCourseRetypedSessionEvent);
+  // Engine driven: the contract's course runs its pledges, so a client
+  // starts the instance with Session and moves it on with its signals.
+  rpc GetPartial(PartialRequest) returns (PartialReply);
+  // Where the course stands, read without waiting on it.
+  rpc GetCourse(CourseRequest) returns (CourseReply);
+  rpc Break(BreakRequest) returns (BreakReply);
+}
+
+service AmendCourseLiteral {
+  // Signs, then holds. The first event carries the signature; the stream
+  // then stays open and empty for as long as the instance lives. Ending the
+  // stream, by close, by cancel, or by dying, ends the instance.
+  rpc Session(AmendCourseLiteralSignRequest) returns (stream AmendCourseLiteralSessionEvent);
+  // A parked instance stood back up: the stream is once again the
+  // instance's life, and its first event carries the signature.
+  rpc Resume(AmendCourseLiteralResumeRequest) returns (stream AmendCourseLiteralSessionEvent);
+  // Engine driven: the contract's course runs its pledges, so a client
+  // starts the instance with Session and moves it on with its signals.
+  rpc GetPartial(PartialRequest) returns (PartialReply);
+  // Where the course stands, read without waiting on it.
+  rpc GetCourse(CourseRequest) returns (CourseReply);
+  rpc Break(BreakRequest) returns (BreakReply);
+}
+
+service AmendCourseComment {
+  // Signs, then holds. The first event carries the signature; the stream
+  // then stays open and empty for as long as the instance lives. Ending the
+  // stream, by close, by cancel, or by dying, ends the instance.
+  rpc Session(AmendCourseCommentSignRequest) returns (stream AmendCourseCommentSessionEvent);
+  // A parked instance stood back up: the stream is once again the
+  // instance's life, and its first event carries the signature.
+  rpc Resume(AmendCourseCommentResumeRequest) returns (stream AmendCourseCommentSessionEvent);
+  // Engine driven: the contract's course runs its pledges, so a client
+  // starts the instance with Session and moves it on with its signals.
+  rpc GetPartial(PartialRequest) returns (PartialReply);
+  // Where the course stands, read without waiting on it.
+  rpc GetCourse(CourseRequest) returns (CourseReply);
   rpc Break(BreakRequest) returns (BreakReply);
 }

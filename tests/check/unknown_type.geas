@@ -1,0 +1,18 @@
+// A type name nothing declares is refused wherever an annotation spells it,
+// a parameter, a return, a record field, a let, or a type argument.
+// StoreError, the one name the compiler brings in, checks, and has no fields
+record Holder {
+    inner: Nope
+}
+
+contract C {
+    pledge q(v: Strng) -> Option<Strng> { return Some(v) }
+    clause p(v: Int) -> Option<Int> {
+        let y: Missing = v
+        return Some(y)
+    }
+    pledge r() -> Result<List<Absent>, String>
+    clause peek(e: StoreError) -> Int {
+        return e.code
+    }
+}

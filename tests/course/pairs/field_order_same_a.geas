@@ -1,0 +1,16 @@
+// A record literal builds its fields in declaration order whatever order
+// the source lists them in, and a variant's payload labels only repeat its
+// field names, so neither the order nor the labels change the hash
+record R {
+    a: Int
+    b: Int
+}
+Shape is either Box(width: Int, height: Int) or Dot
+contract Flow {
+    pledge keep(r: R, s: Shape) -> Option<Int>
+    course {
+        let r = R { a: 1, b: 2 }
+        let s = Box(width: 3, height: 4)
+        keep(r, s)?
+    }
+}

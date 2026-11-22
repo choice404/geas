@@ -2,7 +2,8 @@
 # The golden test runner for the geas front end. Each suite directory pairs
 # with a geas command: tests/lex with `geas lex`, tests/parse with
 # `geas parse`, tests/check and tests/typeck with `geas check`, and
-# tests/course with `geas dump-course`, and tests/shape with
+# tests/course with `geas dump-course`, whose pairs directory holds sources
+# whose course hashes have to agree or differ, and tests/shape with
 # `geas dump-shape`, the debug command that prints every
 # shape string, shape hash, and mangled name, while tests/shape/record
 # holds `geas record` to its goldens, and tests/types with
@@ -15,7 +16,9 @@
 # .err file appearing somewhere in stderr as a substring, so a diagnostic can
 # gain context without breaking the suite. tests/check/mfa holds the
 # multi-file programs: only files with a golden beside them are roots, the
-# rest are modules the roots import. The geas binary is built with
+# rest are modules the roots import. tests/bin/run holds standalone programs
+# built with `geas build --bin` and run, held to their exit code and stderr.
+# The geas binary is built with
 # `make compiler` when missing; set GEAS to test another build, the
 # sanitizer one at target/bin-asan/geas for instance.
 
@@ -177,6 +180,52 @@ run_bin_suite() {
     done
 }
 
+# The run suite. Every NAME.geas in tests/bin/run builds with
+# `geas build --bin` in a scratch directory of its own and runs once per
+# line of NAME.run beside it. A line is the exit code, a text stderr has to
+# hold or nothing, and the arguments, split on '|'; a line opening with '#'
+# is a comment. The suite links against the runtime library, so it is
+# skipped when target/geas-out/libgeasrt.so or cc is missing
+RUNTIME_LIBRARY="target/geas-out/libgeasrt.so"
+
+# One line of a .run file against the built program
+run_exec_case() {
+    local exe="$1" base="$2" code="$3" want="$4" args="$5" err status
+    # shellcheck disable=SC2086
+    err="$("$exe" $args 2>&1 >/dev/null)"
+    status=$?
+    if [ "$status" -ne "$code" ]; then
+        fail_case "$base [$args]" "expected exit $code, got $status"
+    elif [ -n "$want" ] && ! printf '%s' "$err" | grep -qF -- "$want"; then
+        fail_case "$base [$args]" "stderr missing: $want"
+    else
+        pass=$((pass + 1))
+    fi
+}
+
+run_exec_suite() {
+    local work src name base code want args
+    if [ ! -f "$RUNTIME_LIBRARY" ] || ! command -v cc >/dev/null 2>&1; then
+        echo "[tests] no $RUNTIME_LIBRARY or no cc, the run suite is skipped"
+        return
+    fi
+    work="$(mktemp -d "${TMPDIR:-/tmp}/geas-run.XXXXXX")"
+    for src in tests/bin/run/*.geas; do
+        name="$(basename "${src%.geas}")"
+        base="bin/run/$name"
+        mkdir -p "$work/$name"
+        if ! (cd "$work/$name" && GEAS_ROOT="$ROOT" "$GEAS" build --bin "$ROOT/$src" >/dev/null 2>&1); then
+            fail_case "$base" "build --bin failed"
+            continue
+        fi
+        while IFS='|' read -r code want args; do
+            case "$code" in ''|'#'*) continue ;; esac
+            run_exec_case "$work/$name/target/geas-out/$name" "$base" "$code" "$want" "$args"
+        done < "${src%.geas}.run"
+    done
+    rm -rf "$work"
+}
+
 # The record suite. Every NAME.geas in tests/shape/record is an older
 # version an amends case is checked against. Each is recorded in a scratch
 # directory of its own, and every file the record writes must match the
@@ -188,7 +237,7 @@ run_bin_suite() {
 # broken file on purpose
 RECORD_GOLDENS="tests/shape/record/shapes"
 HANDMADE_SHAPES="AmendCorrupt.v1.shape AmendFormat.v1.shape AmendMismatch.v1.shape"
-HANDMADE_SHAPES="$HANDMADE_SHAPES AmendRetyped.v1.shape AmendStale.v1.shape"
+HANDMADE_SHAPES="$HANDMADE_SHAPES AmendPrior.v1.shape AmendRetyped.v1.shape AmendStale.v1.shape"
 
 # Whether every file a record wrote into dir matches its golden
 matches_goldens() {
@@ -258,9 +307,11 @@ check_shape_fixtures() {
     done < <(find tests/check tests/course compiler/tests/codegen -name '*.shape' | sort)
 }
 
-# The layout pairs of tests/shape: NAME_before.geas and NAME_after.geas
-# differ only in the layout of a declared type the boundary reaches, so
-# their shape hashes have to differ, while their goldens pin the rest
+# The pairs of tests/shape: NAME_before.geas and NAME_after.geas differ only
+# in one thing the shape covers, the layout of a declared type the boundary
+# reaches, the members of a subcontract, its transactional modifier, or a
+# requirements block, so their shape hashes have to differ, while their
+# goldens pin the rest
 run_layout_pairs() {
     local before after base hashBefore hashAfter
     for before in tests/shape/*_before.geas; do
@@ -273,9 +324,53 @@ run_layout_pairs() {
         hashBefore="$("$GEAS" dump-shape "$before" 2>/dev/null | grep '^#define GEAS_HASH_')"
         hashAfter="$("$GEAS" dump-shape "$after" 2>/dev/null | grep '^#define GEAS_HASH_')"
         if [ -z "$hashBefore" ] || [ "$hashBefore" = "$hashAfter" ]; then
-            fail_case "$base" "a layout change left the shape hash where it was"
+            fail_case "$base" "the change left the shape hash where it was"
             continue
         fi
+        pass=$((pass + 1))
+    done
+}
+
+# The course hash of every contract a dump-course prints, one per line
+course_hashes() {
+    "$GEAS" dump-course "$1" 2>/dev/null | grep -E '^ +hash: 0x'
+}
+
+# The pairs of tests/course/pairs: NAME_same_a.geas and NAME_same_b.geas
+# differ in nothing the course runs, comments, spacing, a local's or a
+# binding's name, the order of a record literal's fields, a literal's
+# spelling, a pledge the course never names, so their course hashes have to agree;
+# NAME_differ_a.geas and NAME_differ_b.geas differ in one thing it does, so
+# theirs have to differ
+run_course_pairs() {
+    local first second base hashFirst hashSecond
+    for first in tests/course/pairs/*_a.geas; do
+        second="${first%_a.geas}_b.geas"
+        base="course/pairs/$(basename "${first%_a.geas}")"
+        hashFirst="$(course_hashes "$first")"
+        hashSecond="$(course_hashes "$second")"
+        if [ ! -f "$second" ] || [ -z "$hashFirst" ] || [ -z "$hashSecond" ]; then
+            fail_case "$base" "both halves have to dump a course"
+            continue
+        fi
+        case "$base" in
+            *_same)
+                if [ "$hashFirst" != "$hashSecond" ]; then
+                    fail_case "$base" "the course hashes differ"
+                    continue
+                fi
+                ;;
+            *_differ)
+                if [ "$hashFirst" = "$hashSecond" ]; then
+                    fail_case "$base" "the course hashes agree"
+                    continue
+                fi
+                ;;
+            *)
+                fail_case "$base" "a pair is named NAME_same or NAME_differ"
+                continue
+                ;;
+        esac
         pass=$((pass + 1))
     done
 }
@@ -295,9 +390,11 @@ run_suite typeck check
 run_suite shape dump-shape
 run_layout_pairs
 run_suite course dump-course
+run_course_pairs
 run_suite types dump-types
 run_multi_suite check/mfa
 run_bin_suite
+run_exec_suite
 run_record_suite
 check_shape_fixtures
 

@@ -1,0 +1,10 @@
+// Comments and whitespace leave the course hash alone
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    signal ready(value: Int)
+    course {
+        let first = await ready
+        let second = visit(first + 1)?
+        visit(second * 2)?
+    }
+}

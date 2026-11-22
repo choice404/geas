@@ -2,12 +2,12 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k10_AmendItems_pledges[] = {
-    { "reserve", "__geas_ash_AmendItems_reserve_dbb766825b16328f_v2", 0, NULL, -1 },
-    { "ship", "__geas_ash_AmendItems_ship_69a2a2b4d4873e84_v2", 0, NULL, -1 },
-    { "notify", "__geas_ash_AmendItems_notify_a7fc567ca9db6a8a_v2", 1, NULL, -1 },
-    { "wrapped", "__geas_ash_AmendItems_wrapped_0e2ba22315b89a85_v2", 0, NULL, -1 },
-    { "rank", "__geas_ash_AmendItems_rank_ba5f9c58aacecb45_v2", 0, NULL, -1 },
-    { "audit", "__geas_ash_AmendItems_audit_0e2ba22315b89a85_v2", 0, NULL, -1 },
+    { "reserve", "__geas_ash_10AmendItems_7reserve_dbb766825b16328f_v2", 0, NULL, -1 },
+    { "ship", "__geas_ash_10AmendItems_4ship_69a2a2b4d4873e84_v2", 0, NULL, -1 },
+    { "notify", "__geas_ash_10AmendItems_6notify_a7fc567ca9db6a8a_v2", 1, NULL, -1 },
+    { "wrapped", "__geas_ash_10AmendItems_7wrapped_0e2ba22315b89a85_v2", 0, NULL, -1 },
+    { "rank", "__geas_ash_10AmendItems_4rank_ba5f9c58aacecb45_v2", 0, NULL, -1 },
+    { "audit", "__geas_ash_10AmendItems_5audit_0e2ba22315b89a85_v2", 0, NULL, -1 },
     { "arrived", NULL, 1, NULL, -1 },
     { "ping", NULL, 0, NULL, -1 },
     { "cancelled", NULL, 0, NULL, -1 },

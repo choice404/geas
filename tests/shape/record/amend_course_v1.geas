@@ -1,6 +1,8 @@
 // Version 1 of each contract the course cases of tests/check amend from:
 // one whose course stays, one whose course changes, one that gains a
-// course, one that loses it, and one that never has one
+// course, one that loses it, one that never has one, one whose course text
+// stays while a record a slot holds changes, one whose course changes only
+// in a literal, and one whose course changes only in its comments
 contract AmendCourseSame {
     pledge step(n: Int) -> Result<Int, String>
     course {
@@ -29,4 +31,33 @@ contract AmendCourseDropped {
 
 contract AmendCourseNone {
     pledge step(n: Int) -> Result<Int, String>
+}
+
+record Tally {
+    count: Int
+}
+
+contract AmendCourseRetyped {
+    pledge step(n: Int) -> Result<Int, String>
+    clause tally() -> Tally {
+        return Tally { count: 1 }
+    }
+    course {
+        let total = tally()
+        step(total.count)?
+    }
+}
+
+contract AmendCourseLiteral {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        step(1)?
+    }
+}
+
+contract AmendCourseComment {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        step(1)?
+    }
 }

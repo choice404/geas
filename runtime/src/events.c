@@ -1,8 +1,10 @@
 /* events.c: ordered observation of instance transitions
  * Producers queue under the instance lock and deliver after every instance
  * lock on this thread is released, including nested contract calls
- * A reserved instance accepts reads but refuses competing mutations, so a
- * host holding its own mutex can call in while a callback waits on it */
+ * A reserved instance accepts reads from anywhere without waiting. A host
+ * call that mutates it waits the delivery out on delivery_cv, the instance
+ * lock given up for the wait, while a hook, a body, a delivery, and a write
+ * back keep the refusal, since the delivering thread may be waiting on them */
 
 #include "runtime_internal.h"
 
@@ -68,13 +70,67 @@ int geas_rt_thread_busy(void) {
     return event_thread.locks > 0 || event_thread.is_delivering || event_thread.is_callback;
 }
 
-/* Whether this thread may wait out another thread's delivery on the one
- * instance it holds: exactly one instance hold, the hold a condition wait
- * gives up whole, and no delivery or hook of its own under way. A deeper
- * hold would keep the instance from the delivering thread, which takes the
- * lock back to end its delivery */
+int geas_rt_holds_instance(void) {
+    return event_thread.locks > 0;
+}
+
+/* Whether this thread may wait out another thread's delivery while it holds
+ * exactly held instance locks: no delivery or hook of its own under way, no
+ * together body running with the lock released, and no ref write back
+ * callback. Those are the threads a delivering thread could be waiting on,
+ * or the ones the rules keep from mutating at all, so their refusal stands */
+static int thread_may_wait(unsigned held) {
+    if (event_thread.locks != held) return 0;
+    if (event_thread.is_delivering || event_thread.is_callback) return 0;
+    return !geas_rt_in_join_body() && !geas_rt_in_write_back();
+}
+
+/* Exactly one instance hold, the hold a condition wait gives up whole. A
+ * deeper hold would keep the instance from the delivering thread, which
+ * takes the lock back to end its delivery, and every body holds one */
 int geas_rt_may_await_delivery(void) {
-    return event_thread.locks == 1 && !event_thread.is_delivering && !event_thread.is_callback;
+    return thread_may_wait(1);
+}
+
+/* The same thread before it takes the instance lock: a host call that will
+ * wait once it holds the lock is not refused ahead of it */
+int geas_rt_host_may_wait(void) {
+    return thread_may_wait(0);
+}
+
+/* A remedy pass on another thread keeps its reservation to its end */
+static int other_pass(const GeasContract* c) {
+    return c->flow.remedy_active && !pthread_equal(c->flow.remedy_owner, pthread_self());
+}
+
+static int delivery_holds(const GeasContract* c, uint32_t mode) {
+    if (mode == GEAS_AWAIT_PARK) return geas_rt_event_park_blocked(c);
+    if (!geas_rt_events_blocked(c)) return 0;
+    return mode == GEAS_AWAIT_ALL || !other_pass(c);
+}
+
+/* Waits on delivery_cv while another thread's delivery holds the instance,
+ * for a caller holding the instance lock exactly once outside any body,
+ * hook, delivery, or write back, and answers whether it waited, the lock
+ * having been out of the caller's hands meanwhile. The wait gives the
+ * recursive mutex up whole, so the delivering thread takes it back to end
+ * its delivery and the hook reads the instance freely. Every place that
+ * lets a reservation go broadcasts under this same lock, so the predicate
+ * read under the lock never misses its wakeup. Any other caller answers 0
+ * at once and the refusal that follows stands. Under the instance lock */
+int geas_rt_await_delivery(GeasContract* c, uint32_t mode) {
+    if (!c->flow.delivery_cv_ready || !geas_rt_may_await_delivery()) return 0;
+    int is_waited = 0;
+    while (delivery_holds(c, mode)) {
+        pthread_cond_wait(&c->flow.delivery_cv, &c->mu);
+        is_waited = 1;
+    }
+    return is_waited;
+}
+
+/* Wakes every thread waiting out a delivery of c. Under the instance lock */
+void geas_rt_delivery_wake(GeasContract* c) {
+    if (c->flow.delivery_cv_ready) pthread_cond_broadcast(&c->flow.delivery_cv);
 }
 
 /* A foreign park during a remedy wait leaves delivery to the pass owner
@@ -190,24 +246,44 @@ static void deliver_events(void) {
         c->event_delivering = 0;
         /* A cancel accepted before reservation finishes after the callbacks,
          * a release left pending first and a break otherwise. A plain request
-         * ends nothing */
-        if (c->flow.release_pending) {
+         * ends nothing. A remedy pass under way carries either at its end:
+         * this thread's own pass, between two remedies, or a pass a pool
+         * worker began during the callbacks, from a fulfillment that came
+         * back from its retry wait and found the published break. That pass
+         * reclaims at its end only for a break noted as pending, so the
+         * break is noted for it here, as a break that meets another thread's
+         * pass notes itself */
+        int is_other_pass = c->flow.remedy_active &&
+                            !pthread_equal(c->flow.remedy_owner, pthread_self());
+        if (is_other_pass) {
+            if (!c->flow.reclaimed && (geas_rt_cancel_bits(c) & CANCEL_BREAK))
+                c->flow.break_pending = 1;
+        } else if (c->flow.remedy_active) {
+        } else if (c->flow.release_pending) {
             geas_rt_release_carry(c);
         } else if (!c->event_cancelled && !c->flow.reclaimed &&
                    (geas_rt_cancel_bits(c) & CANCEL_BREAK)) {
+            /* A break caller still inside its call reads and departs under
+             * this lock, so the failure goes to it when one is there and to
+             * stderr otherwise, never to a later break */
             GeasStatus status = geas_rt_break_explicit(c);
-            if (status != GEAS_OK) {
+            if (status != GEAS_OK && __atomic_load_n(&c->break_callers, __ATOMIC_SEQ_CST)) {
                 __atomic_store_n(&c->event_cancel_status, status, __ATOMIC_SEQ_CST);
-                if (!__atomic_load_n(&c->break_callers, __ATOMIC_SEQ_CST))
-                    fprintf(stderr, "[libgeasrt] deferred event cancellation failed: %d\n", status);
+            } else if (status != GEAS_OK) {
+                fprintf(stderr, "[libgeasrt] deferred event cancellation failed: %d\n", status);
             }
         }
-        /* The remedy owner keeps its reservation across retry delays */
-        if (!c->event_head && !c->flow.remedy_active)
+        /* The remedy owner keeps its reservation across retry delays. A
+         * pass on another thread gets it back, queued events and all, and
+         * delivers them at its own outermost release */
+        if (is_other_pass || (!c->event_head && !c->flow.remedy_active))
             __atomic_store_n(&c->event_owner, NULL, __ATOMIC_RELEASE);
         /* A course entry that found this delivery holding the instance runs now */
         if (c->course && !__atomic_load_n(&c->event_owner, __ATOMIC_ACQUIRE))
             geas_rt_course_redrive(c);
+        /* Every thread waiting out this delivery reads the instance again:
+         * the reservation may be gone, or a park may now snapshot a pass */
+        geas_rt_delivery_wake(c);
         geas_rt_unlock(c);
     }
     event_thread.is_delivering = 0;
@@ -236,6 +312,7 @@ void geas_rt_unlock(GeasContract* c) {
         __atomic_load_n(&c->event_owner, __ATOMIC_RELAXED) == &event_thread) {
         __atomic_store_n(&c->event_owner, NULL, __ATOMIC_RELEASE);
         if (c->course) geas_rt_course_redrive(c);
+        geas_rt_delivery_wake(c);
     }
     event_thread.locks--;
     pthread_mutex_unlock(&c->mu);

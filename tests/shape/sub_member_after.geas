@@ -1,0 +1,8 @@
+// The membership pair for a subcontract, see sub_member_before.geas: settle
+// joins Payment
+contract C {
+    subcontract Payment {
+        pledge charge(amount: Int) -> Result<Unit, Int>
+        pledge settle() -> Result<Unit, Int>
+    }
+}

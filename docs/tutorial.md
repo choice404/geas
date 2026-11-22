@@ -329,6 +329,8 @@ you can compile straight to an executable. Declare one `Main` contract with a
 `run` pledge over `List<String>` returning `Result<Int, E>`:
 
 ```text
+DemoError is either BadMood(reason: String)
+
 contract Main {
     vow greeting: String = "counted"
 
@@ -383,7 +385,7 @@ contract, every pledge and its signature, and every vow and its default. When
 the runtime loads the module, it registers all of that in the **iname table**, a
 sorted registry keyed by a **mangled name** that bakes in the contract, the
 pledge, a 64 bit hash of the type signature, and a version. A host looks a
-contract up by that name, and because the name carries the shape hash, a version
+contract up by that name, and because the name carries the hash, a version
 mismatch is a clean error at discovery time instead of silent corruption at call
 time.
 
@@ -901,7 +903,11 @@ Now the thing is the hook you install is called from whichever thread recorded
 the events, the ticker included, and while it runs the instance is reserved to
 that thread. The course does not care, a course that runs into somebody else's
 delivery, coming out of a retry delay or at its next step, waits for it to end
-and carries on, it never halts over a hook it had nothing to do with.
+and carries on, it never halts over a hook it had nothing to do with. Your
+own calls get the same treatment, a fulfill, a signal, a park, or a break from
+your thread that runs into another thread's delivery waits for the hook to
+return and then goes through, so the one thing to keep is your own lock order,
+don't make those calls while holding a lock your hook takes.
 
 A host fulfillment of a course's pledge answers `GEAS_ERR_STATE` and the body
 never runs, the course owns the order now. The host still hands signals in:

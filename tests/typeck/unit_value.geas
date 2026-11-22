@@ -1,0 +1,17 @@
+// Unit in value position is the one value of type Unit, so a Result of Unit
+// succeeds with Ok(Unit), and a binding named Unit claims the name first
+E is either Bad
+
+contract U {
+    pledge done() -> Result<Unit, E> {
+        return Ok(Unit)
+    }
+    clause empty() -> Unit {
+        let u: Unit = Unit
+        return u
+    }
+    clause shadowed() -> Int {
+        let Unit = 4
+        return Unit + 1
+    }
+}

@@ -4,7 +4,8 @@
 // final expression statement, and Unit when the block ends any other way.
 // Assignment enforces the mutability rule as written: the target is a let
 // mut binding, a field of one, or an element of one, and a vow is never
-// assignable
+// assignable. Its right side may not assign that binding again, see
+// checkassign.cpp
 #include "checker.hpp"
 
 #include "overloaded.hpp"
@@ -184,6 +185,7 @@ void Checker::checkAssignedValue(ExprId value, TyId target) {
 }
 
 void Checker::checkAssign(const AssignStmt& assign) {
+    checkAssignOrder(assign);
     const Expr& target = ast_.expr(assign.target);
     if (const auto* index = std::get_if<IndexExpr>(&target.kind)) {
         checkIndexAssign(assign, target, *index);

@@ -1,0 +1,2 @@
+5:22: error: vow 'least' initializer must be a constant literal
+6:22: error: vow 'wide' initializer has type 'Int' but the vow is 'UInt'

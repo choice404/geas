@@ -90,8 +90,9 @@ AmendDiff AmendDiffer::run(const AmendsDecl& amends) && {
     return AmendDiff{std::move(plan_), std::move(faults_)};
 }
 
-// Files every item, faulting a second item over the same name. Latches go
-// last, so a latch on a rename's new name is caught wherever it sits
+// Files every item, faulting a second item over the same name. Latches and
+// the rename targets a vow item also sets go last, so either is caught
+// wherever it sits
 void AmendDiffer::collect(const AmendsDecl& amends) {
     for (const AmendItem& item : amends.items) {
         std::visit(Overloaded{
@@ -114,6 +115,12 @@ void AmendDiffer::collect(const AmendsDecl& amends) {
     for (const AmendItem& item : amends.items) {
         if (const auto* latch = std::get_if<AmendLatch>(&item)) {
             checkLatch(*latch);
+        }
+        // A name takes one item: a vow set and a rename cannot both land on it
+        const auto* rename = std::get_if<AmendRename>(&item);
+        if (rename != nullptr && vowSets_.contains(rename->to)) {
+            fault("amends vow " + quoted(rename->to) + " is both set and the target of rename " +
+                  quoted(rename->from) + " -> " + quoted(rename->to) + "; a name takes one item");
         }
     }
 }

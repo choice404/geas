@@ -26,13 +26,13 @@ static GeasStatus geas_clause7_MathOps_int_min(GeasContract* cc, const GeasValue
     t0.as.i = 9223372036854775807;
     GeasValue t1 = {0};
     t1.ty = GEAS_TY_INT;
-    t1.as.i = -t0.as.i;
+    if (__builtin_sub_overflow((int64_t)0, t0.as.i, &t1.as.i)) return GEAS_ERR_TYPE;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_INT;
     t2.as.i = 1;
     GeasValue t3 = {0};
     t3.ty = GEAS_TY_INT;
-    t3.as.i = t1.as.i - t2.as.i;
+    if (__builtin_sub_overflow(t1.as.i, t2.as.i, &t3.as.i)) return GEAS_ERR_TYPE;
     *out = t3;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
@@ -86,6 +86,7 @@ static GeasStatus geas_clause7_MathOps_mul_overflows(GeasContract* cc, const Gea
             if (t11 != GEAS_OK) return t11;
             GeasValue t12 = {0};
             t12.ty = GEAS_TY_INT;
+            if (args[1].as.i == 0 || (args[1].as.i == -1 && t10.as.i == INT64_MIN)) return GEAS_ERR_TYPE;
             t12.as.i = t10.as.i / args[1].as.i;
             GeasValue t13 = {0};
             t13.ty = GEAS_TY_BOOL;
@@ -98,6 +99,7 @@ static GeasStatus geas_clause7_MathOps_mul_overflows(GeasContract* cc, const Gea
         if (t15 != GEAS_OK) return t15;
         GeasValue t16 = {0};
         t16.ty = GEAS_TY_INT;
+        if (args[0].as.i == 0 || (args[0].as.i == -1 && t14.as.i == INT64_MIN)) return GEAS_ERR_TYPE;
         t16.as.i = t14.as.i / args[0].as.i;
         GeasValue t17 = {0};
         t17.ty = GEAS_TY_BOOL;
@@ -117,6 +119,7 @@ static GeasStatus geas_clause7_MathOps_mul_overflows(GeasContract* cc, const Gea
         if (t21 != GEAS_OK) return t21;
         GeasValue t22 = {0};
         t22.ty = GEAS_TY_INT;
+        if (args[1].as.i == 0 || (args[1].as.i == -1 && t20.as.i == INT64_MIN)) return GEAS_ERR_TYPE;
         t22.as.i = t20.as.i / args[1].as.i;
         GeasValue t23 = {0};
         t23.ty = GEAS_TY_BOOL;
@@ -129,6 +132,7 @@ static GeasStatus geas_clause7_MathOps_mul_overflows(GeasContract* cc, const Gea
     if (t25 != GEAS_OK) return t25;
     GeasValue t26 = {0};
     t26.ty = GEAS_TY_INT;
+    if (args[0].as.i == 0 || (args[0].as.i == -1 && t24.as.i == INT64_MIN)) return GEAS_ERR_TYPE;
     t26.as.i = t24.as.i / args[0].as.i;
     GeasValue t27 = {0};
     t27.ty = GEAS_TY_BOOL;
@@ -161,7 +165,7 @@ static GeasStatus geas_clause7_MathOps_abs_float(GeasContract* cc, const GeasVal
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_3abs_a318ec0a4d8f64bd_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -197,7 +201,7 @@ static GeasStatus __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1(void* ctx, const Ge
     if (t7.as.b) {
         GeasValue t8 = {0};
         t8.ty = GEAS_TY_INT;
-        t8.as.i = -args[0].as.i;
+        if (__builtin_sub_overflow((int64_t)0, args[0].as.i, &t8.as.i)) return GEAS_ERR_TYPE;
         GeasValue* t9 = geas_box(cc);
         if (!t9) return GEAS_ERR_OOM;
         *t9 = t8;
@@ -221,7 +225,7 @@ static GeasStatus __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_4sign_a318ec0a4d8f64bd_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -240,7 +244,7 @@ static GeasStatus __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1(void* ctx, const G
         t2.as.i = 1;
         GeasValue t3 = {0};
         t3.ty = GEAS_TY_INT;
-        t3.as.i = -t2.as.i;
+        if (__builtin_sub_overflow((int64_t)0, t2.as.i, &t3.as.i)) return GEAS_ERR_TYPE;
         GeasValue* t4 = geas_box(cc);
         if (!t4) return GEAS_ERR_OOM;
         *t4 = t3;
@@ -287,7 +291,7 @@ static GeasStatus __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1(void* ctx, const G
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_min_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_3min_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -322,7 +326,7 @@ static GeasStatus __geas_ash_MathOps_min_5f090dc695f53dde_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_max_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_3max_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -357,7 +361,7 @@ static GeasStatus __geas_ash_MathOps_max_5f090dc695f53dde_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_5clamp_9ed89d6d7f975e6d_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -424,7 +428,7 @@ static GeasStatus __geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_7pow_int_5f090dc695f53dde_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -486,7 +490,7 @@ static GeasStatus __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1(void* ctx, cons
         GeasValue* t16 = &t6;
         GeasValue t17 = {0};
         t17.ty = GEAS_TY_INT;
-        t17.as.i = t6.as.i * args[0].as.i;
+        if (__builtin_mul_overflow(t6.as.i, args[0].as.i, &t17.as.i)) return GEAS_ERR_TYPE;
         *t16 = t17;
         GeasValue* t18 = &t8;
         GeasValue t19 = {0};
@@ -494,7 +498,7 @@ static GeasStatus __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1(void* ctx, cons
         t19.as.i = 1;
         GeasValue t20 = {0};
         t20.ty = GEAS_TY_INT;
-        t20.as.i = t8.as.i + t19.as.i;
+        if (__builtin_add_overflow(t8.as.i, t19.as.i, &t20.as.i)) return GEAS_ERR_TYPE;
         *t18 = t20;
     }
     GeasValue* t21 = geas_box(cc);
@@ -510,7 +514,7 @@ static GeasStatus __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_abs_f_bbe6048dc2677789_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_5abs_f_bbe6048dc2677789_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -534,7 +538,7 @@ static GeasStatus __geas_ash_MathOps_abs_f_bbe6048dc2677789_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_sign_f_bbe6048dc2677789_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_6sign_f_bbe6048dc2677789_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -600,7 +604,7 @@ static GeasStatus __geas_ash_MathOps_sign_f_bbe6048dc2677789_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_min_f_5e73eefa4d11d063_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_5min_f_5e73eefa4d11d063_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -635,7 +639,7 @@ static GeasStatus __geas_ash_MathOps_min_f_5e73eefa4d11d063_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_max_f_5e73eefa4d11d063_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_5max_f_5e73eefa4d11d063_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -670,7 +674,7 @@ static GeasStatus __geas_ash_MathOps_max_f_5e73eefa4d11d063_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_clamp_f_3233404172772e69_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_7clamp_f_3233404172772e69_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -737,7 +741,7 @@ static GeasStatus __geas_ash_MathOps_clamp_f_3233404172772e69_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7MathOps_9approx_eq_2955f1214d42da9f_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -772,22 +776,22 @@ static GeasStatus __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1(void* ctx, co
 }
 
 static const GeasVowDesc k7_MathOps_vows[] = {
-    { "epsilon", GEAS_TY_FLOAT, 1, { .ty = GEAS_TY_FLOAT, .tag = 0, .as = { .f = 0.000001 } } },
+    { "epsilon", GEAS_TY_FLOAT, 1, { .ty = GEAS_TY_FLOAT, .tag = 0, .as = { .f = 1e-06 } } },
 };
 
 static const GeasPledgeDesc k7_MathOps_pledges[] = {
-    { "abs", "__geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1", 1, __geas_ash_MathOps_abs_a318ec0a4d8f64bd_v1, -1 },
-    { "sign", "__geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1", 1, __geas_ash_MathOps_sign_a318ec0a4d8f64bd_v1, -1 },
-    { "min", "__geas_ash_MathOps_min_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_min_5f090dc695f53dde_v1, -1 },
-    { "max", "__geas_ash_MathOps_max_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_max_5f090dc695f53dde_v1, -1 },
-    { "clamp", "__geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1", 3, __geas_ash_MathOps_clamp_9ed89d6d7f975e6d_v1, -1 },
-    { "pow_int", "__geas_ash_MathOps_pow_int_5f090dc695f53dde_v1", 2, __geas_ash_MathOps_pow_int_5f090dc695f53dde_v1, -1 },
-    { "abs_f", "__geas_ash_MathOps_abs_f_bbe6048dc2677789_v1", 1, __geas_ash_MathOps_abs_f_bbe6048dc2677789_v1, -1 },
-    { "sign_f", "__geas_ash_MathOps_sign_f_bbe6048dc2677789_v1", 1, __geas_ash_MathOps_sign_f_bbe6048dc2677789_v1, -1 },
-    { "min_f", "__geas_ash_MathOps_min_f_5e73eefa4d11d063_v1", 2, __geas_ash_MathOps_min_f_5e73eefa4d11d063_v1, -1 },
-    { "max_f", "__geas_ash_MathOps_max_f_5e73eefa4d11d063_v1", 2, __geas_ash_MathOps_max_f_5e73eefa4d11d063_v1, -1 },
-    { "clamp_f", "__geas_ash_MathOps_clamp_f_3233404172772e69_v1", 3, __geas_ash_MathOps_clamp_f_3233404172772e69_v1, -1 },
-    { "approx_eq", "__geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1", 2, __geas_ash_MathOps_approx_eq_2955f1214d42da9f_v1, -1 },
+    { "abs", "__geas_ash_7MathOps_3abs_a318ec0a4d8f64bd_v1", 1, __geas_ash_7MathOps_3abs_a318ec0a4d8f64bd_v1, -1 },
+    { "sign", "__geas_ash_7MathOps_4sign_a318ec0a4d8f64bd_v1", 1, __geas_ash_7MathOps_4sign_a318ec0a4d8f64bd_v1, -1 },
+    { "min", "__geas_ash_7MathOps_3min_5f090dc695f53dde_v1", 2, __geas_ash_7MathOps_3min_5f090dc695f53dde_v1, -1 },
+    { "max", "__geas_ash_7MathOps_3max_5f090dc695f53dde_v1", 2, __geas_ash_7MathOps_3max_5f090dc695f53dde_v1, -1 },
+    { "clamp", "__geas_ash_7MathOps_5clamp_9ed89d6d7f975e6d_v1", 3, __geas_ash_7MathOps_5clamp_9ed89d6d7f975e6d_v1, -1 },
+    { "pow_int", "__geas_ash_7MathOps_7pow_int_5f090dc695f53dde_v1", 2, __geas_ash_7MathOps_7pow_int_5f090dc695f53dde_v1, -1 },
+    { "abs_f", "__geas_ash_7MathOps_5abs_f_bbe6048dc2677789_v1", 1, __geas_ash_7MathOps_5abs_f_bbe6048dc2677789_v1, -1 },
+    { "sign_f", "__geas_ash_7MathOps_6sign_f_bbe6048dc2677789_v1", 1, __geas_ash_7MathOps_6sign_f_bbe6048dc2677789_v1, -1 },
+    { "min_f", "__geas_ash_7MathOps_5min_f_5e73eefa4d11d063_v1", 2, __geas_ash_7MathOps_5min_f_5e73eefa4d11d063_v1, -1 },
+    { "max_f", "__geas_ash_7MathOps_5max_f_5e73eefa4d11d063_v1", 2, __geas_ash_7MathOps_5max_f_5e73eefa4d11d063_v1, -1 },
+    { "clamp_f", "__geas_ash_7MathOps_7clamp_f_3233404172772e69_v1", 3, __geas_ash_7MathOps_7clamp_f_3233404172772e69_v1, -1 },
+    { "approx_eq", "__geas_ash_7MathOps_9approx_eq_2955f1214d42da9f_v1", 2, __geas_ash_7MathOps_9approx_eq_2955f1214d42da9f_v1, -1 },
 };
 
 static const GeasReqAtom k7_MathOps_atoms[] = {

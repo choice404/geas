@@ -1,0 +1,37 @@
+// Checked integer arithmetic: every Int, UInt, Byte, Duration, and Time sum,
+// difference, and product goes through an overflow builtin, a negation is a
+// checked subtraction from zero, and a division or remainder tests its
+// divisor first, the least Int over minus one included, each failure leaving
+// the body with the status an index out of range reports. Float arithmetic
+// stays plain. Unit stands as a value, and a string literal whose question
+// marks would spell a trigraph escapes each one
+E is either Bad
+
+contract Arith {
+    pledge ints(a: Int, b: Int) -> Result<Int, E> {
+        return Ok(-(a + b - a * b) / b % a)
+    }
+    pledge uints(a: UInt, b: UInt) -> Result<UInt, E> {
+        return Ok((a + b - a * b) / b % a)
+    }
+    pledge bytes(a: Byte, b: Byte) -> Result<Byte, E> {
+        return Ok((a + b - a * b) / b % a)
+    }
+    pledge spans(d: Duration, t: Time, n: Int) -> Result<Duration, E> {
+        let later = t + d - d * n
+        return Ok(-(later - t))
+    }
+    pledge floats(a: Float, b: Float) -> Result<Float, E> {
+        return Ok(-(a + b - a * b) / b)
+    }
+    pledge unit() -> Result<Unit, E> {
+        let u = Unit
+        return Ok(u)
+    }
+    pledge done() -> Result<Unit, E> {
+        return Ok(Unit)
+    }
+    pledge text() -> Option<String> {
+        return Some("what??/ now??= and ?? then?")
+    }
+}

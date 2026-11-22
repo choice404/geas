@@ -96,7 +96,7 @@ static GeasStatus attr_item(const GeasContractDesc* desc, const char* name,
         return GEAS_OK;
     }
     for (uint32_t i = 0; i < desc->nsubs; i++) {
-        if (!desc->subs[i] || strcmp(desc->subs[i], name) != 0) continue;
+        if (!desc->subs || !desc->subs[i] || strcmp(desc->subs[i], name) != 0) continue;
         *owner = GEAS_ATTR_SUBCONTRACT;
         *index = i;
         return GEAS_OK;

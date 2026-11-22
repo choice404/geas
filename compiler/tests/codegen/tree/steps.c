@@ -15,7 +15,7 @@ static GeasStatus geas_clause5_Steps_execute(GeasContract* cc, const GeasValue* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Steps_run_2addd32b8cea04ce_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Steps_3run_2addd32b8cea04ce_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -32,7 +32,7 @@ static GeasStatus __geas_ash_Steps_run_2addd32b8cea04ce_v1(void* ctx, const Geas
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Steps_copy_9bb86e3aa1258785_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Steps_4copy_9bb86e3aa1258785_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -52,39 +52,40 @@ static GeasStatus __geas_ash_Steps_copy_9bb86e3aa1258785_v1(void* ctx, const Gea
     t2.as.s.len = 5;
     GeasValue t3 = {0};
     t3.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &args[0], &t2, &t3) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t4 = {0};
-    if (geas_list_new(cc, GEAS_TY_STRING, 2, &t4) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t4, &args[0]) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t4, &t3) != GEAS_OK) return GEAS_ERR_OOM;
-    t0[1] = t4;
+    GeasStatus t4 = geas_string_concat(cc, &args[0], &t2, &t3);
+    if (t4 != GEAS_OK) return t4;
     GeasValue t5 = {0};
-    t5.ty = GEAS_TY_STRING;
-    t5.as.s.ptr = (uint8_t*)"";
-    t5.as.s.len = 0;
-    t0[2] = t5;
+    if (geas_list_new(cc, GEAS_TY_STRING, 2, &t5) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t5, &args[0]) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t5, &t3) != GEAS_OK) return GEAS_ERR_OOM;
+    t0[1] = t5;
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_STRING;
     t6.as.s.ptr = (uint8_t*)"";
     t6.as.s.len = 0;
-    t0[3] = t6;
+    t0[2] = t6;
     GeasValue t7 = {0};
-    t7.ty = GEAS_TY_RECORD;
-    t7.as.list.data = t0;
-    t7.as.list.len = 4;
-    t7.as.list.cap = 4;
+    t7.ty = GEAS_TY_STRING;
+    t7.as.s.ptr = (uint8_t*)"";
+    t7.as.s.len = 0;
+    t0[3] = t7;
     GeasValue t8 = {0};
-    GeasStatus t9 = geas_process_run(cc, &t7, 1, &t8);
-    if (t9 != GEAS_OK) return t9;
-    *out = t8;
+    t8.ty = GEAS_TY_RECORD;
+    t8.as.list.data = t0;
+    t8.as.list.len = 4;
+    t8.as.list.cap = 4;
+    GeasValue t9 = {0};
+    GeasStatus t10 = geas_process_run(cc, &t8, 1, &t9);
+    if (t10 != GEAS_OK) return t10;
+    *out = t9;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
 static const GeasPledgeDesc k5_Steps_pledges[] = {
-    { "run", "__geas_ash_Steps_run_2addd32b8cea04ce_v1", 1, __geas_ash_Steps_run_2addd32b8cea04ce_v1, -1 },
-    { "copy", "__geas_ash_Steps_copy_9bb86e3aa1258785_v1", 1, __geas_ash_Steps_copy_9bb86e3aa1258785_v1, -1 },
+    { "run", "__geas_ash_5Steps_3run_2addd32b8cea04ce_v1", 1, __geas_ash_5Steps_3run_2addd32b8cea04ce_v1, -1 },
+    { "copy", "__geas_ash_5Steps_4copy_9bb86e3aa1258785_v1", 1, __geas_ash_5Steps_4copy_9bb86e3aa1258785_v1, -1 },
 };
 
 static const GeasReqAtom k5_Steps_atoms[] = {
@@ -152,7 +153,7 @@ static const GeasContractDesc k5_Steps = {
     .remedy_types = NULL,
 };
 
-static GeasStatus __geas_ash_ProgramRemedy_prepare_a8c45e9fc603aab4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_13ProgramRemedy_7prepare_a8c45e9fc603aab4_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -192,7 +193,7 @@ static GeasStatus __geas_ash_ProgramRemedy_prepare_a8c45e9fc603aab4_v1(void* ctx
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ProgramRemedy_fail_a8c45e9fc603aab4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_13ProgramRemedy_4fail_a8c45e9fc603aab4_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -232,7 +233,7 @@ static GeasStatus __geas_ash_ProgramRemedy_fail_a8c45e9fc603aab4_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_ProgramRemedy_undo_a8c45e9fc603aab4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_13ProgramRemedy_4undo_a8c45e9fc603aab4_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -281,8 +282,8 @@ static const GeasVowDesc k13_ProgramRemedy_vows[] = {
 };
 
 static const GeasPledgeDesc k13_ProgramRemedy_pledges[] = {
-    { "prepare", "__geas_ash_ProgramRemedy_prepare_a8c45e9fc603aab4_v1", 0, __geas_ash_ProgramRemedy_prepare_a8c45e9fc603aab4_v1, -1 },
-    { "fail", "__geas_ash_ProgramRemedy_fail_a8c45e9fc603aab4_v1", 0, __geas_ash_ProgramRemedy_fail_a8c45e9fc603aab4_v1, -1 },
+    { "prepare", "__geas_ash_13ProgramRemedy_7prepare_a8c45e9fc603aab4_v1", 0, __geas_ash_13ProgramRemedy_7prepare_a8c45e9fc603aab4_v1, -1 },
+    { "fail", "__geas_ash_13ProgramRemedy_4fail_a8c45e9fc603aab4_v1", 0, __geas_ash_13ProgramRemedy_4fail_a8c45e9fc603aab4_v1, -1 },
 };
 
 static const GeasReqAtom k13_ProgramRemedy_atoms[] = {
@@ -315,7 +316,7 @@ static const GeasTermDesc k13_ProgramRemedy_terms[] = {
 };
 
 static const GeasRemedyDesc k13_ProgramRemedy_remedies[] = {
-    { "undo", "__geas_ash_ProgramRemedy_undo_a8c45e9fc603aab4_v1", 0, 0, __geas_ash_ProgramRemedy_undo_a8c45e9fc603aab4_v1, { 0 } },
+    { "undo", "__geas_ash_13ProgramRemedy_4undo_a8c45e9fc603aab4_v1", 0, 0, __geas_ash_13ProgramRemedy_4undo_a8c45e9fc603aab4_v1, { 0 } },
 };
 
 static const uint32_t k13_ProgramRemedy_type_kids_1[] = { 2, 3 };
@@ -349,7 +350,7 @@ static const GeasItemTypes k13_ProgramRemedy_remedy_types[] = {
 };
 
 static const GeasContractDesc k13_ProgramRemedy = {
-    "ProgramRemedy", 0xafa477785f6fee52ULL,
+    "ProgramRemedy", 0x05d011f668f80da4ULL,
     1, 2, k13_ProgramRemedy_pledges,
     1, k13_ProgramRemedy_vows,
     0, NULL, 2,

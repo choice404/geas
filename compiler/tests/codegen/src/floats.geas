@@ -1,0 +1,29 @@
+// Float literals by their value: a spelling with underscore separators, one
+// with an exponent, and a fraction with no exact binary form, written in an
+// expression, a pattern, a vow default, and an attribute value. The module
+// C carries each as the shortest decimal that reads back as the same
+// double, so the C compiler sees a double constant whatever the source wrote
+attribute scale: Float on contract
+
+contract Floats [scale: 1_000.5] {
+    vow wide: Float = 1_000.5
+    vow tiny: Float = -0.1
+    vow round: Float = 1.0e3
+
+    clause bucket(x: Float) -> Int {
+        return match x {
+            1_000.5 -> 1
+            1.0e3 -> 2
+            0.1 -> 3
+            _ -> 0
+        }
+    }
+
+    pledge sum() -> Result<Float, String> {
+        return Ok(1_000.5 + 1.0e3 + 0.1 + wide + round - tiny + 2.5e-3 + 12_345.678_9)
+    }
+
+    pledge pick(x: Float) -> Result<Int, String> {
+        return Ok(bucket(x))
+    }
+}

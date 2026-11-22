@@ -5,7 +5,6 @@
 // the descriptor by symbol
 #include "codegen.hpp"
 #include "emitc.hpp"
-#include "attributes.hpp"
 #include "emittext.hpp"
 
 namespace geas {
@@ -97,6 +96,9 @@ void CEmitter::emitContract(const ContractShape& shape) {
     if (std::string line = emitTypeTables(shape); !line.empty()) {
         tail.push_back(std::move(line));
     }
+    if (std::string line = emitForeignSymbols(shape); !line.empty()) {
+        tail.push_back(std::move(line));
+    }
     emitDescriptor(shape, counts, subFlagsRef, tail);
 }
 
@@ -138,13 +140,6 @@ void CEmitter::emitThunk(const PledgeShape& pledge) {
     const PledgeDecl& decl = *pledge.decl;
     const CallableSig sig = lookup_.pledgeSig(decl);
     beginBody(sig.ret, decl.lo, decl.hi);
-    bool hasBindingAttrs = false;
-    for (const Attr& attr : decl.attrs) {
-        hasBindingAttrs = hasBindingAttrs || isBuiltinAttr(attr.key, AttrTarget::Pledge);
-    }
-    if (hasBindingAttrs) {
-        lookup_.unsupported(decl.lo, decl.hi, "pledge attributes in a compiled module");
-    }
     pushScope();
     emitThunkFrame(decl, sig);
     genBlock(*decl.body);

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -19,6 +20,14 @@ namespace geas {
  * @returns {std::int64_t} - the value
  */
 std::int64_t intValue(std::string_view text, std::int64_t lo, std::int64_t hi);
+
+/**
+ * The magnitude of an integer span, prefix and underscores handled, up to
+ * the magnitude of the least Int, see magnitude.hpp.
+ * @params text - the source, lo - start of the literal, hi - past its end
+ * @returns {std::optional<std::uint64_t>} - the magnitude, nullopt past the least Int's
+ */
+std::optional<std::uint64_t> intMagnitude(std::string_view text, std::int64_t lo, std::int64_t hi);
 
 /**
  * One scalar in canonical form: printable ASCII as itself, the quote and the

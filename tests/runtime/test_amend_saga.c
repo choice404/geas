@@ -432,35 +432,12 @@ static GeasContract* resume(GeasRuntime* rt, const char* dsn, const char* key) {
     return st == GEAS_OK ? c : NULL;
 }
 
-/* The event hook reserves an instance while a worker delivers the events
- * of the fulfillment before, and a mutation in that window answers
- * GEAS_ERR_STATE, so a host with a hook tries again once delivery ended */
+/* One host driven step. A host call waits out a delivery still under way
+ * on a worker, so the call is made once */
 static GeasStatus step(GeasContract* c, const char* pledge, GeasValue* args, size_t n) {
     GeasValue out;
-    GeasStatus st = GEAS_ERR_STATE;
-    for (int i = 0; i < WAIT_MS && st == GEAS_ERR_STATE; i++) {
-        st = run(c, pledge, args, n, &out);
-        if (st == GEAS_ERR_STATE) nap_ms(1);
-    }
+    GeasStatus st = run(c, pledge, args, n, &out);
     if (st == GEAS_OK && (out.ty != GEAS_TY_RESULT || out.tag != 0)) return GEAS_ERR_STATE;
-    return st;
-}
-
-static GeasStatus park_retrying(GeasContract* c, const char* dsn, const char* key) {
-    GeasStatus st = GEAS_ERR_STATE;
-    for (int i = 0; i < WAIT_MS && st == GEAS_ERR_STATE; i++) {
-        st = geas_instance_park(c, dsn, key);
-        if (st == GEAS_ERR_STATE) nap_ms(1);
-    }
-    return st;
-}
-
-static GeasStatus deliver_retrying(GeasContract* c) {
-    GeasStatus st = GEAS_ERR_STATE;
-    for (int i = 0; i < WAIT_MS && st == GEAS_ERR_STATE; i++) {
-        st = deliver(c);
-        if (st == GEAS_ERR_STATE) nap_ms(1);
-    }
     return st;
 }
 
@@ -576,7 +553,7 @@ static void test_park_after_amend(const char* dsn) {
     GeasRuntime* rt = v2_runtime();
     if (!rt) return;
     GeasContract* r = resume(rt, dsn, "amend-c");
-    int is_parked = r && wait_at(r, V2_AWAIT) && park_retrying(r, dsn, "amend-c") == GEAS_OK;
+    int is_parked = r && wait_at(r, V2_AWAIT) && geas_instance_park(r, dsn, "amend-c") == GEAS_OK;
     CHECK(is_parked, "the amended saga parks at its await");
     geas_runtime_shutdown(rt);
     if (!is_parked) return;
@@ -741,7 +718,7 @@ static void test_host_driven(const char* dsn) {
     GeasContract* c = NULL;
     CHECK(geas_contract_sign(old, "OrderSaga", NULL, 0, 0, &c) == GEAS_OK, "sign version 1");
     CHECK(c && saga_v1_steps(c), "version 1 lands Payment, reserve, and ship");
-    CHECK(c && park_retrying(c, dsn, "amend-g") == GEAS_OK, "park version 1");
+    CHECK(c && geas_instance_park(c, dsn, "amend-g") == GEAS_OK, "park version 1");
     geas_runtime_shutdown(old);
     events_reset();
 
@@ -761,7 +738,7 @@ static void test_host_driven(const char* dsn) {
         GeasValue track_fields[2] = { str_val("ACME"), str_val("T-1") };
         GeasValue tracking = record_of(track_fields, 2);
         CHECK(step(r, "notify", &tracking, 1) == GEAS_OK, "the host notifies");
-        CHECK(deliver_retrying(r) == GEAS_OK, "delivered");
+        CHECK(deliver(r) == GEAS_OK, "delivered");
         CHECK(geas_contract_state(r) == GEAS_FULFILLED, "the amended saga is fulfilled");
         CHECK(runs(B_DISPATCH) == 0, "nothing ran dispatch again");
     }

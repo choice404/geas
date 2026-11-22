@@ -1,5 +1,6 @@
 // The shared state of the C emitter and its small toolbox, see emitc.hpp
 #include "emitc.hpp"
+#include "emitunread.hpp"
 
 #include <utility>
 
@@ -18,11 +19,12 @@ constexpr unsigned char firstPrintable = 32;
 constexpr unsigned char lastPrintable = 126;
 
 // Appends one byte of a C string literal in a spelling every C compiler
-// reads back exactly: printable ASCII as itself, quote and backslash
-// escaped, and everything else as a three digit octal escape, which cannot
-// swallow a digit that follows the way a hex escape can
+// reads back exactly: printable ASCII as itself, quote, backslash, and
+// question mark escaped, and everything else as a three digit octal escape,
+// which cannot swallow a digit that follows the way a hex escape can. The
+// escaped question mark keeps any run of them from spelling a trigraph
 void pushCByte(std::string& out, unsigned char byte) {
-    if (byte == '"' || byte == '\\') {
+    if (byte == '"' || byte == '\\' || byte == '?') {
         out.push_back('\\');
         out.push_back(static_cast<char>(byte));
         return;
@@ -253,10 +255,12 @@ void CEmitter::beginBody(TyId ret, std::int64_t lo, std::int64_t hi) {
     spanHi_ = hi;
 }
 
-// Lands the lowered body in the file with the tail every body shares: one
-// that runs off its end reports Unit
+// Lands the lowered body in the file with the tail every body shares: a
+// Unit body that runs off its end reports Unit, and the checker holds every
+// other body to a return on every path, so none of them reaches it. A
+// temporary the body never reads is marked on the way, see emitunread.hpp
 void CEmitter::endBody() {
-    out_.append(body_);
+    out_.append(markUnreadLocals(body_));
     body_.clear();
     top("    out->ty = GEAS_TY_UNIT;");
     top("    return GEAS_OK;");

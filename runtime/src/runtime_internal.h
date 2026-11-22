@@ -21,11 +21,12 @@
  * wait, and it calls the clock, the sleep, and every remedy with the runtime
  * lock released.
  *
- * A together call's worker releases the instance lock around its pledge body
- * and waits on the course's join_cv under the instance mutex while another
- * thread delivers the instance's events; the redrive broadcasts it. That
- * wait holds the instance lock exactly once, which is what makes it sound on
- * the recursive mutex. */
+ * A together call's worker releases the instance lock around its pledge body.
+ * It, the course function, and a host call that mutates an instance wait on
+ * the instance's delivery_cv under the instance mutex while another thread
+ * delivers the instance's events; every end of a delivery broadcasts it.
+ * That wait holds the instance lock exactly once, which is what makes it
+ * sound on the recursive mutex. */
 
 #ifndef GEAS_RUNTIME_INTERNAL_H
 #define GEAS_RUNTIME_INTERNAL_H
@@ -35,13 +36,21 @@
 #include <geas/geas_wire.h>
 
 #include <pthread.h>
+#include <stdint.h>
+#include <time.h>
 
 #define GEAS_INTERNAL __attribute__((visibility("hidden")))
 
-#define GEAS_MAX_CONTRACT_TYPES 64
-#define GEAS_MAX_MODULES        64
-#define GEAS_MAX_INSTANCES      256
-#define GEAS_MAX_BINDINGS       128
+/* The first capacity of each runtime table: the registered descriptors, the
+ * loaded modules, the live instances, and the bindings. Every table grows by
+ * doubling under the runtime lock as it fills, so none of these is a limit */
+#define GEAS_TABLE_FIRST_CAP 16
+
+/* The eligibility stamp of an item that is not eligible yet. Every other
+ * value, a negative one from a host clock that reads below zero among them,
+ * is the moment the item became eligible. A park row of flow version 4 or
+ * earlier spelled this as any negative stamp, and is read that way */
+#define GEAS_NOT_ELIGIBLE INT64_MIN
 
 #define GEAS_POOL_DEFAULT_THREADS 4
 #define GEAS_POOL_MAX_THREADS     256
@@ -107,8 +116,8 @@ enum {
  * that heap. Everything here is touched only under the instance lock. */
 typedef struct GeasFlow {
     int64_t        signed_ms;          /* sign time on the runtime clock */
-    int64_t*       pledge_eligible_ms; /* per pledge, -1 until eligible */
-    int64_t*       sub_eligible_ms;    /* per subcontract, -1 until eligible */
+    int64_t*       pledge_eligible_ms; /* per pledge, GEAS_NOT_ELIGIBLE until eligible */
+    int64_t*       sub_eligible_ms;    /* per subcontract, GEAS_NOT_ELIGIBLE until eligible */
     uint8_t*       pledge_lapsed;      /* 1 when the broken latch is a lapse */
     GeasValue*     pledge_ok;          /* first Ok value per pledge, and the
                                         * payload of a delivered signal */
@@ -141,6 +150,12 @@ typedef struct GeasFlow {
                                         * delay with the lock released */
     uint8_t        cv_ready;           /* remedy_cv was initialized */
     pthread_cond_t remedy_cv;          /* signalled when the pass ends */
+    uint8_t        delivery_cv_ready;  /* delivery_cv was initialized */
+    pthread_cond_t delivery_cv;        /* broadcast under the instance lock
+                                        * whenever a delivery of this
+                                        * instance's events ends or a
+                                        * reservation is let go, and when a
+                                        * remedy pass starts or ends */
 } GeasFlow;
 
 struct GeasContract {
@@ -226,6 +241,34 @@ struct GeasContract {
     /* The version an amended resume read the row under, 0 otherwise. Written
      * once before the instance publishes and never again */
     uint32_t               amended_from;
+
+    /* A failed release carried out on another thread is answered to the
+     * release callers still inside their call, never to a break. Both
+     * atomic, the status read with an exchange */
+    uint32_t               release_callers;
+    int32_t                release_status;
+
+    /* The instance table's view of this instance, all under the runtime
+     * lock. slot is its index in rt->instances while it is there. pins
+     * counts walkers holding the pointer with the runtime lock released, a
+     * runtime tick or the ticker; is_dropped marks an instance
+     * geas_contract_free took out of the table, whose memory the last unpin
+     * frees when a walker still held it */
+    size_t                 slot;
+    uint32_t               pins;
+    uint8_t                is_dropped;
+
+    /* Set when a body signed, resumed, or claimed the instance: a pledge or
+     * remedy body, a course, or the body of a together call. The handle
+     * lives in that body's frame, so geas_contract_free refuses it and
+     * shutdown frees it. Written once before the instance publishes */
+    uint8_t                is_body_owned;
+
+    /* Write backs a ref callback is running with no runtime lock held, each
+     * on a private copy of its slot's final value. geas_contract_free
+     * refuses while any runs, since the caller retakes the lock after.
+     * Under the instance lock */
+    uint32_t               write_backs;
 };
 
 /* A future is the receipt of one fulfillment. Between the fulfill and the
@@ -316,7 +359,9 @@ typedef struct GeasJoinCall {
  * copy of the state, step, status, and deadline under mu, a leaf lock taken
  * below the instance lock or alone, so a reader never waits on a running
  * course. The step is published at every checkpoint, the rest at every
- * landing. settling counts runs whose events are still being delivered.
+ * landing. settling counts runs whose events are still being delivered,
+ * readers the host calls in geas_course_info or geas_course_wait, whose
+ * lazy tick can end the instance and deliver its end before they read.
  *
  * held is the status of an autopark write that failed; the next operation
  * answers it, so the course halts on it and a crash never finds a row older
@@ -327,10 +372,9 @@ typedef struct GeasJoinCall {
  * for the step join_step. join_done counts outcomes and join_inflight the
  * calls on the pool or on a worker. join_unlocked counts bodies running with
  * the instance lock released; they are inside in_thunk like any body, and
- * the course's own check for "called from a body" subtracts them. join_cv
- * waits on the instance mutex for another thread's event delivery to end,
- * for a together call and for the course function alike, broadcast from
- * the redrive */
+ * the course's own check for "called from a body" subtracts them. A
+ * together call and the course function wait out another thread's event
+ * delivery on the instance's delivery_cv, see GeasFlow */
 typedef struct GeasCourse {
     GeasCourseFrame   frame;
     uint32_t          state;
@@ -353,12 +397,12 @@ typedef struct GeasCourse {
     uint32_t          join_done;
     uint32_t          join_inflight;
     uint32_t          join_unlocked;
-    pthread_cond_t    join_cv;
 
     pthread_mutex_t   mu;
     pthread_cond_t    cv;       /* CLOCK_MONOTONIC, broadcast on settle */
     GeasCourseInfo    pub;
     uint32_t          settling;
+    uint32_t          readers;
 } GeasCourse;
 
 /* A host implementation bound over one pledge or remedy descriptor. The
@@ -379,16 +423,20 @@ struct GeasRuntime {
      * copy of the top level struct, zero past whatever size the registrar
      * reported, freed at shutdown; the tables it points at stay the
      * module's. */
-    const GeasContractDesc* descs[GEAS_MAX_CONTRACT_TYPES];
+    const GeasContractDesc** descs;
     size_t                 ndescs;
-    void*                  modules[GEAS_MAX_MODULES];
+    size_t                 desc_cap;
+    void**                 modules;
     size_t                 nmodules;
-    GeasContract*           instances[GEAS_MAX_INSTANCES];
+    size_t                 module_cap;
+    GeasContract**          instances; /* every instance not yet freed */
     size_t                 ninstances;
+    size_t                 instance_cap;
     size_t                 nreserved; /* slots a claim holds for an instance
                                        * it has built but not yet published */
-    GeasBinding             bindings[GEAS_MAX_BINDINGS];
+    GeasBinding*            bindings;
     size_t                 nbindings;
+    size_t                 binding_cap;
 
     /* The iname table: one entry per registered contract and one per pledge,
      * kept sorted by mangled name so lookup is a binary search and the dump
@@ -433,6 +481,51 @@ struct GeasRuntime {
 };
 
 /* ---- shared by every unit ---- */
+
+/* Grows a table of elem byte entries so it holds at least need of them,
+ * doubling from GEAS_TABLE_FIRST_CAP. GEAS_ERR_OOM when the size overflows
+ * or the allocation fails, the table left as it was. Under whatever lock
+ * guards the table */
+GEAS_INTERNAL GeasStatus geas_rt_table_grow(void** base, size_t* cap, size_t need,
+                                          size_t elem);
+
+/* The instance table. reserve holds room for one instance a caller builds
+ * and publishes later, the claim's case; unreserve gives it back. add puts c
+ * in the table, into reserved room when is_reserved. All under the runtime
+ * lock */
+GEAS_INTERNAL GeasStatus geas_rt_instance_reserve(GeasRuntime* rt);
+GEAS_INTERNAL void geas_rt_instance_unreserve(GeasRuntime* rt);
+GEAS_INTERNAL GeasStatus geas_rt_instance_add(GeasRuntime* rt, GeasContract* c,
+                                            int is_reserved);
+
+/* A copy of the instance table for a walker that runs with the runtime lock
+ * released, each instance pinned so geas_contract_free leaves its memory in
+ * place until the walk ends. unpin ends the walk and frees the copy. Both
+ * take the runtime lock alone */
+GEAS_INTERNAL GeasStatus geas_rt_instances_pin(GeasRuntime* rt, GeasContract*** out,
+                                             size_t* n);
+GEAS_INTERNAL void geas_rt_instances_unpin(GeasRuntime* rt, GeasContract** list,
+                                         size_t n);
+
+/* A condition variable on CLOCK_MONOTONIC, and the absolute time ms from now
+ * on that clock, so a timed wait never follows a wall clock stepped back */
+GEAS_INTERNAL int geas_rt_cond_init_monotonic(pthread_cond_t* cv);
+GEAS_INTERNAL struct timespec geas_rt_monotonic_after(int64_t ms);
+
+/* start plus ms, held at the far end of time instead of wrapping, for any
+ * start a clock reads, a negative one included */
+static inline int64_t geas_rt_ms_after(int64_t start, uint64_t ms) {
+    if (ms > (uint64_t)INT64_MAX) return INT64_MAX;
+    if (start > INT64_MAX - (int64_t)ms) return INT64_MAX;
+    return start + (int64_t)ms;
+}
+
+/* The milliseconds from now until at, 0 when at is not after now, computed
+ * without overflow for any two clock readings */
+static inline uint64_t geas_rt_ms_until(int64_t at, int64_t now) {
+    if (at <= now) return 0;
+    return (uint64_t)at - (uint64_t)now;
+}
 
 /* ---- course.c ---- */
 
@@ -493,6 +586,8 @@ GEAS_INTERNAL int geas_rt_course_level_here(const GeasContract* c);
 GEAS_INTERNAL void geas_rt_course_publish_step(GeasCourse* k);
 
 /* Stops and joins a running ticker at shutdown, no lock held */
+/* Whether the calling thread is rt's ticker. Takes the runtime lock */
+GEAS_INTERNAL int geas_rt_on_ticker(GeasRuntime* rt);
 GEAS_INTERNAL void geas_rt_ticker_shutdown(GeasRuntime* rt);
 
 /* ---- coursejoin.c ---- */
@@ -502,24 +597,27 @@ GEAS_INTERNAL void geas_rt_ticker_shutdown(GeasRuntime* rt);
  * worker of a together call whose pledge allows it, release lets the
  * instance lock go for the body and answers 1, retake takes it back and
  * waits out another thread's event delivery; everywhere else release
- * answers 0. await_delivery is that wait: on join_cv until no other thread
- * delivers this instance's events, taken only when this thread holds the
- * instance lock exactly once and is neither delivering nor in a hook, and
- * a no op otherwise, where the caller's refusal stands; it answers 1 when it
- * waited, the lock having been out of the caller's hands. settle is the same
- * wait for the course's own paths, a together call on its worker or the
- * course function at its own level, and a no op for any other caller, so a
- * host driven fulfillment keeps its refusal. delivered wakes the threads
- * waiting on a delivery, from the redrive. free releases the calls at
- * shutdown or a failed sign, and clear drops them once their outcomes were
- * handed to the course. All but task under the instance lock */
+ * answers 0. course_await_delivery is that wait for the course's own
+ * paths, the whole of another thread's delivery waited out, a remedy pass's
+ * reservation included. settle_delivery is the wait at a fulfillment's gate
+ * and after its retry delay: the course's way on the course's own paths, a
+ * together call on its worker or the course function at its own level, and
+ * the host way for every other caller, which stops at another thread's
+ * remedy pass, see geas_rt_await_delivery. Both answer 1 when they waited,
+ * the lock having been out of the caller's hands. free releases the calls
+ * at shutdown or a failed sign, and clear drops them once their outcomes
+ * were handed to the course. All but task under the instance lock */
 GEAS_INTERNAL void geas_rt_join_task(GeasJoinCall* call);
 GEAS_INTERNAL int geas_rt_join_release(GeasContract* c);
 GEAS_INTERNAL void geas_rt_join_retake(GeasContract* c);
 GEAS_INTERNAL int geas_rt_course_await_delivery(GeasContract* c);
-GEAS_INTERNAL int geas_rt_course_settle(GeasContract* c);
-GEAS_INTERNAL void geas_rt_join_delivered(GeasContract* c);
+GEAS_INTERNAL int geas_rt_settle_delivery(GeasContract* c);
 GEAS_INTERNAL void geas_rt_join_clear(GeasCourse* k);
+
+/* Whether this thread is running the body of a together call with the
+ * instance lock released. Such a body is a body like any other to the calls
+ * that refuse one, though it holds no instance lock */
+GEAS_INTERNAL int geas_rt_in_join_body(void);
 
 /* ---- coursepark.c ---- */
 
@@ -557,10 +655,42 @@ GEAS_INTERNAL void geas_rt_event_queue_pair(GeasContract* c, uint32_t kind,
  * hook, the states in which it must not block on another thread's work */
 GEAS_INTERNAL int geas_rt_thread_busy(void);
 
+/* Whether the calling thread runs inside a body: it holds an instance lock,
+ * as a pledge or remedy body, a course, and every runtime path under one do,
+ * or it runs the body of a together call with the lock released. An event
+ * hook and a write back callback hold no lock and are the host's */
+GEAS_INTERNAL int geas_rt_in_body_here(void);
+
+/* Whether this thread holds any instance lock */
+GEAS_INTERNAL int geas_rt_holds_instance(void);
+
 /* Whether this thread holds exactly one instance lock and is neither
- * delivering events nor inside a hook, the one state in which a course
- * thread waits out another thread's delivery on join_cv */
+ * delivering events, inside a hook, running a together body with the lock
+ * released, nor running a ref write back callback, the one state in which
+ * it waits out another thread's delivery. host_may_wait is the same thread
+ * before it takes the instance lock, holding none */
 GEAS_INTERNAL int geas_rt_may_await_delivery(void);
+GEAS_INTERNAL int geas_rt_host_may_wait(void);
+
+/* What a wait for another thread's delivery waits out. ALL waits for the
+ * reservation to go, a remedy pass's held across its retry delays included,
+ * for the course's own paths, a break, a release, and a free. LIVE stops at
+ * another thread's remedy pass, which leaves the contract Remedying for the
+ * caller's own checks to answer, for fulfill, signal, and tick. PARK waits
+ * while a park is refused for the delivery, so a snapshot during a remedy
+ * wait goes ahead, for park and autopark */
+enum { GEAS_AWAIT_ALL = 0, GEAS_AWAIT_LIVE = 1, GEAS_AWAIT_PARK = 2 };
+
+/* Waits on the instance's delivery_cv while another thread's delivery holds
+ * the instance in the given mode, when this thread may wait at all, and
+ * answers whether it waited; a no op answering 0 otherwise, where the
+ * caller's refusal stands. wake broadcasts delivery_cv. Both under the
+ * instance lock */
+GEAS_INTERNAL int geas_rt_await_delivery(GeasContract* c, uint32_t mode);
+GEAS_INTERNAL void geas_rt_delivery_wake(GeasContract* c);
+
+/* Whether this thread is running ref write back callbacks */
+GEAS_INTERNAL int geas_rt_in_write_back(void);
 
 #ifdef GEAS_RUNTIME_TESTING
 extern uint32_t geas_test_event_alloc_failures;
@@ -785,6 +915,11 @@ GEAS_INTERNAL void geas_rt_remedy_drive(GeasContract* c);
 /* The explicit break, under the instance lock. */
 GEAS_INTERNAL GeasStatus geas_rt_break_explicit(GeasContract* c);
 
+/* Whether this thread is running c's remedy pass. A remedy is the work a
+ * cancel asked for, so inside the pass the cancel reads as not requested and
+ * only a runtime shutdown cuts a remedy body short. No lock */
+GEAS_INTERNAL int geas_rt_remedy_pass_here(const GeasContract* c);
+
 /* Resolves the remedy dispatch table into plain heap, the binding beating
  * the compiled body, GEAS_ERR_UNBOUND when a remedy has neither. Under the
  * runtime lock. */
@@ -816,6 +951,9 @@ typedef struct GeasParkRow {
     GeasString errs;
     GeasString subtxn;
     GeasString flow;
+    /* The write's generation, a fresh nonzero number every park writes, 0
+     * for a row written before the column existed */
+    int64_t    gen;
 } GeasParkRow;
 
 /* One call of a together a row caught in flight, by N's item index */
@@ -908,6 +1046,10 @@ typedef struct GeasResumed {
 
 GEAS_INTERNAL GeasStatus geas_rt_resume_read(const char* dsn, const char* key,
                                            GeasResumed* r);
+/* Deletes the row r read when it is still that row, generation included.
+ * *is_taken is 1 when this call took it */
+GEAS_INTERNAL GeasStatus geas_rt_claim_take(const char* dsn, const char* key,
+                                          const GeasResumed* r, int* is_taken);
 GEAS_INTERNAL GeasStatus geas_rt_resume_build(GeasRuntime* rt, uint64_t expected_hash,
                                             GeasResumed* r);
 GEAS_INTERNAL GeasStatus geas_rt_resume_publish(GeasResumed* r, int is_reserved);
@@ -920,6 +1062,15 @@ GEAS_INTERNAL void geas_rt_resume_discard(GeasResumed* r);
  * above GEAS_VALUE_MAX_DEPTH, the line every boundary holds, since compiled
  * code copies values that never cross a boundary */
 #define GEAS_COPY_MAX_DEPTH 4096u
+
+/* GEAS_VALUE_MAX_NODES, in geas_abi.h, bounds the nodes one deep copy, one
+ * boundary check, and one encode visit, so a small DAG with a vast unfolding
+ * is GEAS_ERR_OOM instead of gigabytes of copy */
+
+/* The most GeasValue slots one array of a list, a map, or a tuple holds,
+ * so the byte size of the array never overflows. A count past it is
+ * GEAS_ERR_OOM */
+#define GEAS_VALUES_MAX_COUNT ((uint64_t)(SIZE_MAX - 64) / sizeof(GeasValue))
 
 /* Whether a sequence of bytes is strict UTF-8: no overlong encoding, no
  * surrogate, nothing above U+10FFFF, no sequence cut short */
@@ -939,6 +1090,42 @@ GEAS_INTERNAL GeasStatus geas_rt_conform(const GeasContractDesc* d, uint32_t ty,
 /* The registrar's check of a descriptor's type table. GEAS_ERR_TYPE for a
  * table that does not hold up, GEAS_OK for one that does or for none */
 GEAS_INTERNAL GeasStatus geas_rt_validate_types(const GeasContractDesc* d);
+
+/* ---- courseslot.c ---- */
+
+/* The height of every node of d's type table, the fewest levels a finite
+ * value of it nests, UINT32_MAX for a type with no finite value. *out is
+ * heap the caller frees, NULL when the table is empty. GEAS_ERR_OOM */
+GEAS_INTERNAL GeasStatus geas_rt_type_heights(const GeasContractDesc* d, uint32_t** out);
+
+/* The registrar's check of the course slot types: present only beside a
+ * course with slots and a type table, every slot an index or GEAS_NO_TYPE,
+ * and every indexed type with a smallest value no deeper than
+ * GEAS_VALUE_MAX_DEPTH. GEAS_OK for a descriptor with none */
+GEAS_INTERNAL GeasStatus geas_rt_validate_slot_types(const GeasContractDesc* d);
+
+/* Starts each slot of a fresh frame at the smallest value of its type, on the
+ * instance heap. Leaves the slots alone for a descriptor with no slot types.
+ * GEAS_ERR_OOM */
+GEAS_INTERNAL GeasStatus geas_rt_course_slots_zero(GeasContract* c, GeasValue* slots,
+                                                 uint32_t nslots);
+
+/* The type table index of one course slot, GEAS_NO_TYPE when the descriptor
+ * carries no slot types */
+GEAS_INTERNAL uint32_t geas_rt_course_slot_type(const GeasContractDesc* d, uint32_t slot);
+
+/* ---- foreign.c ---- */
+
+/* The function an abstract pledge's or remedy's foreign symbol names, looked
+ * up in the global scope of the process, NULL when the descriptor names no
+ * symbol for the entry or the process exports none under it */
+GEAS_INTERNAL GeasPledgeFn geas_rt_foreign_pledge(const GeasContractDesc* d, uint32_t i);
+GEAS_INTERNAL GeasPledgeFn geas_rt_foreign_remedy(const GeasContractDesc* d, uint32_t r);
+
+/* The registrar's check of the foreign symbol tables: a symbol rides only an
+ * abstract pledge or an abstract remedy, never a signal or an entry with a
+ * compiled body. GEAS_OK for a descriptor with none */
+GEAS_INTERNAL GeasStatus geas_rt_validate_symbols(const GeasContractDesc* d);
 
 /* Whether the descriptor carries a type table. Every check below answers
  * GEAS_OK for one that does not, the behaviour such a descriptor always had */

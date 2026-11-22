@@ -6,7 +6,10 @@
 //
 // The walk starts at the vows in declaration order, then each pledge's
 // parameters and return, then each signal's parameters, then each remedy's
-// parameter and return, the order the descriptor tables list them in. A
+// parameter and return, the order the descriptor tables list them in, then
+// the type of every slot of the course frame, hidden ones included: a for
+// loop's collection copy is its List or Map, its position an Int, a select's
+// chosen arm an Int, and every other slot the type of the value it holds. A
 // type takes its index the first time the walk meets it, before its kids are
 // walked, so a recursive type refers back to its own index. Every distinct
 // type appears once, distinct as a conforming value sees it: Duration, Time,
@@ -60,12 +63,14 @@ struct TypeTableItem {
 
 // The whole table of one contract. items lists the pledges then the
 // signals, the pledges table's order; remedies holds the 0 or 1 parameter
-// the remedy thunk is handed and the remedy's return
+// the remedy thunk is handed and the remedy's return; courseSlots holds one
+// index per slot of the course frame, empty for a contract with no course
 struct ContractTypes {
     std::vector<TypeTableNode> nodes;
     std::vector<TypeTableItem> items;
     std::vector<std::uint32_t> vows;
     std::vector<TypeTableItem> remedies;
+    std::vector<std::uint32_t> courseSlots;
 };
 
 /**

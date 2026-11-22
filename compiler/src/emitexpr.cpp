@@ -34,6 +34,9 @@ std::string_view operatorText(BinaryOp op) {
     return "||";
 }
 
+// The name of the Unit value, the checker's rule
+constexpr std::string_view unitValueName = "Unit";
+
 bool isEquality(BinaryOp op) {
     return op == BinaryOp::Eq || op == BinaryOp::Ne;
 }
@@ -55,7 +58,7 @@ CValue CEmitter::genExpr(ExprId id, TyId want) {
         Overloaded{
             [&](const IntLiteral& e) { return genInt(e, want); },
             [&](const FloatLiteral& e) {
-                return genScalar("GEAS_TY_FLOAT", "f", e.spelling, TyKind::Float);
+                return genScalar("GEAS_TY_FLOAT", "f", cFloat(e.spelling), TyKind::Float);
             },
             [&](const StringLiteral& e) { return genString(e); },
             [&](const CharLiteral& e) {
@@ -89,7 +92,8 @@ CValue CEmitter::genInt(const IntLiteral& literal, TyId want) {
     const TyKind wanted = kindOf(want);
     const TyKind kind = wanted == TyKind::UInt || wanted == TyKind::Byte ? wanted : TyKind::Int;
     const TyId type = types().scalar(kind);
-    return genScalar(lookup_.tagOf(type), lookup_.unionFieldOf(type), decimal(literal.value), kind);
+    return genScalar(lookup_.tagOf(type), lookup_.unionFieldOf(type), cInteger(literal.value),
+                     kind);
 }
 
 // A scalar literal: a fresh value, its tag, and its one union field
@@ -110,8 +114,8 @@ CValue CEmitter::genString(const StringLiteral& literal) {
     return CValue{std::move(value), types().scalar(TyKind::String)};
 }
 
-// A parameter, a let binding, a vow of the enclosing contract, or a bare sum
-// variant, which the parser leaves as an identifier on purpose
+// A parameter, a let binding, a vow of the enclosing contract, a bare sum
+// variant, which the parser leaves as an identifier on purpose, or Unit
 CValue CEmitter::genIdentifier(const Expr& expr, const Identifier& identifier) {
     if (const CValue* local = lookupLocal(identifier.name)) {
         return *local;
@@ -123,6 +127,12 @@ CValue CEmitter::genIdentifier(const Expr& expr, const Identifier& identifier) {
     const GlobalEntry* global = lookup_.resolved().global(identifier.name);
     if (global != nullptr && global->kind == GlobalKind::Variant) {
         return genVariant(expr, identifier.name, {});
+    }
+    // Unit as a value, the zeroed value of type Unit, when nothing declares the name
+    if (global == nullptr && identifier.name == unitValueName) {
+        std::string value = newValue();
+        setTag(value, "GEAS_TY_UNIT");
+        return CValue{std::move(value), types().scalar(TyKind::Unit)};
     }
     unsupportedAt(expr, joined("the name '", identifier.name, "' in a pledge body"));
     return badValue();
@@ -153,19 +163,22 @@ CValue CEmitter::genUnary(const Expr& expr, const UnaryExpr& unary) {
     }
     std::string value = newValue();
     setTag(value, lookup_.tagOf(operand.type));
-    line(joined(value, ".as.", field, " = -", operand.name, ".as.", field, ";"));
+    genCheckedNegation(operand, field, value);
     return CValue{std::move(value), operand.type};
 }
 
 // String and Bytes concatenation through the runtime helper, which allocates the
-// result on the instance the thunk runs against
+// result on the instance the thunk runs against. A status other than GEAS_OK
+// leaves the body as the helper reported it
 CValue CEmitter::genConcat(const CValue& lhs, const CValue& rhs) {
     std::string value = newValue();
     setTag(value, lookup_.tagOf(lhs.type));
     const std::string_view helper = kindOf(lhs.type) == TyKind::Bytes
         ? "geas_bytes_concat" : "geas_string_concat";
-    line(joined("if (", helper, "(cc, &", lhs.name, ", &", rhs.name, ", &", value,
-                ") != GEAS_OK) ", failExit("GEAS_ERR_OOM")));
+    const std::string status = freshName();
+    line(joined("GeasStatus ", status, " = ", helper, "(cc, &", lhs.name, ", &", rhs.name, ", &",
+                value, ");"));
+    returnUnlessOk(status);
     return CValue{std::move(value), lhs.type};
 }
 
@@ -219,8 +232,7 @@ CValue CEmitter::genBinary(const Expr& expr, const BinaryExpr& binary, TyId want
     }
     std::string value = newValue();
     setTag(value, lookup_.tagOf(operand));
-    line(joined(value, ".as.", field, " = ", lhs.name, ".as.", field, " ", operatorText(op), " ",
-                rhs.name, ".as.", field, ";"));
+    genCheckedArithmetic(op, lhs, rhs, field, value);
     // Time minus Time is the Duration between them, every other temporal
     // pairing keeps the left operand's type
     const bool isSpan = op == BinaryOp::Sub && kindOf(lhs.type) == TyKind::Time &&
@@ -229,7 +241,8 @@ CValue CEmitter::genBinary(const Expr& expr, const BinaryExpr& binary, TyId want
 }
 
 // Equality: Strings through geas_string_eq, composites and instance handles
-// through the structural geas_value_eq, scalars on their union field
+// through the structural geas_value_eq, which also holds every Unit inside a
+// composite equal, Unit itself as a constant, scalars on their union field
 CValue CEmitter::genEquality(const Expr& expr, const BinaryExpr& binary, const CValue& lhs,
                              const CValue& rhs, TyId operand) {
     std::string value = newValue();
@@ -243,6 +256,11 @@ CValue CEmitter::genEquality(const Expr& expr, const BinaryExpr& binary, const C
     if (isString || (field.empty() && isDeep)) {
         const std::string_view helper = isString ? "geas_string_eq(&" : "geas_value_eq(&";
         line(joined(value, ".as.b = ", bang, helper, lhs.name, ", &", rhs.name, ");"));
+        return CValue{std::move(value), boolean};
+    }
+    // Unit has one value, so two of them are always equal
+    if (kindOf(operand) == TyKind::Unit) {
+        line(joined(value, ".as.b = ", binary.op == BinaryOp::Ne ? "0" : "1", ";"));
         return CValue{std::move(value), boolean};
     }
     if (field.empty()) {

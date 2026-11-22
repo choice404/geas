@@ -5,6 +5,8 @@
 #include <unordered_map>
 
 #include "emittext.hpp"
+#include "quote.hpp"
+#include "smallest.hpp"
 
 namespace geas {
 
@@ -31,6 +33,12 @@ public:
 
 private:
     std::uint32_t slotOf(TyId type, std::int64_t lo, std::int64_t hi);
+    std::uint32_t courseSlotOf(TyId type, const SmallestValues& smallest, std::int64_t lo,
+                               std::int64_t hi);
+    bool isSlotStartable(TyId type, const SmallestValues& smallest, std::int64_t lo,
+                         std::int64_t hi);
+    bool judgeSlotType(TyId type, const SmallestValues& smallest, std::int64_t lo,
+                       std::int64_t hi) const;
     TypeTableItem itemOf(const CallableSig& sig, bool isSignal, std::int64_t lo, std::int64_t hi);
     TypeTableItem remedyItemOf(const RemedyShape& remedy);
     Spelling spellingOf(TyId type, std::set<std::string>& seen) const;
@@ -47,9 +55,14 @@ private:
     const EmitLookup& lookup_;
     ContractTypes out_;
     std::unordered_map<std::string, std::uint32_t> indices_;
+    // Whether each slot type judged so far can start a slot, so a type many
+    // slots share is faulted once
+    std::unordered_map<std::string, bool> slotVerdicts_;
 };
 
-// Vows, pledges, signals, remedies: the fixed walk order the indices follow
+// Vows, pledges, signals, remedies, then the course slots: the fixed walk
+// order the indices follow, the slots last so every index the boundary
+// items take is the one they take in a contract with no course
 ContractTypes TypeTableBuilder::run(const ContractShape& shape) && {
     for (const VowDecl* vow : shape.vows) {
         out_.vows.push_back(slotOf(lookup_.vowType(*vow), vow->lo, vow->hi));
@@ -65,7 +78,83 @@ ContractTypes TypeTableBuilder::run(const ContractShape& shape) && {
     for (const RemedyShape& remedy : shape.remedies) {
         out_.remedies.push_back(remedyItemOf(remedy));
     }
+    const auto course = lookup_.tables().courses.find(shape.decl);
+    if (course == lookup_.tables().courses.end() || shape.course == nullptr) {
+        return std::move(out_);
+    }
+    std::vector<TyId> slotTypes;
+    for (const CourseSlot& slot : course->second.slots) {
+        if (slot.type.isSet()) {
+            slotTypes.push_back(slot.type);
+        }
+    }
+    const SmallestValues smallest{lookup_, slotTypes};
+    for (const CourseSlot& slot : course->second.slots) {
+        out_.courseSlots.push_back(
+            courseSlotOf(slot.type, smallest, shape.course->lo, shape.course->hi));
+    }
     return std::move(out_);
+}
+
+// The index a course slot carries. A slot the table cannot spell, a name with
+// no layout or a pledge value the wire codec refuses to park anyway, carries
+// noTypeIndex. The runtime starts every slot at the smallest value of its
+// type, so a type whose smallest value the runtime would refuse to build is a
+// build fault, see smallest.hpp
+std::uint32_t TypeTableBuilder::courseSlotOf(TyId type, const SmallestValues& smallest,
+                                             std::int64_t lo, std::int64_t hi) {
+    if (!type.isSet()) {
+        return noTypeIndex;
+    }
+    std::set<std::string> seen;
+    if (spellingOf(type, seen) != Spelling::Known) {
+        return noTypeIndex;
+    }
+    if (!isSlotStartable(type, smallest, lo, hi)) {
+        return noTypeIndex;
+    }
+    return indexOf(type);
+}
+
+// Whether the runtime can start a slot of this type, judged once per type
+bool TypeTableBuilder::isSlotStartable(TyId type, const SmallestValues& smallest,
+                                       std::int64_t lo, std::int64_t hi) {
+    std::string key = keyOf(type);
+    const auto found = slotVerdicts_.find(key);
+    if (found != slotVerdicts_.end()) {
+        return found->second;
+    }
+    const bool isStartable = judgeSlotType(type, smallest, lo, hi);
+    slotVerdicts_.emplace(std::move(key), isStartable);
+    return isStartable;
+}
+
+// Whether a type has a finite value whose smallest one nests no deeper than
+// a value may and holds no more nodes than a slot may start with. A type
+// that fails is faulted here
+bool TypeTableBuilder::judgeSlotType(TyId type, const SmallestValues& smallest,
+                                     std::int64_t lo, std::int64_t hi) const {
+    const SmallestValue value = smallest.of(type);
+    const std::string head =
+        joined("codegen: the course holds a value of type ", quoted(lookup_.types().render(type)));
+    if (!value.isFinite()) {
+        lookup_.fault(lo, hi,
+                      joined(head, ", which has no finite value, so no frame could hold one"));
+        return false;
+    }
+    if (value.height > valueMaxDepth) {
+        lookup_.fault(lo, hi, joined(head, " whose smallest value nests more than ",
+                                     decimal(static_cast<std::int64_t>(valueMaxDepth)),
+                                     " levels; hold it behind an Option or a List"));
+        return false;
+    }
+    if (value.nodes > slotMinNodesMax) {
+        lookup_.fault(lo, hi, joined(head, " whose smallest value has more than ",
+                                     decimal(static_cast<std::int64_t>(slotMinNodesMax)),
+                                     " nodes; hold it behind an Option or a List"));
+        return false;
+    }
+    return true;
 }
 
 // The index one slot carries: the type's own, or noTypeIndex when the type

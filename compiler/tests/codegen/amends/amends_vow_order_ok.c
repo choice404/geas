@@ -10,8 +10,8 @@ static const GeasVowDesc k13_AmendVowOrder_vows[] = {
 };
 
 static const GeasPledgeDesc k13_AmendVowOrder_pledges[] = {
-    { "ship", "__geas_ash_AmendVowOrder_ship_0e2ba22315b89a85_v2", 0, NULL, -1 },
-    { "notify", "__geas_ash_AmendVowOrder_notify_6991a6b4d478d21d_v2", 0, NULL, -1 },
+    { "ship", "__geas_ash_13AmendVowOrder_4ship_0e2ba22315b89a85_v2", 0, NULL, -1 },
+    { "notify", "__geas_ash_13AmendVowOrder_6notify_6991a6b4d478d21d_v2", 0, NULL, -1 },
 };
 
 static const GeasReqAtom k13_AmendVowOrder_atoms[] = {
@@ -45,19 +45,20 @@ static GeasStatus k13_AmendVowOrder_amend1_vows(void* ctx, const GeasValue* prio
     t1.as.i = 2;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_INT;
-    t2.as.i = t0.as.i * t1.as.i;
+    if (__builtin_mul_overflow(t0.as.i, t1.as.i, &t2.as.i)) return GEAS_ERR_TYPE;
     GeasStatus t3 = geas_value_deep_copy(cc, &t2, &vows[2]);
     if (t3 != GEAS_OK) return t3;
     GeasValue t4 = {0};
     t4.ty = GEAS_TY_INT;
-    t4.as.i = vows[2].as.i + vows[0].as.i;
+    if (__builtin_add_overflow(vows[2].as.i, vows[0].as.i, &t4.as.i)) return GEAS_ERR_TYPE;
     GeasStatus t5 = geas_value_deep_copy(cc, &t4, &vows[3]);
     if (t5 != GEAS_OK) return t5;
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &vows[4], &vows[1], &t6) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasStatus t7 = geas_value_deep_copy(cc, &t6, &vows[4]);
+    GeasStatus t7 = geas_string_concat(cc, &vows[4], &vows[1], &t6);
     if (t7 != GEAS_OK) return t7;
+    GeasStatus t8 = geas_value_deep_copy(cc, &t6, &vows[4]);
+    if (t8 != GEAS_OK) return t8;
     return GEAS_OK;
 }
 

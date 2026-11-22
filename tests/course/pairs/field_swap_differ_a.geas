@@ -1,0 +1,12 @@
+// The two fields trade values, which is another record and another course
+record R {
+    a: Int
+    b: Int
+}
+contract Flow {
+    pledge keep(r: R) -> Option<Int>
+    course {
+        let r = R { a: 1, b: 2 }
+        keep(r)?
+    }
+}

@@ -1,0 +1,7 @@
+// The Float literal holds another value
+contract Flow {
+    pledge p(x: Float) -> Option<Int>
+    course {
+        p(1.5)?
+    }
+}

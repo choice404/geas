@@ -1,0 +1,4 @@
+// The other half of the iname split pair, see iname_split_one.geas
+contract A_b {
+    pledge c(x: Int) -> Option<Int> { return Some(x + 1) }
+}

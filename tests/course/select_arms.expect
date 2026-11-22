@@ -1,6 +1,6 @@
 Courses [
     Course "Flow" {
-        hash: 0x96beb87e8584ce6c,
+        hash: 0xcdcc7a12023e4f15,
         entry: 0,
         slots: [
             Slot(0) "$hidden0": Int (choice),

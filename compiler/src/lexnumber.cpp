@@ -1,9 +1,13 @@
 // The number scanners: decimal, hex, and binary integers with underscore
 // separators, floats with a fraction and an optional exponent, and durations
+#include <cmath>
+#include <cstdlib>
 #include <limits>
+#include <string>
 
 #include "duration.hpp"
 #include "lexer.hpp"
+#include "magnitude.hpp"
 #include "size.hpp"
 #include "utf8.hpp"
 
@@ -49,6 +53,21 @@ bool doesIntOverflow(std::string_view text, std::int64_t lo, std::int64_t hi, in
     return false;
 }
 
+// A float literal whose value is past the largest finite double has no
+// Float to stand for, so it is refused where an integer past 64 bits is
+void Lexer::checkFloatOverflow(std::int64_t start) {
+    std::string digits;
+    for (std::int64_t i = start; i < pos_; ++i) {
+        const int byte = byteAt(text_, i);
+        if (byte != '_') {
+            digits.push_back(static_cast<char>(byte));
+        }
+    }
+    if (std::isinf(std::strtod(digits.c_str(), nullptr))) {
+        report(start, "float literal overflows the Float range");
+    }
+}
+
 // Scans digits of base with underscores between, returning how many real
 // digits it saw so a caller can refuse an empty run. A digit of a larger base
 // ends the run and the junk check after the literal reports it
@@ -67,10 +86,21 @@ std::int64_t Lexer::scanDigitRun(int base) {
     }
 }
 
+// The magnitude of the least Int passes only right after a minus, where the
+// parser decides whether that minus negates it
 void Lexer::checkIntOverflow(std::int64_t start, std::int64_t lo, std::int64_t hi, int base) {
-    if (doesIntOverflow(text_, lo, hi, base)) {
+    if (doesIntOverflow(text_, lo, hi, base) && !isLeastAfterMinus(TokenKind::Int, start)) {
         report(start, "integer literal overflows 64 bits");
     }
+}
+
+// Whether the literal from start to the cursor spells the magnitude of the
+// least Int with a minus token right before it
+bool Lexer::isLeastAfterMinus(TokenKind kind, std::int64_t start) const {
+    if (tokens_.empty() || tokens_.back().kind != TokenKind::Minus) {
+        return false;
+    }
+    return isLeastMagnitude(text_, Token{kind, start, pos_, false});
 }
 
 // Consumes identifier characters trailing a number as one fault, so 0x1G or
@@ -126,7 +156,7 @@ void Lexer::scanDuration(std::int64_t start) {
     const std::string_view literal = text_.substr(static_cast<std::size_t>(start),
                                                   static_cast<std::size_t>(pos_ - start));
     const auto milliseconds = parseDuration(literal);
-    if (!milliseconds) {
+    if (!milliseconds && !isLeastAfterMinus(TokenKind::Duration, start)) {
         report(start, durationErrorMessage(milliseconds.error()));
     }
     push(TokenKind::Duration, start);
@@ -140,7 +170,7 @@ void Lexer::scanSize(std::int64_t start) {
     const std::string_view literal = text_.substr(static_cast<std::size_t>(start),
                                                   static_cast<std::size_t>(pos_ - start));
     const auto bytes = parseSize(literal);
-    if (!bytes) {
+    if (!bytes && !isLeastAfterMinus(TokenKind::Size, start)) {
         report(start, sizeErrorMessage(bytes.error()));
     }
     push(TokenKind::Size, start);
@@ -171,6 +201,7 @@ void Lexer::scanNumber(std::int64_t start) {
             scanExponent();
         }
         scanNumberJunk(start);
+        checkFloatOverflow(start);
         push(TokenKind::Float, start);
         return;
     }

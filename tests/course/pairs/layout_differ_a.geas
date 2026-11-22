@@ -1,0 +1,25 @@
+// The course reads a record whose field changes type between a and b, and
+// the course text stays the same, so only the layout segment tells them apart
+record Box {
+    a: Int
+    b: Int
+}
+
+contract Flow {
+    pledge done(n: Int) -> Option<Int>
+    signal ping()
+
+    clause make() -> Box {
+        return Box { a: 1, b: 2 }
+    }
+
+    clause report(value: Box) -> Int {
+        return value.a
+    }
+
+    course {
+        let box = make()
+        await ping
+        done(report(box))
+    }
+}

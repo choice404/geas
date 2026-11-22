@@ -181,11 +181,11 @@ TyId Checker::instanceMember(const Expr& expr, const MemberExpr& member, TyId ba
         markUse(expr, ExprUse::InstanceVow);
         return vowType(*entry->vow());
     }
-    if (const PledgeDecl* pledge = resolved_.findPledge(target, name)) {
-        refuseCoursePledge(expr, *target, name);
-        const CallableSig& sig = pledgeSig(*pledge);
-        markUse(expr, ExprUse::InstancePledgeValue);
-        return types_.pledge(sig.params, sig.ret);
+    if (resolved_.findPledge(target, name) != nullptr) {
+        // A pledge named without a call would be a pledge value, which this
+        // version of the language leaves out
+        emitAt(expr, std::string{pledgeValueFault} + "; call " + quoted(name) + " instead");
+        return unknown();
     }
     if (resolved_.findSignal(target, name) != nullptr) {
         emitAt(expr, "signal " + quoted(name) + " is delivered with a call, it is not a value");
@@ -222,7 +222,9 @@ TyId Checker::memberWithBase(const Expr& expr, const MemberExpr& member, TyId ba
         emitAt(expr, "a value of " + quoted(typeName) + " has no fields; match it");
         return unknown();
     }
-    // An opaque outside name, its fields are unknowable so the access passes
+    // StoreError, the one name the compiler brings in with no declaration,
+    // has no fields to read
+    emitAt(expr, quoted(typeName) + " has no field " + quoted(member.name));
     return unknown();
 }
 

@@ -60,6 +60,8 @@ private:
     void scanDuration(std::int64_t start);
     void scanSize(std::int64_t start);
     void checkIntOverflow(std::int64_t start, std::int64_t lo, std::int64_t hi, int base);
+    void checkFloatOverflow(std::int64_t start);
+    bool isLeastAfterMinus(TokenKind kind, std::int64_t start) const;
 
     std::string_view text_;
     std::int64_t pos_ = 0;

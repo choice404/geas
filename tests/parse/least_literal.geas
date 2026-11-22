@@ -1,0 +1,22 @@
+// The least Int is a literal only right after a unary minus, which folds
+// into it: in an expression, a pattern, an attribute, and for a Duration
+// and a Size alike
+contract Least [floor: -9223372036854775808] {
+    vow least: Int = -9223372036854775808
+    clause pick(x: Int) -> Int {
+        return match x {
+            -9223372036854775808 -> 1
+            -1 -> 2
+            _ -> -0x8000000000000000
+        }
+    }
+    clause span() -> Duration {
+        return -9223372036854775808ms
+    }
+    clause size() -> Int {
+        return -8388608T
+    }
+    clause twice() -> Int {
+        return - -9223372036854775808
+    }
+}

@@ -1,4 +1,4 @@
 // shape Checkout v1: contract Checkout;pledge charge:(F)->R(V,NPayError);pledge ping:()->V;type PayError=Declined(reason:S)|Timeout;
 #define GEAS_HASH_Checkout 0x62873c853fb0aff2ULL
-#define GEAS_MANGLED_Checkout_charge "__geas_ash_Checkout_charge_51fe8717b2ba70f5_v1"
-#define GEAS_MANGLED_Checkout_ping "__geas_ash_Checkout_ping_0e2ba22315b89a85_v1"
+#define GEAS_MANGLED_Checkout_charge "__geas_ash_8Checkout_6charge_51fe8717b2ba70f5_v1"
+#define GEAS_MANGLED_Checkout_ping "__geas_ash_8Checkout_4ping_0e2ba22315b89a85_v1"

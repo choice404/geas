@@ -23,7 +23,7 @@ export interface SessionStream {
 // OrderSagaShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const OrderSagaShapeHash: bigint = 0x34601efe4025953fn;
+export const OrderSagaShapeHash: bigint = 0xebb032185b79a070n;
 
 export interface OrderSagaSignRequest {
   card?: string;  // the vow; unset takes the declared default

@@ -111,7 +111,7 @@ static GeasStatus geas_clause8_Boundary_count(GeasContract* cc, const GeasValue*
         if (t10 != GEAS_OK) return t10;
         GeasValue t11 = {0};
         t11.ty = GEAS_TY_INT;
-        t11.as.i = t1.as.i + t9.as.i;
+        if (__builtin_add_overflow(t1.as.i, t9.as.i, &t11.as.i)) return GEAS_ERR_TYPE;
         *t7 = t11;
     }
     *out = t1;
@@ -120,7 +120,7 @@ static GeasStatus geas_clause8_Boundary_count(GeasContract* cc, const GeasValue*
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_greet_78b3efb59ab079a8_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_5greet_78b3efb59ab079a8_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -201,39 +201,43 @@ static GeasStatus __geas_ash_Boundary_greet_78b3efb59ab079a8_v1(void* ctx, const
     t27.as.s.len = 1;
     GeasValue t28 = {0};
     t28.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t26, &t27, &t28) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t29 = ((const GeasValue*)args[0].as.list.data)[1];
-    GeasValue t30 = {0};
-    GeasStatus t31 = geas_value_deep_copy(cc, &t29, &t30);
-    if (t31 != GEAS_OK) return t31;
-    GeasValue t32 = ((const GeasValue*)t30.as.list.data)[0];
-    GeasValue t33 = {0};
-    t33.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t28, &t32, &t33) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasStatus t29 = geas_string_concat(cc, &t26, &t27, &t28);
+    if (t29 != GEAS_OK) return t29;
+    GeasValue t30 = ((const GeasValue*)args[0].as.list.data)[1];
+    GeasValue t31 = {0};
+    GeasStatus t32 = geas_value_deep_copy(cc, &t30, &t31);
+    if (t32 != GEAS_OK) return t32;
+    GeasValue t33 = ((const GeasValue*)t31.as.list.data)[0];
     GeasValue t34 = {0};
     t34.ty = GEAS_TY_STRING;
-    t34.as.s.ptr = (uint8_t*)"#";
-    t34.as.s.len = 1;
-    GeasValue t35 = {0};
-    t35.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t33, &t34, &t35) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasStatus t35 = geas_string_concat(cc, &t28, &t33, &t34);
+    if (t35 != GEAS_OK) return t35;
     GeasValue t36 = {0};
     t36.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t35, &t10, &t36) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue* t37 = geas_box(cc);
-    if (!t37) return GEAS_ERR_OOM;
-    *t37 = t36;
-    GeasValue t38 = {0};
-    t38.ty = GEAS_TY_RESULT;
-    t38.tag = 0;
-    t38.as.box = t37;
-    *out = t38;
+    t36.as.s.ptr = (uint8_t*)"#";
+    t36.as.s.len = 1;
+    GeasValue t37 = {0};
+    t37.ty = GEAS_TY_STRING;
+    GeasStatus t38 = geas_string_concat(cc, &t34, &t36, &t37);
+    if (t38 != GEAS_OK) return t38;
+    GeasValue t39 = {0};
+    t39.ty = GEAS_TY_STRING;
+    GeasStatus t40 = geas_string_concat(cc, &t37, &t10, &t39);
+    if (t40 != GEAS_OK) return t40;
+    GeasValue* t41 = geas_box(cc);
+    if (!t41) return GEAS_ERR_OOM;
+    *t41 = t39;
+    GeasValue t42 = {0};
+    t42.ty = GEAS_TY_RESULT;
+    t42.tag = 0;
+    t42.as.box = t41;
+    *out = t42;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_measure_52f869b0190c8e41_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_7measure_52f869b0190c8e41_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -257,7 +261,7 @@ static GeasStatus __geas_ash_Boundary_measure_52f869b0190c8e41_v1(void* ctx, con
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_tally_42b718cf90705453_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_5tally_42b718cf90705453_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -285,6 +289,7 @@ static GeasStatus __geas_ash_Boundary_tally_42b718cf90705453_v1(void* ctx, const
             t7.as.box = t8;
         }
         GeasValue t10 = {0};
+        (void)t10;
         GeasValue t11 = {0};
         int t12 = 0;
         do {
@@ -297,7 +302,7 @@ static GeasStatus __geas_ash_Boundary_tally_42b718cf90705453_v1(void* ctx, const
             GeasValue* t14 = &t1;
             GeasValue t15 = {0};
             t15.ty = GEAS_TY_INT;
-            t15.as.i = t1.as.i + t11.as.i;
+            if (__builtin_add_overflow(t1.as.i, t11.as.i, &t15.as.i)) return GEAS_ERR_TYPE;
             *t14 = t15;
         } else {
             int t16 = 0;
@@ -339,7 +344,7 @@ static GeasStatus __geas_ash_Boundary_tally_42b718cf90705453_v1(void* ctx, const
         t24.as.i = 1;
         GeasValue t25 = {0};
         t25.ty = GEAS_TY_INT;
-        t25.as.i = t1.as.i + t24.as.i;
+        if (__builtin_add_overflow(t1.as.i, t24.as.i, &t25.as.i)) return GEAS_ERR_TYPE;
         *t23 = t25;
     }
     GeasValue* t26 = geas_box(cc);
@@ -355,7 +360,7 @@ static GeasStatus __geas_ash_Boundary_tally_42b718cf90705453_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_census_d03f20aa672e93d6_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_6census_d03f20aa672e93d6_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -379,7 +384,7 @@ static GeasStatus __geas_ash_Boundary_census_d03f20aa672e93d6_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_stamp_eafad7bfac151a7c_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_5stamp_eafad7bfac151a7c_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -415,7 +420,7 @@ static GeasStatus __geas_ash_Boundary_stamp_eafad7bfac151a7c_v1(void* ctx, const
     t5.as.i = (int64_t)(args[3].as.list.len / 2);
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_INT;
-    t6.as.i = t4.as.i + t5.as.i;
+    if (__builtin_add_overflow(t4.as.i, t5.as.i, &t6.as.i)) return GEAS_ERR_TYPE;
     GeasValue t7 = t6;
     uint64_t t8 = args[3].as.list.len;
     for (uint64_t t9 = 0; t9 < t8; t9 += 2) {
@@ -455,7 +460,7 @@ static GeasStatus __geas_ash_Boundary_stamp_eafad7bfac151a7c_v1(void* ctx, const
         t20.as.i = 1;
         GeasValue t21 = {0};
         t21.ty = GEAS_TY_INT;
-        t21.as.i = t7.as.i + t20.as.i;
+        if (__builtin_add_overflow(t7.as.i, t20.as.i, &t21.as.i)) return GEAS_ERR_TYPE;
         *t19 = t21;
     }
     GeasValue* t22 = geas_box(cc);
@@ -471,7 +476,7 @@ static GeasStatus __geas_ash_Boundary_stamp_eafad7bfac151a7c_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_pick_4a44439912552240_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_4pick_4a44439912552240_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -506,7 +511,7 @@ static GeasStatus __geas_ash_Boundary_pick_4a44439912552240_v1(void* ctx, const 
     GeasValue t6 = t0;
     GeasValue t7 = {0};
     t7.ty = GEAS_TY_INT;
-    t7.as.i = t6.as.i + args[1].as.i;
+    if (__builtin_add_overflow(t6.as.i, args[1].as.i, &t7.as.i)) return GEAS_ERR_TYPE;
     const GeasValue* t8 = geas_vow_ref(cc, "limit");
     if (!t8) return GEAS_ERR_NAME;
     GeasValue t9 = *t8;
@@ -530,7 +535,7 @@ static GeasStatus __geas_ash_Boundary_pick_4a44439912552240_v1(void* ctx, const 
     }
     GeasValue t14 = {0};
     t14.ty = GEAS_TY_INT;
-    t14.as.i = t6.as.i + args[1].as.i;
+    if (__builtin_add_overflow(t6.as.i, args[1].as.i, &t14.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t15 = geas_box(cc);
     if (!t15) return GEAS_ERR_OOM;
     *t15 = t14;
@@ -544,7 +549,7 @@ static GeasStatus __geas_ash_Boundary_pick_4a44439912552240_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Boundary_note_9cfefb9c55a5961e_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_8Boundary_4note_9cfefb9c55a5961e_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -579,7 +584,7 @@ static GeasStatus __geas_ash_Boundary_note_9cfefb9c55a5961e_v1(void* ctx, const 
     t5.as.i = 1;
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_INT;
-    t6.as.i = args[0].as.i + t5.as.i;
+    if (__builtin_add_overflow(args[0].as.i, t5.as.i, &t6.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t7 = geas_box(cc);
     if (!t7) return GEAS_ERR_OOM;
     *t7 = t6;
@@ -602,15 +607,15 @@ static const GeasVowDesc k8_Boundary_vows[] = {
 };
 
 static const GeasPledgeDesc k8_Boundary_pledges[] = {
-    { "greet", "__geas_ash_Boundary_greet_78b3efb59ab079a8_v1", 1, __geas_ash_Boundary_greet_78b3efb59ab079a8_v1, -1 },
-    { "measure", "__geas_ash_Boundary_measure_52f869b0190c8e41_v1", 1, __geas_ash_Boundary_measure_52f869b0190c8e41_v1, -1 },
-    { "tally", "__geas_ash_Boundary_tally_42b718cf90705453_v1", 2, __geas_ash_Boundary_tally_42b718cf90705453_v1, -1 },
-    { "census", "__geas_ash_Boundary_census_d03f20aa672e93d6_v1", 1, __geas_ash_Boundary_census_d03f20aa672e93d6_v1, -1 },
-    { "stamp", "__geas_ash_Boundary_stamp_eafad7bfac151a7c_v1", 4, __geas_ash_Boundary_stamp_eafad7bfac151a7c_v1, -1 },
-    { "pick", "__geas_ash_Boundary_pick_4a44439912552240_v1", 2, __geas_ash_Boundary_pick_4a44439912552240_v1, -1 },
-    { "note", "__geas_ash_Boundary_note_9cfefb9c55a5961e_v1", 2, __geas_ash_Boundary_note_9cfefb9c55a5961e_v1, -1 },
-    { "lookup", "__geas_ash_Boundary_lookup_11f3ae6deda39bb5_v1", 2, NULL, -1 },
-    { "find", "__geas_ash_Boundary_find_2d9e1a75b235da5b_v1", 1, NULL, -1 },
+    { "greet", "__geas_ash_8Boundary_5greet_78b3efb59ab079a8_v1", 1, __geas_ash_8Boundary_5greet_78b3efb59ab079a8_v1, -1 },
+    { "measure", "__geas_ash_8Boundary_7measure_52f869b0190c8e41_v1", 1, __geas_ash_8Boundary_7measure_52f869b0190c8e41_v1, -1 },
+    { "tally", "__geas_ash_8Boundary_5tally_42b718cf90705453_v1", 2, __geas_ash_8Boundary_5tally_42b718cf90705453_v1, -1 },
+    { "census", "__geas_ash_8Boundary_6census_d03f20aa672e93d6_v1", 1, __geas_ash_8Boundary_6census_d03f20aa672e93d6_v1, -1 },
+    { "stamp", "__geas_ash_8Boundary_5stamp_eafad7bfac151a7c_v1", 4, __geas_ash_8Boundary_5stamp_eafad7bfac151a7c_v1, -1 },
+    { "pick", "__geas_ash_8Boundary_4pick_4a44439912552240_v1", 2, __geas_ash_8Boundary_4pick_4a44439912552240_v1, -1 },
+    { "note", "__geas_ash_8Boundary_4note_9cfefb9c55a5961e_v1", 2, __geas_ash_8Boundary_4note_9cfefb9c55a5961e_v1, -1 },
+    { "lookup", "__geas_ash_8Boundary_6lookup_11f3ae6deda39bb5_v1", 2, NULL, -1 },
+    { "find", "__geas_ash_8Boundary_4find_2d9e1a75b235da5b_v1", 1, NULL, -1 },
     { "arrived", NULL, 2, NULL, -1 },
     { "shaped", NULL, 1, NULL, -1 },
 };
@@ -703,7 +708,7 @@ static const uint8_t k8_Boundary_kinds[] = {
 };
 
 static const GeasRemedyDesc k8_Boundary_remedies[] = {
-    { "unlookup", "__geas_ash_Boundary_unlookup_9f6ab0731d067e25_v1", 7, 1, NULL, { 0 } },
+    { "unlookup", "__geas_ash_8Boundary_8unlookup_9f6ab0731d067e25_v1", 7, 1, NULL, { 0 } },
 };
 
 static const uint32_t k8_Boundary_type_kids_4[] = { 0, 5, 7, 8 };
@@ -868,7 +873,7 @@ static const GeasVowDesc k14_BoundaryCourse_vows[] = {
 };
 
 static const GeasPledgeDesc k14_BoundaryCourse_pledges[] = {
-    { "fetch", "__geas_ash_BoundaryCourse_fetch_5e54fb757a079400_v1", 1, NULL, -1 },
+    { "fetch", "__geas_ash_14BoundaryCourse_5fetch_5e54fb757a079400_v1", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k14_BoundaryCourse_atoms[] = {
@@ -910,6 +915,8 @@ static const GeasItemTypes k14_BoundaryCourse_item_types[] = {
 
 static const uint32_t k14_BoundaryCourse_vow_types[] = { 0 };
 
+static const uint32_t k14_BoundaryCourse_course_slot_types[] = { 0, 1, 2 };
+
 static const GeasContractDesc k14_BoundaryCourse = {
     "BoundaryCourse", 0x94be4c35e3eac0a7ULL,
     1, 1, k14_BoundaryCourse_pledges,
@@ -920,10 +927,11 @@ static const GeasContractDesc k14_BoundaryCourse = {
     k14_BoundaryCourse_rf, NULL, k14_BoundaryCourse_rb,
     0, NULL,
     NULL,
-    .course_fn = k14_BoundaryCourse_course, .course_nslots = 3, .course_hash = 0xb2f893829d455200ULL,
+    .course_fn = k14_BoundaryCourse_course, .course_nslots = 3, .course_hash = 0x4f5dcba5f49c7ed4ULL,
     .ntypes = 6, .types = k14_BoundaryCourse_types,
     .item_types = k14_BoundaryCourse_item_types, .vow_types = k14_BoundaryCourse_vow_types,
     .remedy_types = NULL,
+    .course_slot_types = k14_BoundaryCourse_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

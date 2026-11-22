@@ -1,0 +1,32 @@
+// The contract of test_course_slots.c. The course parks at await go with a
+// list and a marker already in their slots and a record, an Option, and a
+// sum not written yet, so the row it leaves holds every slot at a value of
+// its type: the written ones at what the course wrote and the rest at the
+// smallest value of their type
+record Point {
+    x: Int
+    label: String
+}
+
+Shape is either Circle(radius: Int) or Dot
+
+contract Flow {
+    pledge visit(value: Int) -> Unit
+    pledge point() -> Option<Point>
+    pledge classify() -> Option<Shape>
+    signal go()
+    course {
+        let marker = 777001
+        let values = [5]
+        await go
+        let made = point()?
+        let shape = classify()?
+        let bonus = match shape {
+            Circle(radius) -> radius
+            Dot -> 0
+        }
+        for value in values {
+            visit(value + made.x + bonus + marker - marker)
+        }
+    }
+}

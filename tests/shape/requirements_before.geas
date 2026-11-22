@@ -1,0 +1,7 @@
+// The requirements pair: a contract with no requirements block, which
+// spells no requirements segment, and in requirements_after.geas the same
+// contract with a block of its own, which spells one
+contract C {
+    pledge charge(amount: Int) -> Result<Unit, Int>
+    pledge ship() -> Result<Unit, Int>
+}

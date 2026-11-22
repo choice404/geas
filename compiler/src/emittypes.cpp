@@ -1,8 +1,9 @@
 // The type table of one contract's descriptor, see typetable.hpp for what it
 // holds. The kid and payload index arrays land first, then the variant
 // tables of the sums, then the node table, then the parameter arrays and the
-// item, vow, and remedy tables. Every contract with a pledge, a signal, a
-// vow, or a remedy carries the table; one with none of them emits no array
+// item, vow, and remedy tables, and last the course slot table. Every
+// contract with a pledge, a signal, a vow, a remedy, or a course slot
+// carries the table; one with none of them emits no array
 // and names ntypes 0 alone, so its descriptor still reads as carrying no
 // table and still ends on a designated field, every field it leaves out
 // zero filled by name rather than by position
@@ -34,9 +35,11 @@ std::string indexList(const std::vector<std::uint32_t>& indices) {
     return out + " }";
 }
 
-bool hasTypedItems(const ContractShape& shape) {
+bool hasTypedItems(const ContractShape& shape, const CheckTables& tables) {
+    const auto course = tables.courses.find(shape.decl);
+    const bool hasSlots = course != tables.courses.end() && !course->second.slots.empty();
     return !shape.pledges.empty() || !shape.signals.empty() || !shape.vows.empty() ||
-           !shape.remedies.empty();
+           !shape.remedies.empty() || hasSlots;
 }
 
 }  // namespace
@@ -167,10 +170,10 @@ std::string CEmitter::emitVowTypes(std::string_view symbol, const std::vector<st
  * Emits the type table of one contract and every array it points at.
  * @params shape - the contract
  * @returns {std::string} - the descriptor lines naming the tables, ntypes 0 alone for a contract
- * with no pledge, signal, vow, or remedy
+ * with no pledge, signal, vow, remedy, or course slot
  */
 std::string CEmitter::emitTypeTables(const ContractShape& shape) {
-    if (!hasTypedItems(shape)) {
+    if (!hasTypedItems(shape, lookup_.tables())) {
         return "    .ntypes = 0,";
     }
     const ContractTypes types = buildContractTypes(lookup_, shape);
@@ -179,9 +182,12 @@ std::string CEmitter::emitTypeTables(const ContractShape& shape) {
     const std::string items = emitItemTypes(joined(stem, "_item"), types.items);
     const std::string vows = emitVowTypes(joined(stem, "_vow_types"), types.vows);
     const std::string remedies = emitItemTypes(joined(stem, "_remedy"), types.remedies);
+    const std::string slots = emitVowTypes(joined(stem, "_course_slot_types"), types.courseSlots);
+    const std::string slotLine =
+        types.courseSlots.empty() ? "" : joined("\n    .course_slot_types = ", slots, ",");
     return joined("    .ntypes = ", countOf(types.nodes.size()), ", .types = ", nodes,
                   ",\n    .item_types = ", items, ", .vow_types = ", vows,
-                  ",\n    .remedy_types = ", remedies, ",");
+                  ",\n    .remedy_types = ", remedies, ",", slotLine);
 }
 
 }  // namespace geas

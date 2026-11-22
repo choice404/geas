@@ -86,7 +86,7 @@ def main():
         check(rt.iname_count() == dump.count("\n"),
               "iname count matches the dump")
         charge_rows = [ln for ln in dump.splitlines()
-                       if "PaymentService_charge" in ln]
+                       if "_14PaymentService_6charge_" in ln]
         check(len(charge_rows) == 1, "charge has one iname row")
         entry = rt.iname_lookup(charge_rows[0].split()[0])
         check(entry["kind"] == "pledge" and entry["contract"] ==

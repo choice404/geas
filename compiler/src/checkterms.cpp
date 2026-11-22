@@ -1,12 +1,13 @@
 // Terms and ordering. Which terms each declaration accepts: a pledge takes
 // within, after, and retry, a subcontract and a signal take within and
-// after, a remedy takes within and retry, and no term repeats. A retry
-// counts at least one attempt, backs off by at least 1.0, and its on list
-// names variants of the declaration's own error sum. An after term names
-// pledges, named subcontracts, or signals of the same contract, never the
-// item itself or the subcontract it sits in, and the ordering the after
-// terms describe must have no cycle. A transactional subcontract holds no
-// signal and no pledge with a retry
+// after, a remedy takes within and retry, and no term repeats. A within,
+// a retry every, and a retry cap are durations greater than zero. A retry
+// counts at least one attempt and at most a million, backs off by at least
+// 1.0, and its on list names variants of the declaration's own error sum.
+// An after term names pledges, named subcontracts, or signals of the same
+// contract, never the item itself or the subcontract it sits in, and the
+// ordering the after terms describe must have no cycle. A transactional
+// subcontract holds no signal and no pledge with a retry
 #include "checker.hpp"
 
 #include <algorithm>
@@ -19,6 +20,9 @@ namespace geas {
 namespace {
 
 constexpr std::int64_t minimumRetryCount = 1;
+// The most attempts a retry term may count, a bound well inside what the
+// runtime's counter holds
+constexpr std::int64_t maximumRetryCount = 1'000'000;
 constexpr double minimumBackoff = 1.0;
 
 std::string_view termWord(const Term& term) {
@@ -220,6 +224,11 @@ void Checker::checkTermList(const std::vector<Term>& terms, const TermOwner& own
                  "the term " + quoted(word) + " appears more than once on " + owner.label);
             continue;
         }
+        if (const auto* within = std::get_if<WithinTerm>(&term.kind)) {
+            if (within->milliseconds <= 0) {
+                emit(term.lo, term.hi, "the within term must be a duration greater than zero");
+            }
+        }
         if (const auto* retry = std::get_if<RetryTerm>(&term.kind)) {
             checkRetry(term, *retry, owner);
         }
@@ -229,6 +238,16 @@ void Checker::checkTermList(const std::vector<Term>& terms, const TermOwner& own
 void Checker::checkRetry(const Term& term, const RetryTerm& retry, const TermOwner& owner) {
     if (retry.count < minimumRetryCount) {
         emit(term.lo, term.hi, "retry count must be at least 1");
+    }
+    if (retry.count > maximumRetryCount) {
+        emit(term.lo, term.hi,
+             "retry count must be at most " + std::to_string(maximumRetryCount));
+    }
+    if (retry.everyMilliseconds && *retry.everyMilliseconds <= 0) {
+        emit(term.lo, term.hi, "retry every must be a duration greater than zero");
+    }
+    if (retry.capMilliseconds && *retry.capMilliseconds <= 0) {
+        emit(term.lo, term.hi, "retry cap must be a duration greater than zero");
     }
     if (retry.backoff && floatValue(*retry.backoff) < minimumBackoff) {
         emit(term.lo, term.hi, "retry backoff must be at least 1.0");

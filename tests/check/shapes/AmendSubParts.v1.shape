@@ -1,0 +1,11 @@
+geas shape 3
+contract AmendSubParts
+version 1
+hash 0xc7c9581115e4c139
+course 0x0000000000000000
+shape contract AmendSubParts;vow dsn:S;pledge charge:(I)->R(V,I);pledge settle:()->R(V,I);pledge ship:()->R(V,I);schema Ledger:id:I,amount:I;sub Payment:charge;
+vow dsn S
+pledge charge (I)->R(V,I) V
+pledge settle ()->R(V,I) V
+pledge ship ()->R(V,I) V
+sub Payment

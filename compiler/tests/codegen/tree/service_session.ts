@@ -23,7 +23,7 @@ export interface SessionStream {
 // ServiceShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const ServiceShapeHash: bigint = 0x800d8e21674a4e31n;
+export const ServiceShapeHash: bigint = 0xeeada03b3d7b1a1dn;
 
 export interface ServiceSignRequest {
   name?: string;  // the vow; no default is declared, so unset refuses at sign

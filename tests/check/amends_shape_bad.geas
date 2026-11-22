@@ -1,6 +1,7 @@
 // The recorded shape an amends block needs: missing, edited after it was
 // written, in a format version this compiler does not read, in the first
-// format, which records no type layouts, with a type record edited away
+// format, which records no type layouts, in the second, whose hash leaves
+// out the subcontract members and the requirements, with a type record edited away
 // from the layout its shape line spells, recording another contract than
 // its name says, and asked for by an internal contract, which is never
 // recorded
@@ -33,6 +34,12 @@ contract AmendMismatch [version: 2] {
 }
 
 contract AmendStale [version: 2] {
+    pledge step() -> Unit
+    amends 1 {
+    }
+}
+
+contract AmendPrior [version: 2] {
     pledge step() -> Unit
     amends 1 {
     }

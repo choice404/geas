@@ -1,0 +1,7 @@
+// One half of the iname split pair: contract A with the pledge b_c, beside
+// iname_split_two.geas's contract A_b with the pledge c. Both pledges have
+// one signature, so only the length prefixes of the mangled names keep the
+// two entries apart, see test_iname.c
+contract A {
+    pledge b_c(x: Int) -> Option<Int> { return Some(x) }
+}

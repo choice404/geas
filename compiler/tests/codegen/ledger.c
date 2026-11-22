@@ -11,7 +11,7 @@ static const GeasSchemaDesc k6_Ledger_schemas[] = {
     { "Accounts", 3, k6_Ledger_Accounts_cols },
 };
 
-static GeasStatus __geas_ash_Ledger_balance_93da4ddb7e1fb12f_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_7balance_93da4ddb7e1fb12f_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -82,7 +82,7 @@ static GeasStatus __geas_ash_Ledger_balance_93da4ddb7e1fb12f_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_open_0dec7644ef072374_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_4open_0dec7644ef072374_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -113,6 +113,7 @@ static GeasStatus __geas_ash_Ledger_open_0dec7644ef072374_v1(void* ctx, const Ge
     do {
         if (t5.tag != 0) break;
         GeasValue t9 = *(const GeasValue*)t5.as.box;
+        (void)t9;
         t8 = 1;
     } while (0);
     if (t8) {
@@ -146,7 +147,7 @@ static GeasStatus __geas_ash_Ledger_open_0dec7644ef072374_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_set_balance_0dec7644ef072374_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_11set_balance_0dec7644ef072374_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -177,6 +178,7 @@ static GeasStatus __geas_ash_Ledger_set_balance_0dec7644ef072374_v1(void* ctx, c
     do {
         if (t5.tag != 0) break;
         GeasValue t9 = *(const GeasValue*)t5.as.box;
+        (void)t9;
         t8 = 1;
     } while (0);
     if (t8) {
@@ -210,7 +212,7 @@ static GeasStatus __geas_ash_Ledger_set_balance_0dec7644ef072374_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_owned_total_fc22786fdc9ce27d_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_11owned_total_fc22786fdc9ce27d_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -258,7 +260,7 @@ static GeasStatus __geas_ash_Ledger_owned_total_fc22786fdc9ce27d_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_rich_6507ff46de4c993b_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_4rich_6507ff46de4c993b_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -306,7 +308,7 @@ static GeasStatus __geas_ash_Ledger_rich_6507ff46de4c993b_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_owned_above_f26bab85d3551c17_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_11owned_above_f26bab85d3551c17_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -368,7 +370,7 @@ static GeasStatus __geas_ash_Ledger_owned_above_f26bab85d3551c17_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_owners_asc_06567d7f0ebb153d_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_10owners_asc_06567d7f0ebb153d_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -400,29 +402,30 @@ static GeasStatus __geas_ash_Ledger_owners_asc_06567d7f0ebb153d_v1(void* ctx, co
             GeasValue t12 = ((const GeasValue*)t10.as.list.data)[2];
             GeasValue t13 = {0};
             t13.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t8, &t12, &t13) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t14 = geas_string_concat(cc, &t8, &t12, &t13);
+            if (t14 != GEAS_OK) return t14;
             *t11 = t13;
         }
-        GeasValue* t14 = geas_box(cc);
-        if (!t14) return GEAS_ERR_OOM;
-        *t14 = t8;
-        GeasValue t15 = {0};
-        t15.ty = GEAS_TY_RESULT;
-        t15.tag = 0;
-        t15.as.box = t14;
-        t3 = t15;
-    } else {
+        GeasValue* t15 = geas_box(cc);
+        if (!t15) return GEAS_ERR_OOM;
+        *t15 = t8;
         GeasValue t16 = {0};
-        t16.ty = GEAS_TY_SUM;
-        t16.tag = 1;
-        GeasValue* t17 = geas_box(cc);
-        if (!t17) return GEAS_ERR_OOM;
-        *t17 = t16;
-        GeasValue t18 = {0};
-        t18.ty = GEAS_TY_RESULT;
-        t18.tag = 1;
-        t18.as.box = t17;
-        t3 = t18;
+        t16.ty = GEAS_TY_RESULT;
+        t16.tag = 0;
+        t16.as.box = t15;
+        t3 = t16;
+    } else {
+        GeasValue t17 = {0};
+        t17.ty = GEAS_TY_SUM;
+        t17.tag = 1;
+        GeasValue* t18 = geas_box(cc);
+        if (!t18) return GEAS_ERR_OOM;
+        *t18 = t17;
+        GeasValue t19 = {0};
+        t19.ty = GEAS_TY_RESULT;
+        t19.tag = 1;
+        t19.as.box = t18;
+        t3 = t19;
     }
     *out = t3;
     return GEAS_OK;
@@ -430,7 +433,7 @@ static GeasStatus __geas_ash_Ledger_owners_asc_06567d7f0ebb153d_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_owners_desc_06567d7f0ebb153d_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_11owners_desc_06567d7f0ebb153d_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -462,29 +465,30 @@ static GeasStatus __geas_ash_Ledger_owners_desc_06567d7f0ebb153d_v1(void* ctx, c
             GeasValue t12 = ((const GeasValue*)t10.as.list.data)[2];
             GeasValue t13 = {0};
             t13.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t8, &t12, &t13) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t14 = geas_string_concat(cc, &t8, &t12, &t13);
+            if (t14 != GEAS_OK) return t14;
             *t11 = t13;
         }
-        GeasValue* t14 = geas_box(cc);
-        if (!t14) return GEAS_ERR_OOM;
-        *t14 = t8;
-        GeasValue t15 = {0};
-        t15.ty = GEAS_TY_RESULT;
-        t15.tag = 0;
-        t15.as.box = t14;
-        t3 = t15;
-    } else {
+        GeasValue* t15 = geas_box(cc);
+        if (!t15) return GEAS_ERR_OOM;
+        *t15 = t8;
         GeasValue t16 = {0};
-        t16.ty = GEAS_TY_SUM;
-        t16.tag = 1;
-        GeasValue* t17 = geas_box(cc);
-        if (!t17) return GEAS_ERR_OOM;
-        *t17 = t16;
-        GeasValue t18 = {0};
-        t18.ty = GEAS_TY_RESULT;
-        t18.tag = 1;
-        t18.as.box = t17;
-        t3 = t18;
+        t16.ty = GEAS_TY_RESULT;
+        t16.tag = 0;
+        t16.as.box = t15;
+        t3 = t16;
+    } else {
+        GeasValue t17 = {0};
+        t17.ty = GEAS_TY_SUM;
+        t17.tag = 1;
+        GeasValue* t18 = geas_box(cc);
+        if (!t18) return GEAS_ERR_OOM;
+        *t18 = t17;
+        GeasValue t19 = {0};
+        t19.ty = GEAS_TY_RESULT;
+        t19.tag = 1;
+        t19.as.box = t18;
+        t3 = t19;
     }
     *out = t3;
     return GEAS_OK;
@@ -492,7 +496,7 @@ static GeasStatus __geas_ash_Ledger_owners_desc_06567d7f0ebb153d_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_top_owner_06567d7f0ebb153d_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_9top_owner_06567d7f0ebb153d_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -527,29 +531,30 @@ static GeasStatus __geas_ash_Ledger_top_owner_06567d7f0ebb153d_v1(void* ctx, con
             GeasValue t13 = ((const GeasValue*)t11.as.list.data)[2];
             GeasValue t14 = {0};
             t14.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t9, &t13, &t14) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t15 = geas_string_concat(cc, &t9, &t13, &t14);
+            if (t15 != GEAS_OK) return t15;
             *t12 = t14;
         }
-        GeasValue* t15 = geas_box(cc);
-        if (!t15) return GEAS_ERR_OOM;
-        *t15 = t9;
-        GeasValue t16 = {0};
-        t16.ty = GEAS_TY_RESULT;
-        t16.tag = 0;
-        t16.as.box = t15;
-        t4 = t16;
-    } else {
+        GeasValue* t16 = geas_box(cc);
+        if (!t16) return GEAS_ERR_OOM;
+        *t16 = t9;
         GeasValue t17 = {0};
-        t17.ty = GEAS_TY_SUM;
-        t17.tag = 1;
-        GeasValue* t18 = geas_box(cc);
-        if (!t18) return GEAS_ERR_OOM;
-        *t18 = t17;
-        GeasValue t19 = {0};
-        t19.ty = GEAS_TY_RESULT;
-        t19.tag = 1;
-        t19.as.box = t18;
-        t4 = t19;
+        t17.ty = GEAS_TY_RESULT;
+        t17.tag = 0;
+        t17.as.box = t16;
+        t4 = t17;
+    } else {
+        GeasValue t18 = {0};
+        t18.ty = GEAS_TY_SUM;
+        t18.tag = 1;
+        GeasValue* t19 = geas_box(cc);
+        if (!t19) return GEAS_ERR_OOM;
+        *t19 = t18;
+        GeasValue t20 = {0};
+        t20.ty = GEAS_TY_RESULT;
+        t20.tag = 1;
+        t20.as.box = t19;
+        t4 = t20;
     }
     *out = t4;
     return GEAS_OK;
@@ -557,7 +562,7 @@ static GeasStatus __geas_ash_Ledger_top_owner_06567d7f0ebb153d_v1(void* ctx, con
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_top_owners_f756139bad41cc86_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_10top_owners_f756139bad41cc86_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -590,29 +595,30 @@ static GeasStatus __geas_ash_Ledger_top_owners_f756139bad41cc86_v1(void* ctx, co
             GeasValue t12 = ((const GeasValue*)t10.as.list.data)[2];
             GeasValue t13 = {0};
             t13.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t8, &t12, &t13) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t14 = geas_string_concat(cc, &t8, &t12, &t13);
+            if (t14 != GEAS_OK) return t14;
             *t11 = t13;
         }
-        GeasValue* t14 = geas_box(cc);
-        if (!t14) return GEAS_ERR_OOM;
-        *t14 = t8;
-        GeasValue t15 = {0};
-        t15.ty = GEAS_TY_RESULT;
-        t15.tag = 0;
-        t15.as.box = t14;
-        t3 = t15;
-    } else {
+        GeasValue* t15 = geas_box(cc);
+        if (!t15) return GEAS_ERR_OOM;
+        *t15 = t8;
         GeasValue t16 = {0};
-        t16.ty = GEAS_TY_SUM;
-        t16.tag = 1;
-        GeasValue* t17 = geas_box(cc);
-        if (!t17) return GEAS_ERR_OOM;
-        *t17 = t16;
-        GeasValue t18 = {0};
-        t18.ty = GEAS_TY_RESULT;
-        t18.tag = 1;
-        t18.as.box = t17;
-        t3 = t18;
+        t16.ty = GEAS_TY_RESULT;
+        t16.tag = 0;
+        t16.as.box = t15;
+        t3 = t16;
+    } else {
+        GeasValue t17 = {0};
+        t17.ty = GEAS_TY_SUM;
+        t17.tag = 1;
+        GeasValue* t18 = geas_box(cc);
+        if (!t18) return GEAS_ERR_OOM;
+        *t18 = t17;
+        GeasValue t19 = {0};
+        t19.ty = GEAS_TY_RESULT;
+        t19.tag = 1;
+        t19.as.box = t18;
+        t3 = t19;
     }
     *out = t3;
     return GEAS_OK;
@@ -620,7 +626,7 @@ static GeasStatus __geas_ash_Ledger_top_owners_f756139bad41cc86_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_extremes_7eb1797e0b691827_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_8extremes_7eb1797e0b691827_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -654,29 +660,30 @@ static GeasStatus __geas_ash_Ledger_extremes_7eb1797e0b691827_v1(void* ctx, cons
             GeasValue t13 = ((const GeasValue*)t11.as.list.data)[2];
             GeasValue t14 = {0};
             t14.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t9, &t13, &t14) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t15 = geas_string_concat(cc, &t9, &t13, &t14);
+            if (t15 != GEAS_OK) return t15;
             *t12 = t14;
         }
-        GeasValue* t15 = geas_box(cc);
-        if (!t15) return GEAS_ERR_OOM;
-        *t15 = t9;
-        GeasValue t16 = {0};
-        t16.ty = GEAS_TY_RESULT;
-        t16.tag = 0;
-        t16.as.box = t15;
-        t4 = t16;
-    } else {
+        GeasValue* t16 = geas_box(cc);
+        if (!t16) return GEAS_ERR_OOM;
+        *t16 = t9;
         GeasValue t17 = {0};
-        t17.ty = GEAS_TY_SUM;
-        t17.tag = 1;
-        GeasValue* t18 = geas_box(cc);
-        if (!t18) return GEAS_ERR_OOM;
-        *t18 = t17;
-        GeasValue t19 = {0};
-        t19.ty = GEAS_TY_RESULT;
-        t19.tag = 1;
-        t19.as.box = t18;
-        t4 = t19;
+        t17.ty = GEAS_TY_RESULT;
+        t17.tag = 0;
+        t17.as.box = t16;
+        t4 = t17;
+    } else {
+        GeasValue t18 = {0};
+        t18.ty = GEAS_TY_SUM;
+        t18.tag = 1;
+        GeasValue* t19 = geas_box(cc);
+        if (!t19) return GEAS_ERR_OOM;
+        *t19 = t18;
+        GeasValue t20 = {0};
+        t20.ty = GEAS_TY_RESULT;
+        t20.tag = 1;
+        t20.as.box = t19;
+        t4 = t20;
     }
     *out = t4;
     return GEAS_OK;
@@ -684,7 +691,7 @@ static GeasStatus __geas_ash_Ledger_extremes_7eb1797e0b691827_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_notable_65eae7c204633dd4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_7notable_65eae7c204633dd4_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -735,7 +742,7 @@ static GeasStatus __geas_ash_Ledger_notable_65eae7c204633dd4_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_tail_total_ffe7fca0a4d8b340_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_10tail_total_ffe7fca0a4d8b340_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -785,7 +792,7 @@ static GeasStatus __geas_ash_Ledger_tail_total_ffe7fca0a4d8b340_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_mid_owners_7eb1797e0b691827_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_10mid_owners_7eb1797e0b691827_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -818,29 +825,30 @@ static GeasStatus __geas_ash_Ledger_mid_owners_7eb1797e0b691827_v1(void* ctx, co
             GeasValue t12 = ((const GeasValue*)t10.as.list.data)[2];
             GeasValue t13 = {0};
             t13.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t8, &t12, &t13) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t14 = geas_string_concat(cc, &t8, &t12, &t13);
+            if (t14 != GEAS_OK) return t14;
             *t11 = t13;
         }
-        GeasValue* t14 = geas_box(cc);
-        if (!t14) return GEAS_ERR_OOM;
-        *t14 = t8;
-        GeasValue t15 = {0};
-        t15.ty = GEAS_TY_RESULT;
-        t15.tag = 0;
-        t15.as.box = t14;
-        t3 = t15;
-    } else {
+        GeasValue* t15 = geas_box(cc);
+        if (!t15) return GEAS_ERR_OOM;
+        *t15 = t8;
         GeasValue t16 = {0};
-        t16.ty = GEAS_TY_SUM;
-        t16.tag = 1;
-        GeasValue* t17 = geas_box(cc);
-        if (!t17) return GEAS_ERR_OOM;
-        *t17 = t16;
-        GeasValue t18 = {0};
-        t18.ty = GEAS_TY_RESULT;
-        t18.tag = 1;
-        t18.as.box = t17;
-        t3 = t18;
+        t16.ty = GEAS_TY_RESULT;
+        t16.tag = 0;
+        t16.as.box = t15;
+        t3 = t16;
+    } else {
+        GeasValue t17 = {0};
+        t17.ty = GEAS_TY_SUM;
+        t17.tag = 1;
+        GeasValue* t18 = geas_box(cc);
+        if (!t18) return GEAS_ERR_OOM;
+        *t18 = t17;
+        GeasValue t19 = {0};
+        t19.ty = GEAS_TY_RESULT;
+        t19.tag = 1;
+        t19.as.box = t18;
+        t3 = t19;
     }
     *out = t3;
     return GEAS_OK;
@@ -848,7 +856,7 @@ static GeasStatus __geas_ash_Ledger_mid_owners_7eb1797e0b691827_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_others_137b584aef67e2cc_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_6others_137b584aef67e2cc_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -896,7 +904,7 @@ static GeasStatus __geas_ash_Ledger_others_137b584aef67e2cc_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_spread_e9149bb61dede676_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_6spread_e9149bb61dede676_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1023,7 +1031,7 @@ static GeasStatus __geas_ash_Ledger_spread_e9149bb61dede676_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_midpoint_1fa763904c865bbc_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_8midpoint_1fa763904c865bbc_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1072,7 +1080,7 @@ static GeasStatus __geas_ash_Ledger_midpoint_1fa763904c865bbc_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_debit_a5445a61d72109ed_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_5debit_a5445a61d72109ed_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1203,7 +1211,7 @@ static GeasStatus __geas_ash_Ledger_debit_a5445a61d72109ed_v1(void* ctx, const G
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_credit_a5445a61d72109ed_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_6credit_a5445a61d72109ed_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1321,25 +1329,25 @@ static const GeasVowDesc k6_Ledger_vows[] = {
 };
 
 static const GeasPledgeDesc k6_Ledger_pledges[] = {
-    { "balance", "__geas_ash_Ledger_balance_93da4ddb7e1fb12f_v1", 1, __geas_ash_Ledger_balance_93da4ddb7e1fb12f_v1, -1 },
-    { "open", "__geas_ash_Ledger_open_0dec7644ef072374_v1", 3, __geas_ash_Ledger_open_0dec7644ef072374_v1, -1 },
-    { "set_balance", "__geas_ash_Ledger_set_balance_0dec7644ef072374_v1", 3, __geas_ash_Ledger_set_balance_0dec7644ef072374_v1, -1 },
-    { "owned_total", "__geas_ash_Ledger_owned_total_fc22786fdc9ce27d_v1", 1, __geas_ash_Ledger_owned_total_fc22786fdc9ce27d_v1, -1 },
-    { "rich", "__geas_ash_Ledger_rich_6507ff46de4c993b_v1", 1, __geas_ash_Ledger_rich_6507ff46de4c993b_v1, -1 },
-    { "owned_above", "__geas_ash_Ledger_owned_above_f26bab85d3551c17_v1", 2, __geas_ash_Ledger_owned_above_f26bab85d3551c17_v1, -1 },
-    { "owners_asc", "__geas_ash_Ledger_owners_asc_06567d7f0ebb153d_v1", 1, __geas_ash_Ledger_owners_asc_06567d7f0ebb153d_v1, -1 },
-    { "owners_desc", "__geas_ash_Ledger_owners_desc_06567d7f0ebb153d_v1", 1, __geas_ash_Ledger_owners_desc_06567d7f0ebb153d_v1, -1 },
-    { "top_owner", "__geas_ash_Ledger_top_owner_06567d7f0ebb153d_v1", 1, __geas_ash_Ledger_top_owner_06567d7f0ebb153d_v1, -1 },
-    { "top_owners", "__geas_ash_Ledger_top_owners_f756139bad41cc86_v1", 2, __geas_ash_Ledger_top_owners_f756139bad41cc86_v1, -1 },
-    { "extremes", "__geas_ash_Ledger_extremes_7eb1797e0b691827_v1", 2, __geas_ash_Ledger_extremes_7eb1797e0b691827_v1, -1 },
-    { "notable", "__geas_ash_Ledger_notable_65eae7c204633dd4_v1", 3, __geas_ash_Ledger_notable_65eae7c204633dd4_v1, -1 },
-    { "tail_total", "__geas_ash_Ledger_tail_total_ffe7fca0a4d8b340_v1", 2, __geas_ash_Ledger_tail_total_ffe7fca0a4d8b340_v1, -1 },
-    { "mid_owners", "__geas_ash_Ledger_mid_owners_7eb1797e0b691827_v1", 2, __geas_ash_Ledger_mid_owners_7eb1797e0b691827_v1, -1 },
-    { "others", "__geas_ash_Ledger_others_137b584aef67e2cc_v1", 1, __geas_ash_Ledger_others_137b584aef67e2cc_v1, -1 },
-    { "spread", "__geas_ash_Ledger_spread_e9149bb61dede676_v1", 1, __geas_ash_Ledger_spread_e9149bb61dede676_v1, -1 },
-    { "midpoint", "__geas_ash_Ledger_midpoint_1fa763904c865bbc_v1", 1, __geas_ash_Ledger_midpoint_1fa763904c865bbc_v1, -1 },
-    { "debit", "__geas_ash_Ledger_debit_a5445a61d72109ed_v1", 2, __geas_ash_Ledger_debit_a5445a61d72109ed_v1, 0 },
-    { "credit", "__geas_ash_Ledger_credit_a5445a61d72109ed_v1", 2, __geas_ash_Ledger_credit_a5445a61d72109ed_v1, 0 },
+    { "balance", "__geas_ash_6Ledger_7balance_93da4ddb7e1fb12f_v1", 1, __geas_ash_6Ledger_7balance_93da4ddb7e1fb12f_v1, -1 },
+    { "open", "__geas_ash_6Ledger_4open_0dec7644ef072374_v1", 3, __geas_ash_6Ledger_4open_0dec7644ef072374_v1, -1 },
+    { "set_balance", "__geas_ash_6Ledger_11set_balance_0dec7644ef072374_v1", 3, __geas_ash_6Ledger_11set_balance_0dec7644ef072374_v1, -1 },
+    { "owned_total", "__geas_ash_6Ledger_11owned_total_fc22786fdc9ce27d_v1", 1, __geas_ash_6Ledger_11owned_total_fc22786fdc9ce27d_v1, -1 },
+    { "rich", "__geas_ash_6Ledger_4rich_6507ff46de4c993b_v1", 1, __geas_ash_6Ledger_4rich_6507ff46de4c993b_v1, -1 },
+    { "owned_above", "__geas_ash_6Ledger_11owned_above_f26bab85d3551c17_v1", 2, __geas_ash_6Ledger_11owned_above_f26bab85d3551c17_v1, -1 },
+    { "owners_asc", "__geas_ash_6Ledger_10owners_asc_06567d7f0ebb153d_v1", 1, __geas_ash_6Ledger_10owners_asc_06567d7f0ebb153d_v1, -1 },
+    { "owners_desc", "__geas_ash_6Ledger_11owners_desc_06567d7f0ebb153d_v1", 1, __geas_ash_6Ledger_11owners_desc_06567d7f0ebb153d_v1, -1 },
+    { "top_owner", "__geas_ash_6Ledger_9top_owner_06567d7f0ebb153d_v1", 1, __geas_ash_6Ledger_9top_owner_06567d7f0ebb153d_v1, -1 },
+    { "top_owners", "__geas_ash_6Ledger_10top_owners_f756139bad41cc86_v1", 2, __geas_ash_6Ledger_10top_owners_f756139bad41cc86_v1, -1 },
+    { "extremes", "__geas_ash_6Ledger_8extremes_7eb1797e0b691827_v1", 2, __geas_ash_6Ledger_8extremes_7eb1797e0b691827_v1, -1 },
+    { "notable", "__geas_ash_6Ledger_7notable_65eae7c204633dd4_v1", 3, __geas_ash_6Ledger_7notable_65eae7c204633dd4_v1, -1 },
+    { "tail_total", "__geas_ash_6Ledger_10tail_total_ffe7fca0a4d8b340_v1", 2, __geas_ash_6Ledger_10tail_total_ffe7fca0a4d8b340_v1, -1 },
+    { "mid_owners", "__geas_ash_6Ledger_10mid_owners_7eb1797e0b691827_v1", 2, __geas_ash_6Ledger_10mid_owners_7eb1797e0b691827_v1, -1 },
+    { "others", "__geas_ash_6Ledger_6others_137b584aef67e2cc_v1", 1, __geas_ash_6Ledger_6others_137b584aef67e2cc_v1, -1 },
+    { "spread", "__geas_ash_6Ledger_6spread_e9149bb61dede676_v1", 1, __geas_ash_6Ledger_6spread_e9149bb61dede676_v1, -1 },
+    { "midpoint", "__geas_ash_6Ledger_8midpoint_1fa763904c865bbc_v1", 1, __geas_ash_6Ledger_8midpoint_1fa763904c865bbc_v1, -1 },
+    { "debit", "__geas_ash_6Ledger_5debit_a5445a61d72109ed_v1", 2, __geas_ash_6Ledger_5debit_a5445a61d72109ed_v1, 0 },
+    { "credit", "__geas_ash_6Ledger_6credit_a5445a61d72109ed_v1", 2, __geas_ash_6Ledger_6credit_a5445a61d72109ed_v1, 0 },
 };
 
 static const char* const k6_Ledger_subs[] = {
@@ -1544,7 +1552,7 @@ static const GeasItemTypes k6_Ledger_item_types[] = {
 static const uint32_t k6_Ledger_vow_types[] = { 0 };
 
 static const GeasContractDesc k6_Ledger = {
-    "Ledger", 0x91e8dbbfad45dc44ULL,
+    "Ledger", 0xd4d7e971ff99f4e8ULL,
     1, 19, k6_Ledger_pledges,
     1, k6_Ledger_vows,
     1, k6_Ledger_subs, 36,

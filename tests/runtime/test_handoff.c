@@ -392,14 +392,6 @@ static GeasRuntime* runtime_of(const GeasContractDesc* d) {
     return runtime_with(one, 1);
 }
 
-/* A worker delivers the events of the call it ran after the caller's wait
- * returned, and a park or a release meanwhile answers GEAS_ERR_STATE, the
- * rule for every call during a delivery; the gate waits that out first */
-static void await_delivery(GeasContract* c) {
-    if (!c) return;
-    while (__atomic_load_n(&c->event_owner, __ATOMIC_ACQUIRE)) sched_yield();
-}
-
 static GeasContract* sign(GeasRuntime* rt, const char* name) {
     GeasContract* c = NULL;
     CHECK(geas_contract_sign(rt, name, NULL, 0, 0, &c) == GEAS_OK, "sign");
@@ -492,14 +484,12 @@ static void test_request_body(void) {
     CHECK(item_is(c, "hold", GEAS_ITEM_FULFILLED), "the outcome latched");
     CHECK(geas_contract_state(c) == GEAS_SIGNED, "the instance stays live");
     CHECK(geas_contract_request_cancel(c) == GEAS_OK, "a second request is the same request");
-    await_delivery(c);
     CHECK(run(c, "next", NULL, 0, &out) == GEAS_OK && is_ok_int(&out, 7),
           "a later fulfillment runs");
     CHECK(item_is(c, "next", GEAS_ITEM_FULFILLED), "and latches");
     CHECK(geas_cancel_requested(c), "the flag stays raised");
     CHECK(atomic_load(&g_remedy_runs) == 0, "a request runs no remedy");
     CHECK(events_of(c, GEAS_EVENT_CANCELLED) == 0, "a request is no break");
-    await_delivery(c);
     CHECK(geas_contract_break(c) == GEAS_OK, "the break that follows");
     CHECK(atomic_load(&g_remedy_runs) == 1, "is an ordinary break");
     CHECK(geas_contract_request_cancel(c) == GEAS_ERR_STATE, "a request after the break");
@@ -528,7 +518,6 @@ static void test_request_retry(void) {
     CHECK(geas_future_release(fut) == GEAS_OK, "release the receipt");
     CHECK(atomic_load(&g_flaky_runs) == 1, "no attempt after the request");
     CHECK(geas_contract_state(c) == GEAS_SIGNED, "the instance stays live");
-    await_delivery(c);
     CHECK(run(c, "next", NULL, 0, &out) == GEAS_OK, "and takes the next call");
     geas_runtime_shutdown(rt);
 }
@@ -571,17 +560,13 @@ static void test_release_states(void) {
     if (!rt) return;
     GeasValue arg = int_val(5);
     GeasContract* fresh = sign(rt, "Hand");
-    await_delivery(fresh);
     CHECK(geas_contract_release(fresh) == GEAS_OK, "a Signed instance releases");
-    await_delivery(fresh);
     check_released(fresh, GEAS_SIGNED);
     check_after_release(fresh, "charge", &arg, 1);
     GeasContract* part = sign(rt, "Hand");
     CHECK(run(part, "charge", &arg, 1, NULL) == GEAS_OK, "charge lands");
     CHECK(geas_contract_state(part) == GEAS_PARTIAL, "Partial with a remedy due");
-    await_delivery(part);
     CHECK(geas_contract_release(part) == GEAS_OK, "a Partial instance releases");
-    await_delivery(part);
     check_released(part, GEAS_PARTIAL);
     CHECK(item_is(part, "Pay", GEAS_ITEM_FULFILLED), "the latches still read");
     check_after_release(part, "ship", NULL, 0);
@@ -605,7 +590,6 @@ static void test_release_waits(void) {
     GeasValue out;
     GeasStatus waited = geas_future_wait(fut, &out);
     CHECK(waited == GEAS_ERR_STATE || waited == GEAS_OK, "the receipt delivers or forfeits");
-    await_delivery(c);
     CHECK(geas_future_release(fut) == GEAS_OK, "release the receipt");
     CHECK(item_is(c, "hold", GEAS_ITEM_FULFILLED), "the body's outcome latched first");
     check_released(c, GEAS_SIGNED);
@@ -620,7 +604,6 @@ static void test_release_from_body(void) {
     GeasContract* c = sign(rt, "Held");
     CHECK(run(c, "selfish", NULL, 0, NULL) == GEAS_ERR_STATE,
           "the fulfillment ends in the release the body asked for");
-    await_delivery(c);
     check_released(c, GEAS_SIGNED);
     check_after_release(c, "next", NULL, 0);
     CHECK(atomic_load(&g_remedy_runs) == 0, "no remedy ran");
@@ -639,7 +622,6 @@ static void test_release_episode(void) {
     pthread_mutex_lock(&first->mu);
     CHECK(first->sub_txn[0] == TXN_OPEN, "and stays open between calls");
     pthread_mutex_unlock(&first->mu);
-    await_delivery(first);
     CHECK(geas_contract_release(first) == GEAS_OK, "release with the episode open");
     pthread_mutex_lock(&first->mu);
     CHECK(first->sub_txn[0] == TXN_ROLLED_BACK, "the episode rolled back");
@@ -666,7 +648,6 @@ static void test_release_autopark(void) {
     pthread_mutex_lock(&c->mu);
     CHECK(c->autopark_dirty, "the latch waits on its receipt to be written");
     pthread_mutex_unlock(&c->mu);
-    await_delivery(c);
     CHECK(geas_contract_release(c) == GEAS_OK, "release writes the last row");
     GeasValue out;
     CHECK(geas_future_wait(fut, &out) == GEAS_ERR_STATE, "the receipt is forfeited");
@@ -695,7 +676,6 @@ static void test_release_course_running(void) {
     wait_started();
     CHECK(geas_contract_release(c) == GEAS_OK, "release while hold runs");
     CHECK(atomic_load(&g_has_returned), "hold returned first");
-    await_delivery(c);
     check_released(c, GEAS_SIGNED);
     CHECK(atomic_load(&g_tail_runs) == 0, "tail never ran here");
     geas_runtime_shutdown(rt);
@@ -722,10 +702,8 @@ static void test_release_course_waiting(void) {
     GeasContract* c = sign(rt, "Waiter");
     CHECK(settle(c) == GEAS_COURSE_WAITING, "the course waits for go");
     uint32_t step = course_of(c).step;
-    await_delivery(c);
     CHECK(geas_instance_park(c, g_dsn, "waiter") == GEAS_OK, "park while waiting");
     CHECK(geas_contract_release(c) == GEAS_OK, "release while waiting");
-    await_delivery(c);
     check_released(c, GEAS_SIGNED);
     geas_runtime_shutdown(rt);
     GeasRuntime* next = runtime_of(&waiter);
@@ -750,7 +728,6 @@ static void park_hand(GeasRuntime* rt, const char* key, int64_t charge) {
     GeasContract* c = sign(rt, "Hand");
     GeasValue arg = int_val(charge);
     CHECK(run(c, "charge", &arg, 1, NULL) == GEAS_OK, "charge lands");
-    await_delivery(c);
     CHECK(geas_instance_park(c, g_dsn, key) == GEAS_OK, "park");
 }
 
@@ -804,7 +781,6 @@ static void test_claim_amended(void) {
     if (!a || !b) return;
     GeasContract* c = sign(a, "Tally");
     CHECK(run(c, "a", NULL, 0, NULL) == GEAS_OK, "a lands under version 1");
-    await_delivery(c);
     CHECK(geas_instance_park(c, g_dsn, "tally") == GEAS_OK, "park");
     GeasContract* r = NULL;
     CHECK(geas_instance_claim(b, g_dsn, "tally", 0, &r) == GEAS_OK, "claim through amends");
@@ -873,10 +849,8 @@ static void test_full_handoff(void) {
     GeasContract* c = sign(a, "Hand");
     GeasValue arg = int_val(9);
     CHECK(run(c, "charge", &arg, 1, NULL) == GEAS_OK, "charge lands");
-    await_delivery(c);
     CHECK(geas_instance_park(c, g_dsn, "full") == GEAS_OK, "park");
     CHECK(geas_contract_release(c) == GEAS_OK, "release");
-    await_delivery(c);
     check_released(c, GEAS_PARTIAL);
     geas_runtime_shutdown(a);
     GeasRuntime* b = runtime_of(&hand);
@@ -886,7 +860,6 @@ static void test_full_handoff(void) {
     GeasValue out;
     CHECK(r && run(r, "ship", NULL, 0, &out) == GEAS_OK, "ship lands on the claimed instance");
     CHECK(r && geas_contract_state(r) == GEAS_FULFILLED, "the contract is fulfilled");
-    await_delivery(r);
     CHECK(r && geas_contract_break(r) == GEAS_OK, "a break of a fulfilled contract");
     CHECK(atomic_load(&g_remedy_runs) == 0, "no remedy ran anywhere on the way");
     geas_runtime_shutdown(b);

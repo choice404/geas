@@ -1,13 +1,13 @@
-/* geas_store.h: the store vtable of Layer 3, a library first and a schema
- * second. A driver behind this surface opens one connection to one database,
+/* geas_store.h: the store driver, a library first and a schema second. A driver behind this surface opens one connection to one database,
  * runs SQL with positionally bound parameters, and hands result rows back as
  * ordinary GeasValues, and it does all of that without ever naming a contract.
  * docs/database.md pins the model: the backend sits behind open, exec, query,
  * begin, commit, rollback, and close, and the runtime speaks to a database
  * through those and never through a driver's own types. This header is that
- * vtable's C shape, the reference backend is SQLite, and S0 is the driver and
- * its goldens with no contract, no schema block, and no transaction policy
- * wired to it yet.
+ * vtable's C shape and the reference backend is SQLite. The runtime's own
+ * store calls and its park table sit on it; no emitted module calls it, and
+ * it is outside the stable ABI, the seam a second backend plugs into, see
+ * the Stability section of docs/abi.md.
  *
  * The type map is docs/database.md's, and it is the whole of what a store may
  * hold. Int and UInt cross as a 64 bit integer, a UInt by its bit pattern so
@@ -32,8 +32,8 @@ extern "C" {
 #endif
 
 /* Rows and their string bytes allocate through this hook, so the driver never
- * names a GeasContract. S0 tests pass a plain arena; S1 wraps geas_bytes on the
- * signing instance, the same seam the wire codec kept over its owner. A NULL
+ * names a GeasContract. The driver's own tests pass a plain arena; the runtime
+ * wraps geas_bytes on the signing instance, the same seam the wire codec kept over its owner. A NULL
  * return means out of memory and stops the read with GEAS_ERR_OOM. */
 typedef struct GeasStoreAlloc {
     uint8_t* (*bytes)(void* ctx, uint64_t n);
@@ -76,8 +76,8 @@ GeasStatus geas_store_exec_params(GeasStore* s, const char* sql,
  * each field typed by col_types[i], and every row rides one GEAS_TY_LIST of
  * records placed in *rows_out. col_names, when non NULL, names the columns for
  * a caller that wants them; the positional record repr the ABI pins carries no
- * names of its own, so S0 takes the array as the S1 seam and does not fold it
- * into the value. Every field, its string bytes, and the row backbone are
+ * names of its own, so the driver takes the array for its caller and does not
+ * fold it into the value. Every field, its string bytes, and the row backbone are
  * allocated through alloc, so the whole result set is the caller's to own and
  * free the way the alloc's owner frees everything.
  *
@@ -103,8 +103,9 @@ GeasStatus geas_store_query(GeasStore* s, const char* sql,
  * create or validate, never migrate, which is v1's whole schema defense. */
 GeasStatus geas_store_reconcile(GeasStore* s, const GeasSchemaDesc* schema);
 
-/* The transaction primitives. S0 wires their implementations and tests their
- * round trip; S1 and S2 drive them from a transactional subcontract's fate. A
+/* The transaction primitives. The runtime drives them from a transactional
+ * subcontract's fate: begin as the episode opens, commit or rollback as it
+ * closes. A
  * begin over an already open transaction, or a commit or rollback with none
  * open, is the backend's to answer, and its refusal is GEAS_ERR_STORE. A commit
  * a constraint blocks is GEAS_ERR_STORE too, the store failing the runtime. */

@@ -1,0 +1,7 @@
+// One string literal the course passes changes
+contract Flow {
+    pledge visit(value: String) -> Option<Int>
+    course {
+        visit("ab")?
+    }
+}

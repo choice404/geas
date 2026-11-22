@@ -1,0 +1,5 @@
+1:9: error: integer literal overflows 64 bits
+2:10: error: integer literal overflows 64 bits
+3:10: error: integer literal overflows 64 bits
+4:9: error: duration literal overflows 64 bits
+5:9: error: size literal overflows 64 bits

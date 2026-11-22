@@ -1,4 +1,4 @@
-// The Layer 3 walking skeleton: a store-backed Ledger signed against a SQLite
+// The store walking skeleton: a store-backed Ledger signed against a SQLite
 // file, one schema reconciled at sign, and loose pledges that read and write
 // rows through the store surface. The dsn is a vow, so a host points the ledger
 // at a temp database with a sign-time override and nothing more; the Accounts

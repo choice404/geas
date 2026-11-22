@@ -2,11 +2,11 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k10_AmendParts_pledges[] = {
-    { "capture", "__geas_ash_AmendParts_capture_db846a825aeadfc2_v2", 0, NULL, 0 },
-    { "pack", "__geas_ash_AmendParts_pack_0e2ba22315b89a85_v2", 0, NULL, 1 },
-    { "log", "__geas_ash_AmendParts_log_0e2ba22315b89a85_v2", 0, NULL, 2 },
-    { "reserve", "__geas_ash_AmendParts_reserve_db846a825aeadfc2_v2", 0, NULL, -1 },
-    { "ship", "__geas_ash_AmendParts_ship_0e2ba22315b89a85_v2", 0, NULL, -1 },
+    { "capture", "__geas_ash_10AmendParts_7capture_db846a825aeadfc2_v2", 0, NULL, 0 },
+    { "pack", "__geas_ash_10AmendParts_4pack_0e2ba22315b89a85_v2", 0, NULL, 1 },
+    { "log", "__geas_ash_10AmendParts_3log_0e2ba22315b89a85_v2", 0, NULL, 2 },
+    { "reserve", "__geas_ash_10AmendParts_7reserve_db846a825aeadfc2_v2", 0, NULL, -1 },
+    { "ship", "__geas_ash_10AmendParts_4ship_0e2ba22315b89a85_v2", 0, NULL, -1 },
 };
 
 static const char* const k10_AmendParts_subs[] = {
@@ -61,9 +61,9 @@ static const GeasReqOp k10_AmendParts_rb[] = {
 };
 
 static const GeasRemedyDesc k10_AmendParts_remedies[] = {
-    { "refund", "__geas_ash_AmendParts_refund_38a3aab7fdf5db00_v2", 0, 1, NULL, { 0 } },
-    { "free", "__geas_ash_AmendParts_free_38a3aab7fdf5db00_v2", 3, 1, NULL, { 0 } },
-    { "recall", "__geas_ash_AmendParts_recall_0e2ba22315b89a85_v2", 4, 0, NULL, { 0 } },
+    { "refund", "__geas_ash_10AmendParts_6refund_38a3aab7fdf5db00_v2", 0, 1, NULL, { 0 } },
+    { "free", "__geas_ash_10AmendParts_4free_38a3aab7fdf5db00_v2", 3, 1, NULL, { 0 } },
+    { "recall", "__geas_ash_10AmendParts_6recall_0e2ba22315b89a85_v2", 4, 0, NULL, { 0 } },
 };
 
 static const char* const k10_AmendParts_amend1_old_items[] = {
@@ -111,7 +111,7 @@ static const int32_t k10_AmendParts_amend1_remedy_map[] = {
 static const GeasAmendDesc k10_AmendParts_amends[] = {
     {
         .from_version = 1, .restart_course = 0,
-        .from_shape_hash = 0x881b810253ab47e8ULL, .from_course_hash = 0x0000000000000000ULL,
+        .from_shape_hash = 0xdf959dc9893ba5fdULL, .from_course_hash = 0x0000000000000000ULL,
         .nold_vows = 0, .old_vows = NULL,
         .nold_items = 5, .old_items = k10_AmendParts_amend1_old_items,
         .nold_subs = 4, .old_subs = k10_AmendParts_amend1_old_subs,
@@ -150,7 +150,7 @@ static const GeasItemTypes k10_AmendParts_remedy_types[] = {
 };
 
 static const GeasContractDesc k10_AmendParts = {
-    "AmendParts", 0x07fdf664e921d8d0ULL,
+    "AmendParts", 0x8c441d028948ea3fULL,
     2, 5, k10_AmendParts_pledges,
     0, NULL,
     3, k10_AmendParts_subs, 10,

@@ -1,7 +1,6 @@
-// The walking skeleton. This contract is the program every milestone keeps
+// The walking skeleton. This contract is the program every release keeps
 // green: geas compiles it, a C host signs it, fulfills greet, checks the
-// result, and breaks it. The M0 compiler reads this file only to prove the
-// pipeline; real parsing arrives with M1.
+// result, and breaks it.
 
 GreetError is either Empty
 

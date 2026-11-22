@@ -80,7 +80,7 @@ private:
     int saveBraceDepth();
     void restoreBraceDepth(int depth);
     bool enterNesting();
-    void leaveNesting();
+    void leaveNesting(int levels = 1);
     bool isHalted() const;
     void guardProgress(std::size_t before, std::string_view context);
     void expectSeparator(std::string_view message);
@@ -171,10 +171,14 @@ private:
     ExprId parseUnary();
     ExprId parseUnaryInner();
     ExprId parsePostfix();
+    bool isPostfixSuffix() const;
     ExprId parseIndexSuffix(ExprId base);
     std::vector<Argument> parseCallArgs();
     Argument parseArg();
     std::optional<ExprId> parseLiteralExpr();
+    bool isLeastLiteralNext() const;
+    ExprId parseLeastLiteral(std::int64_t lo);
+    void refuseBareLeast(const Token& token);
     ExprId parsePrimary();
     ExprId spanExpr(std::int64_t lo, std::int64_t hi, ExprKind kind);
 

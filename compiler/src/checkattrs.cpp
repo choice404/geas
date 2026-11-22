@@ -1,7 +1,14 @@
-// Attribute lists are literal host settings checked in their package scope
+// Attribute lists are literal host settings checked in their package scope.
+// The two builtin keys a pledge and a remedy take, abi and symbol, bind a
+// declaration with no body to a function the host exports: abi names the
+// calling convention, and "c" is the one there is, symbol names the function,
+// and the two always appear together
 #include "checker.hpp"
 
+#include <array>
+
 #include "attributes.hpp"
+#include "magnitude.hpp"
 
 namespace geas {
 
@@ -72,6 +79,45 @@ void resolveAttributes(const Program& program, Resolved& resolved) {
 
 namespace {
 
+constexpr std::string_view foreignABI = "c";
+
+// The prefixes of every name the geas runtime and the code geas emits define
+constexpr std::array<std::string_view, 3> runtimePrefixes = {"geas_", "__geas_", "GEAS_"};
+
+// Whether a symbol starts with a prefix the runtime owns
+bool isRuntimeSymbol(std::string_view text) {
+    for (const std::string_view prefix : runtimePrefixes) {
+        if (text.starts_with(prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// A C identifier: a letter or underscore, then letters, digits, and underscores
+bool isCIdentifier(std::string_view text) {
+    if (text.empty() || (text.front() >= '0' && text.front() <= '9')) {
+        return false;
+    }
+    for (const char c : text) {
+        const bool isWord = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                            (c >= '0' && c <= '9') || c == '_';
+        if (!isWord) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const Attr* findAttr(const std::vector<Attr>& attrs, std::string_view key) {
+    for (const Attr& attr : attrs) {
+        if (attr.key == key) {
+            return &attr;
+        }
+    }
+    return nullptr;
+}
+
 std::string_view literalType(const Ast& ast, ExprId value) {
     const Expr* literal = &ast.expr(value);
     const auto* unary = std::get_if<UnaryExpr>(&literal->kind);
@@ -79,6 +125,7 @@ std::string_view literalType(const Ast& ast, ExprId value) {
     if (isNegative) {
         literal = &ast.expr(unary->operand);
     }
+    if (isNegative && isLeastLiteral(literal->kind)) return "invalid negative literal";
     if (std::holds_alternative<IntLiteral>(literal->kind)) return "Int";
     if (std::holds_alternative<FloatLiteral>(literal->kind)) return "Float";
     if (std::holds_alternative<DurationLiteral>(literal->kind)) return "Duration";
@@ -142,6 +189,63 @@ void Checker::unknownAttribute(const Attr& attr, AttrTarget target, const std::s
 }
 
 /**
+ * Holds one abi or symbol value to its form: abi is the string "c", and
+ * symbol is a string spelling a C identifier outside the runtime's prefixes
+ * @params attr - the abi or symbol attribute
+ * @returns {void} - faults are recorded in the checker's diagnostics
+ */
+void Checker::checkForeignValue(const Attr& attr) {
+    const Expr& value = ast_.expr(attr.value);
+    const auto* text = std::get_if<StringLiteral>(&value.kind);
+    if (text == nullptr) {
+        emitAt(value, "attribute " + quoted(attr.key) + " expects String, found " +
+                          std::string{literalType(ast_, attr.value)});
+        return;
+    }
+    if (attr.key == "abi" && text->body != foreignABI) {
+        emitAt(value, "abi " + quoted(text->body) + " is not a calling convention geas binds; "
+                      "the one there is, abi: \"c\", binds a function the host exports");
+    } else if (attr.key == "symbol" && !isCIdentifier(text->body)) {
+        emitAt(value, "symbol " + quoted(text->body) + " is not a C identifier, so no host "
+                      "function can export it");
+    } else if (attr.key == "symbol" && isRuntimeSymbol(text->body)) {
+        emitAt(value, "symbol " + quoted(text->body) + " starts with geas_, __geas_, or GEAS_, "
+                      "prefixes that belong to the geas runtime and the code geas emits; give "
+                      "the host function another name");
+    }
+}
+
+/**
+ * Holds the abi and symbol keys of one pledge or remedy together: both or
+ * neither, and only on a declaration with no body, since a body is already
+ * the implementation
+ * @params attrs - the declaration's list, hasBody - whether it carries a body, label - the
+ * declaration name used in diagnostics, lo and hi - the declaration's span
+ * @returns {void} - faults are recorded in the checker's diagnostics
+ */
+void Checker::checkForeignBinding(const std::vector<Attr>& attrs, bool hasBody,
+                                  const std::string& label, std::int64_t lo, std::int64_t hi) {
+    const Attr* abi = findAttr(attrs, "abi");
+    const Attr* symbol = findAttr(attrs, "symbol");
+    if (abi == nullptr && symbol == nullptr) {
+        return;
+    }
+    for (const Attr* attr : {abi, symbol}) {
+        if (attr != nullptr) {
+            checkForeignValue(*attr);
+        }
+    }
+    if (hasBody) {
+        emit(lo, hi, label + " has a body, so it binds no foreign symbol; abi and symbol belong "
+                     "on a declaration with no body");
+    } else if (abi == nullptr) {
+        emit(lo, hi, label + " names a symbol with no abi; write abi: \"c\" beside it");
+    } else if (symbol == nullptr) {
+        emit(lo, hi, label + " names an abi with no symbol; write symbol: \"NAME\" beside it");
+    }
+}
+
+/**
  * Checks each key once within one trailing list
  * @params contract - the owning scope, attrs - the list, target - the declaration kind,
  * label - the declaration name used in diagnostics
@@ -169,11 +273,15 @@ void Checker::checkDeclaredAttrs(const ContractDecl& contract) {
     checkAttrList(contract, contract.attrs, AttrTarget::Contract, "contract " + quoted(contract.name));
     for (const Member& member : contract.members) {
         if (const auto* pledge = std::get_if<PledgeDecl>(&member)) {
-            checkAttrList(contract, pledge->attrs, AttrTarget::Pledge, "pledge " + quoted(pledge->name));
+            const std::string label = "pledge " + quoted(pledge->name);
+            checkAttrList(contract, pledge->attrs, AttrTarget::Pledge, label);
+            checkForeignBinding(pledge->attrs, pledge->body.has_value(), label, pledge->lo, pledge->hi);
         } else if (const auto* signal = std::get_if<SignalDecl>(&member)) {
             checkAttrList(contract, signal->attrs, AttrTarget::Signal, "signal " + quoted(signal->name));
         } else if (const auto* remedy = std::get_if<RemedyDecl>(&member)) {
-            checkAttrList(contract, remedy->attrs, AttrTarget::Remedy, "remedy " + quoted(remedy->name));
+            const std::string label = "remedy " + quoted(remedy->name);
+            checkAttrList(contract, remedy->attrs, AttrTarget::Remedy, label);
+            checkForeignBinding(remedy->attrs, remedy->body.has_value(), label, remedy->lo, remedy->hi);
         } else if (const auto* sub = std::get_if<SubcontractDecl>(&member)) {
             checkSubAttrs(contract, *sub);
         }
@@ -190,7 +298,9 @@ void Checker::checkSubAttrs(const ContractDecl& contract, const SubcontractDecl&
     checkAttrList(contract, sub.attrs, AttrTarget::Subcontract, label);
     for (const SubMember& member : sub.members) {
         if (const auto* pledge = std::get_if<PledgeDecl>(&member)) {
-            checkAttrList(contract, pledge->attrs, AttrTarget::Pledge, "pledge " + quoted(pledge->name));
+            const std::string label = "pledge " + quoted(pledge->name);
+            checkAttrList(contract, pledge->attrs, AttrTarget::Pledge, label);
+            checkForeignBinding(pledge->attrs, pledge->body.has_value(), label, pledge->lo, pledge->hi);
         } else if (const auto* signal = std::get_if<SignalDecl>(&member)) {
             checkAttrList(contract, signal->attrs, AttrTarget::Signal, "signal " + quoted(signal->name));
         }

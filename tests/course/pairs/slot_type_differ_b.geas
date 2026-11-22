@@ -1,0 +1,9 @@
+// A slot's type changes while the course text stays the same
+contract Flow {
+    pledge make() -> Option<String>
+    pledge visit(value: Int) -> Option<Int>
+    course {
+        let made = make()?
+        visit(1)?
+    }
+}

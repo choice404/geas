@@ -8,11 +8,13 @@
  * where each remedy stands.
  *
  * The blob is versioned. It opens with the four bytes "GFLW" and a version
- * number, and this file reads versions 2, 3, and 4. Version 3 adds the
+ * number, and this file reads versions 2 through 5. Version 3 adds the
  * attempts completed and the absolute retry due time for each pledge.
  * Version 4 adds the course frame at the tail: the course state, the step,
  * the status, the wait fields, the course hash, every slot, and the outcomes
- * a together in flight already has. Version 1 is
+ * a together in flight already has. Version 5 spells an item not eligible
+ * yet as GEAS_NOT_ELIGIBLE instead of a negative stamp, so a clock that
+ * reads below zero stamps like any other. Version 1 is
  * the row with no blob at all, the row every runtime before the workflow
  * state wrote, and an empty blob is how it reads here; such a row resumes
  * with the workflow state rebuilt from what the row does hold.
@@ -28,7 +30,13 @@
 #include <string.h>
 
 #define FLOW_MAGIC   "GFLW"
-#define FLOW_VERSION 4u
+#define FLOW_VERSION 5u
+
+/* The last version whose eligibility stamps spell "not eligible yet" as any
+ * negative number; from version 5 the blob carries GEAS_NOT_ELIGIBLE itself
+ * and every other stamp verbatim, a negative one from a clock below zero
+ * included */
+#define FLOW_NEGATIVE_UNSTAMPED 4u
 
 /* ---- writing ---- */
 
@@ -43,9 +51,19 @@ typedef struct FlowOut {
 
 static uint8_t* out_room(FlowOut* o, size_t n) {
     if (o->oom) return NULL;
+    if (n > SIZE_MAX - o->len) {
+        o->oom = 1;
+        return NULL;
+    }
     if (o->len + n > o->cap) {
-        size_t cap = o->cap ? o->cap * 2 : 256;
-        while (cap < o->len + n) cap *= 2;
+        size_t cap = o->cap ? o->cap : 256;
+        while (cap < o->len + n) {
+            if (cap > SIZE_MAX / 2) {
+                o->oom = 1;
+                return NULL;
+            }
+            cap *= 2;
+        }
         uint8_t* grown = realloc(o->buf, cap);
         if (!grown) {
             o->oom = 1;
@@ -93,6 +111,9 @@ static GeasStatus out_value(FlowOut* o, const GeasValue* v, int present) {
      * size protocol, so only another status is a fault. */
     GeasStatus st = geas_wire_encode_value(v, NULL, 0, &need);
     if (st != GEAS_OK && st != GEAS_ERR_OOM) return st;
+    /* No encoded value is empty: GEAS_ERR_OOM with no size is a value past
+     * the node budget, which no resume could read back */
+    if (need == 0) return GEAS_ERR_OOM;
     uint8_t* at = out_room(o, need);
     if (!at) return GEAS_ERR_OOM;
     return geas_wire_encode_value(v, at, need, &need);
@@ -259,12 +280,26 @@ static GeasStatus in_value(FlowIn* in, GeasContract* c, GeasValue* v,
     return st;
 }
 
-static GeasStatus decode_pledges(GeasContract* c, FlowIn* in, uint32_t version) {
+/* An eligibility stamp as a blob of this version wrote it */
+static int64_t read_stamp(int64_t stamp, uint32_t version) {
+    if (version <= FLOW_NEGATIVE_UNSTAMPED && stamp < 0) return GEAS_NOT_ELIGIBLE;
+    return stamp;
+}
+
+/* The latest a saved retry may fall due: now plus the delay its term gives
+ * the attempt the row says is next. A row cannot hold a pledge in its retry
+ * wait for longer than the term itself would */
+static int64_t retry_due_bound(const GeasTermDesc* t, uint32_t attempts, int64_t now) {
+    return geas_rt_ms_after(now, geas_rt_retry_delay(t, attempts - 1));
+}
+
+static GeasStatus decode_pledges(GeasContract* c, FlowIn* in, uint32_t version,
+                                 int64_t now) {
     GeasFlow* f = &c->flow;
     uint32_t n = in_u32(in);
     if (in->bad || n != c->desc->npledges) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < n; i++) {
-        f->pledge_eligible_ms[i] = in_i64(in);
+        f->pledge_eligible_ms[i] = read_stamp(in_i64(in), version);
         f->pledge_lapsed[i] = in_u8(in);
         f->latch_seq[i] = in_u32(in);
         GeasStatus st = in_value(in, c, &f->pledge_ok[i], &f->pledge_ok_set[i]);
@@ -277,6 +312,10 @@ static GeasStatus decode_pledges(GeasContract* c, FlowIn* in, uint32_t version) 
                 (!terms || f->retry_attempts[i] > terms->retry_count ||
                  geas_rt_is_signal(c->desc, i))) return GEAS_ERR_TYPE;
             if (!f->retry_attempts[i] && f->retry_due_ms[i]) return GEAS_ERR_TYPE;
+            if (f->retry_attempts[i]) {
+                int64_t bound = retry_due_bound(terms, f->retry_attempts[i], now);
+                if (f->retry_due_ms[i] > bound) f->retry_due_ms[i] = bound;
+            }
         }
         /* A lapse is a broken latch and nothing else. */
         if (f->pledge_lapsed[i] > 1) return GEAS_ERR_TYPE;
@@ -335,7 +374,7 @@ static GeasStatus rebuild_from_latches(GeasContract* c, int64_t now) {
     for (uint32_t i = 0; i < d->npledges; i++) {
         const GeasTermDesc* t = geas_rt_pledge_term(d, i);
         if (t && t->nafter > 0) continue;
-        if (f->pledge_eligible_ms[i] < 0) continue;
+        if (f->pledge_eligible_ms[i] == GEAS_NOT_ELIGIBLE) continue;
         f->pledge_eligible_ms[i] = geas_rt_pledge_is_loose(d, i)
             ? f->signed_ms
             : f->sub_eligible_ms[d->pledges[i].sub];
@@ -386,7 +425,7 @@ static GeasStatus decode_join(GeasContract* c, FlowIn* in) {
  * one, or for a contract that has no course now, is GEAS_ERR_VERSION; a
  * frame that disagrees with the descriptor in any other way is
  * GEAS_ERR_TYPE. A row with no frame leaves the course at step 0 */
-static GeasStatus decode_course(GeasContract* c, FlowIn* in) {
+static GeasStatus decode_course(GeasContract* c, FlowIn* in, uint32_t version) {
     uint8_t present = in_u8(in);
     if (in->bad || present > 1) return GEAS_ERR_TYPE;
     if (!present) return GEAS_OK;
@@ -403,7 +442,10 @@ static GeasStatus decode_course(GeasContract* c, FlowIn* in) {
     uint32_t nslots = in_u32(in);
     if (in->bad || nslots != f->nslots) return GEAS_ERR_TYPE;
     if (state < GEAS_COURSE_RUNNING || state > GEAS_COURSE_CANCELLED) return GEAS_ERR_TYPE;
-    if (f->wait_due_ms < 0) return GEAS_ERR_TYPE;
+    /* A deadline below zero is one a clock below zero set, from version 5.
+     * However far off it reads, the course's first poll after the resume
+     * holds it to the duration the course function passes again */
+    if (version <= FLOW_NEGATIVE_UNSTAMPED && f->wait_due_ms < 0) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < nslots; i++) {
         uint8_t is_present = 0;
         GeasStatus st = in_value(in, c, &f->slots[i], &is_present);
@@ -428,14 +470,14 @@ GeasStatus geas_rt_flow_decode(GeasContract* c, const uint8_t* buf, size_t len,
     f->term_lapsed = in_u8(&in);
     f->next_seq = in_u32(&in);
     if (in.bad || f->term_lapsed > 1) return GEAS_ERR_TYPE;
-    GeasStatus st = decode_pledges(c, &in, version);
+    GeasStatus st = decode_pledges(c, &in, version, now);
     if (st != GEAS_OK) return st;
     uint32_t nsubs = in_u32(&in);
     if (in.bad || nsubs != c->desc->nsubs) return GEAS_ERR_TYPE;
-    for (uint32_t s = 0; s < nsubs; s++) f->sub_eligible_ms[s] = in_i64(&in);
+    for (uint32_t s = 0; s < nsubs; s++) f->sub_eligible_ms[s] = read_stamp(in_i64(&in), version);
     st = decode_remedies(c, &in);
     if (st != GEAS_OK) return st;
-    if (version >= 4) st = decode_course(c, &in);
+    if (version >= 4) st = decode_course(c, &in, version);
     if (st != GEAS_OK) return st;
     /* The blob must hold exactly what the descriptor declares. */
     return in.off == len ? GEAS_OK : GEAS_ERR_TYPE;

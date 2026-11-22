@@ -1,0 +1,23 @@
+// A match and a select bind their payloads under names of the source's
+// choosing; the names are not the course, so renaming them keeps the hash
+Pair is either Two(left: Int, right: Int) or Empty
+contract Flow {
+    signal tick(v: Option<Int>)
+    signal pair(p: Pair)
+    course {
+        let v = await tick
+        let n = match v {
+            Some(y) -> y
+            None -> 0
+        }
+        let p = await pair
+        let m = match p {
+            Two(a, b) -> a + b
+            Empty -> 0
+        }
+        select {
+            await pair as other -> n + m
+            timeout 5s -> 0
+        }
+    }
+}

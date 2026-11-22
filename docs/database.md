@@ -23,6 +23,10 @@ vow dsn: String = "file:payments.db"
 A schema is the table shape a contract vows to operate against. It is declared inside the contract beside the vows:
 
 ```text
+import std.store
+
+PaymentError is either NoSuchAccount(id: Int) or Insufficient(id: Int) or StoreFailed
+
 contract PaymentService {
     vow dsn: String = "file:payments.db"
 
@@ -49,19 +53,24 @@ A pledge body reads and writes through the standard library store module, `lib/s
 
 ```text
 pledge debit(id: Int, amount: Float) -> Result<Unit, PaymentError> {
-    let acct = Store.find(Accounts, id)?
-    match acct {
-        None -> { return Err(NoSuchAccount(id)) }
-        Some(row) -> {
+    match Store.find(Accounts, id) {
+        Ok(Some(row)) -> {
             if row.balance < amount {
                 return Err(Insufficient(id))
             }
-            Store.update(Accounts, id, Accounts { balance: row.balance - amount })?
-            return Ok(Unit)
+            let next = Accounts { id: id, balance: row.balance - amount, owner: row.owner }
+            match Store.update(Accounts, id, next) {
+                Ok(_) -> { return Ok(Unit) }
+                Err(_) -> { return Err(StoreFailed) }
+            }
         }
+        Ok(None) -> { return Err(NoSuchAccount(id)) }
+        _ -> { return Err(StoreFailed) }
     }
 }
 ```
+
+An update writes the whole row, so the record names every column, the key included. A store failure comes back as `StoreError`, and `?` only propagates an error of the body's own error type, so the body matches it and folds it into `PaymentError` instead; the last arm is the `Err` of the find, written `_` since the coverage rule wants every shape of the nested pattern answered.
 
 The surface is small and every operation returns a `Result` so a store failure is a value, never a throw:
 

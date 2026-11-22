@@ -1,0 +1,13 @@
+exit 1
+compiler/tests/codegen/src/faults_slots.geas: 140:5: error: codegen: the course holds a value of type 'R0' whose smallest value has more than 4096 nodes; hold it behind an Option or a List
+      course {
+      ^~~~~~~~
+compiler/tests/codegen/src/faults_slots.geas: 140:5: error: codegen: the course holds a value of type 'Loop', which has no finite value, so no frame could hold one
+      course {
+      ^~~~~~~~
+compiler/tests/codegen/src/faults_slots.geas: 140:5: error: codegen: the course holds a value of type 'Pick' whose smallest value has more than 4096 nodes; hold it behind an Option or a List
+      course {
+      ^~~~~~~~
+compiler/tests/codegen/src/faults_slots.geas: 140:5: error: codegen: the course holds a value of type 'Result<K0, R0>' whose smallest value has more than 4096 nodes; hold it behind an Option or a List
+      course {
+      ^~~~~~~~

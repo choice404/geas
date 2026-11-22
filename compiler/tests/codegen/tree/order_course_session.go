@@ -18,7 +18,7 @@ import (
 // OrderCourseShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const OrderCourseShapeHash uint64 = 0x4861f0a9753d79d4
+const OrderCourseShapeHash uint64 = 0xa5fa4f6bf483ba55
 
 // OrderCourseSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

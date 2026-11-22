@@ -1,6 +1,10 @@
 // Two provisional clauses incorporated side by side: every signature has a
 // same named clause in the contract, and the contributed names never collide.
 
+LogError is either LogFailed
+AuditError is either AuditFailed
+LedgerError is either Unbalanced
+
 provisional clause Loggable {
     clause log(message: String) -> Result<Unit, LogError>
 }
@@ -18,10 +22,12 @@ contract Ledger {
 
     clause log(message: String) -> Result<Unit, LogError> {
         // log implementation
+        return Ok(Unit)
     }
 
     clause audit(event: String) -> Result<Unit, AuditError> {
         // audit implementation
+        return Ok(Unit)
     }
 
     clause audit_count() -> Int {

@@ -1,0 +1,27 @@
+// The subcontract and the requirements against version 1: settle joins
+// Payment, Payment becomes transactional, and a requirements block appears.
+// Each moves the shape hash, and none of them changes what a parked row of
+// version 1 holds, so the amends block names no item for them
+contract AmendSubParts [version: 2] {
+    vow dsn: String = "file:parts.db"
+
+    schema Ledger {
+        id: Int
+        amount: Int
+    }
+
+    subcontract Payment transactional {
+        pledge charge(amount: Int) -> Result<Unit, Int>
+        pledge settle() -> Result<Unit, Int>
+    }
+    pledge ship() -> Result<Unit, Int>
+
+    requirements {
+        fulfill: Payment && ship
+        partial: Payment
+        break: !Payment
+    }
+
+    amends 1 {
+    }
+}

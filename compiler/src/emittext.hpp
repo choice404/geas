@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -32,6 +33,33 @@ std::string joined(const Parts&... parts) {
 inline std::string decimal(std::int64_t value) {
     return std::to_string(value);
 }
+
+/**
+ * A signed integer as C source. The least Int is spelled as an expression,
+ * since its magnitude has no signed C constant and a bare negated one would
+ * read as unsigned.
+ * @params value - the number to spell
+ * @returns {std::string} - its decimal digits, or the expression for the least Int
+ */
+inline std::string cInteger(std::int64_t value) {
+    if (value == std::numeric_limits<std::int64_t>::min()) {
+        return "(-9223372036854775807 - 1)";
+    }
+    return decimal(value);
+}
+
+/**
+ * A Float literal as C source: the shortest decimal that reads back as the
+ * same double, with a dot or an exponent so C reads a double and not an
+ * integer. Underscores are separators in Geas and nothing in C, so the
+ * value is what is spelled, never the source text. A value below the
+ * least subnormal is spelled as zero, the double it rounds to, and a
+ * spelling that does not read as a double is kept as written, underscores
+ * dropped.
+ * @params spelling - the literal as the source wrote it
+ * @returns {std::string} - a C double constant of the same value
+ */
+std::string cFloat(std::string_view spelling);
 
 // One blank of a template and the text that fills it
 using TemplateFill = std::pair<std::string_view, std::string_view>;

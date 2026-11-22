@@ -1,9 +1,16 @@
 // The template filler, see emittext.hpp
 #include "emittext.hpp"
 
+#include <array>
+#include <charconv>
+#include <system_error>
+
 namespace geas {
 
 namespace {
+
+// Room for the longest shortest round trip spelling of a double
+constexpr std::size_t floatTextCapacity = 32;
 
 // Replaces every occurrence of one marker
 std::string replaceMarker(std::string_view text, std::string_view marker,
@@ -24,6 +31,36 @@ std::string replaceMarker(std::string_view text, std::string_view marker,
 }
 
 }  // namespace
+
+std::string cFloat(std::string_view spelling) {
+    std::string digits;
+    for (const char c : spelling) {
+        if (c != '_') {
+            digits.push_back(c);
+        }
+    }
+    double value = 0.0;
+    const char* end = digits.data() + digits.size();
+    const auto parsed = std::from_chars(digits.data(), end, value);
+    if (parsed.ptr != end) {
+        return digits;
+    }
+    // Past the range is refused by the lexer, so out of range here is a
+    // value below the least subnormal, which reads as zero
+    if (parsed.ec == std::errc::result_out_of_range) {
+        value = 0.0;
+    } else if (parsed.ec != std::errc{}) {
+        return digits;
+    }
+    std::array<char, floatTextCapacity> text{};
+    const auto written = std::to_chars(text.data(), text.data() + text.size(), value);
+    std::string out{text.data(), written.ptr};
+    // A whole value spells as bare digits, which C would read as an integer
+    if (out.find_first_of(".eE") == std::string::npos) {
+        out.append(".0");
+    }
+    return out;
+}
 
 std::string fillTemplate(std::string_view text, std::initializer_list<TemplateFill> fills) {
     std::string out{text};

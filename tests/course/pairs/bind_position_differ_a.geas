@@ -1,0 +1,15 @@
+// The arm reads its first binding in one half and its second in the other,
+// which is another course, though the bound names are the same
+Pair is either Two(left: Int, right: Int) or Empty
+contract Flow {
+    signal pair(p: Pair)
+    pledge use(value: Int) -> Option<Int>
+    course {
+        let p = await pair
+        let m = match p {
+            Two(first, second) -> first
+            Empty -> 0
+        }
+        use(m)?
+    }
+}

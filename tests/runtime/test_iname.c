@@ -6,8 +6,10 @@
  * the owning contract and its shape hash, yesterday's mangled name misses
  * today's module with GEAS_ERR_NAME, the freeze shuts load, register, and
  * bind while sign and fulfill stay open, and the canonical dump matches the
- * golden in tests/runtime/iname.expect byte for byte. Runs from the repo
- * root under ASan and LSan. */
+ * golden in tests/runtime/iname.expect byte for byte. A second runtime
+ * loads the split pair, iname_split_one.geas and iname_split_two.geas, whose
+ * contract and pledge names join to the same text, and proves each keeps an
+ * entry and a body of its own. Runs from the repo root under ASan and LSan. */
 
 #include <geas/geas.h>
 
@@ -31,13 +33,19 @@ static void fail_at(const char* what, const char* file, int line) {
  * keeps them honest. The stale name is v1 greet's signature hash wearing
  * Greeter2's name, the exact lie a host shipping yesterday's header would
  * tell, and it must miss. */
-#define GREET_V1   "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
-#define SHOUT_V1   "__geas_ash_Greeter_shout_5155c52e95ed821d_v1"
-#define CTYPE_V1   "__geas_ash_Greeter__8b67a53d561ff526_v1"
-#define GREET_V2   "__geas_ash_Greeter2_greet_0b2357619b406722_v2"
-#define CTYPE_V2   "__geas_ash_Greeter2__ed0ccb47c5176d84_v2"
-#define STALE_V2   "__geas_ash_Greeter2_greet_5155c52e95ed821d_v2"
-#define STALE_V1   "__geas_ash_Greeter2_greet_5155c52e95ed821d_v1"
+#define GREET_V1   "__geas_ash_7Greeter_5greet_5155c52e95ed821d_v1"
+#define SHOUT_V1   "__geas_ash_7Greeter_5shout_5155c52e95ed821d_v1"
+#define CTYPE_V1   "__geas_ash_7Greeter_0_8b67a53d561ff526_v1"
+#define GREET_V2   "__geas_ash_8Greeter2_5greet_0b2357619b406722_v2"
+#define CTYPE_V2   "__geas_ash_8Greeter2_0_ed0ccb47c5176d84_v2"
+#define STALE_V2   "__geas_ash_8Greeter2_5greet_5155c52e95ed821d_v2"
+#define STALE_V1   "__geas_ash_8Greeter2_5greet_5155c52e95ed821d_v1"
+
+/* The split pair: contract A with pledge b_c and contract A_b with pledge c
+ * share one signature hash, so the names differ only where the length
+ * prefixes cut the contract from the pledge */
+#define SPLIT_ONE  "__geas_ash_1A_3b_c_1da73ef4d721fbeb_v1"
+#define SPLIT_TWO  "__geas_ash_3A_b_1c_1da73ef4d721fbeb_v1"
 
 static GeasValue str_arg(const char* s) {
     GeasValue v;
@@ -65,6 +73,53 @@ static GeasStatus never_fn(void* ctx, const GeasValue* args, size_t nargs,
                           GeasValue* out) {
     (void)ctx; (void)args; (void)nargs; (void)out;
     return GEAS_ERR_STATE;
+}
+
+/* Fulfills one pledge of the split pair with 10 and holds it to the Some it
+ * answers */
+static void expect_split(GeasRuntime* rt, const char* contract, const char* pledge,
+                         int64_t want) {
+    GeasContract* c = NULL;
+    CHECK(geas_contract_sign(rt, contract, NULL, 0, 0, &c) == GEAS_OK, "sign a split contract");
+    if (!c) return;
+    GeasValue arg;
+    memset(&arg, 0, sizeof(arg));
+    arg.ty = GEAS_TY_INT;
+    arg.as.i = 10;
+    GeasValue out;
+    memset(&out, 0, sizeof(out));
+    CHECK(geas_pledge_fulfill_sync(c, pledge, &arg, 1, NULL, 0, &out) == GEAS_OK,
+          "fulfill a split pledge");
+    const GeasValue* inner = (const GeasValue*)out.as.box;
+    CHECK(out.ty == GEAS_TY_OPTION && out.tag == 1 && inner && inner->as.i == want,
+          "each split pledge runs its own body");
+    CHECK(geas_contract_break(c) == GEAS_OK, "break a split contract");
+}
+
+/* The split pair side by side: four entries, each name resolving to its own
+ * owner and symbol */
+static void test_split(void) {
+    GeasRuntime* rt = NULL;
+    CHECK(geas_runtime_init(NULL, &rt) == GEAS_OK, "split runtime init");
+    if (!rt) return;
+    CHECK(geas_module_load(rt, "target/geas-out/libiname_split_one.geas.so") == GEAS_OK,
+          "load the first split module");
+    CHECK(geas_module_load(rt, "target/geas-out/libiname_split_two.geas.so") == GEAS_OK,
+          "load the second split module");
+    CHECK(geas_iname_count(rt) == 4, "two contracts and two pledges");
+    GeasInameEntry one;
+    GeasInameEntry two;
+    memset(&one, 0, sizeof(one));
+    memset(&two, 0, sizeof(two));
+    CHECK(geas_iname_lookup(rt, SPLIT_ONE, &one) == GEAS_OK && one.contract && one.symbol &&
+              strcmp(one.contract, "A") == 0 && strcmp(one.symbol, "b_c") == 0,
+          "A.b_c keeps its own entry");
+    CHECK(geas_iname_lookup(rt, SPLIT_TWO, &two) == GEAS_OK && two.contract && two.symbol &&
+              strcmp(two.contract, "A_b") == 0 && strcmp(two.symbol, "c") == 0,
+          "A_b.c keeps its own entry");
+    expect_split(rt, "A", "b_c", 10);
+    expect_split(rt, "A_b", "c", 11);
+    geas_runtime_shutdown(rt);
 }
 
 int main(void) {
@@ -214,6 +269,7 @@ int main(void) {
     }
 
     geas_runtime_shutdown(rt);
+    test_split();
     if (g_failures) {
         fprintf(stderr, "[test_iname] %d failure(s)\n", g_failures);
         return 1;

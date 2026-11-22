@@ -7,3 +7,4 @@ version 1 has no vow 'missing' to read through prior
 amends vow 'note' is set twice
 prior is the instance of the amended version, not a value; read one of its vows as prior.NAME
 rename names 'ghost', which version 1 never had
+amends vow 'span' is both set and the target of rename 'stamp' -> 'span'; a name takes one item

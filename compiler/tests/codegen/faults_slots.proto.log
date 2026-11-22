@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/faults_slots.geas: 139:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Result<K0, R0>
+      signal armed(v: Result<K0, R0>)
+      ^~~~~~~~~~~~

@@ -28,7 +28,8 @@ RT_UNITS := runtime/src/runtime.c runtime/src/wire.c runtime/src/store.c \
     runtime/src/events.c runtime/src/terms.c runtime/src/remedy.c runtime/src/signal.c \
     runtime/src/flowpark.c runtime/src/attrs.c runtime/src/bytes.c runtime/src/process.c \
     runtime/src/course.c runtime/src/coursejoin.c runtime/src/coursepark.c \
-    runtime/src/amendrow.c runtime/src/amend.c runtime/src/handoff.c runtime/src/conform.c
+    runtime/src/amendrow.c runtime/src/amend.c runtime/src/handoff.c runtime/src/conform.c \
+    runtime/src/courseslot.c runtime/src/foreign.c
 
 # The runtime now speaks to the store, so runtime.c references the driver in
 # store.c and its vendored SQLite; every gate that links the runtime in gets
@@ -65,9 +66,9 @@ HOST       := $(OUT)/host
 BIN_DEMO   := $(OUT)/main_demo
 
 .PHONY: test-conform test-amend test-amend-saga test-amend-python test-course test-course-park test-events test-events-python test-terms test-remedy test-bind-user test-signal test-workflow-park test-saga test-saga-python test-handoff-python tsan-workflow
-.PHONY: test-requirements
+.PHONY: test-requirements test-hardening tsan-hardening
 .PHONY: test-soname test-future test-cancel test-handoff test-process test-dusk tsan-process
-.PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-grpc-saga test-grpc-course test-grpc-saga-go test-grpc-saga-node test-grpc-edge test-grpc-handoff test-supervisor test-supervisor-watch tsan install uninstall clean
+.PHONY: all smoke smoke-asan runtime compiler module host test-runtime test-wire test-park test-lifecycle test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-stress test-store-stress-tsan test-store-python test-thread test-iname test-course-slots test-foreign test-desc-sizes test-partial test-lang test-std test-process test-python test-bin test-header test-proto test-determinism grpc-venv test-grpc-bridge test-grpc-go test-grpc-node test-grpc-resume test-grpc-failover test-grpc-saga test-grpc-course test-grpc-saga-go test-grpc-saga-node test-grpc-edge test-grpc-handoff test-supervisor test-supervisor-watch tsan install uninstall clean
 
 # The full suite, one gate per surface the language carries: the walking
 # skeleton, the runtime's own units, the compiled language, and the store, with
@@ -75,7 +76,7 @@ BIN_DEMO   := $(OUT)/main_demo
 # sanitizer variants of the store gates stay out and are run on their own, since
 # each is minutes of load on ground the functional gate beside it already
 # covers.
-all: test-conform test-boundary test-course test-course-park test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-handoff test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-handoff-python test-course-saga test-course-python test-amend-saga test-amend-python tsan tsan-workflow tsan-process
+all: test-conform test-boundary test-course test-course-park test-course-slots test-foreign test-desc-sizes test-amend test-events test-events-python test-bytes test-bytes-python test-attrs test-requirements smoke test-soname test-runtime test-wire test-thread test-future test-iname test-partial test-lang test-std test-process test-dusk test-python test-bin test-header test-proto test-determinism test-store-unit test-store test-store-txn test-store-fail test-store-crash test-store-python test-park test-lifecycle test-terms test-remedy test-cancel test-handoff test-bind-user test-signal test-workflow-park test-park-inflight test-saga test-saga-python test-handoff-python test-course-saga test-course-python test-amend-saga test-amend-python test-hardening tsan tsan-workflow tsan-hardening tsan-process
 
 runtime: $(RT_SO)
 
@@ -418,6 +419,41 @@ test-course-park: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_park.c
 	    tests/runtime/test_course_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_park
 	./$(OUT)/test_course_park
 
+# The course slot types: a fresh frame at the smallest value of each slot's
+# type, a row whose list slot carries a String refused at resume and claim,
+# the registrar's slot table checks, and thousands of rows mutated inside the
+# course frame, each refused or resumed and run, under ASan and UBSan.
+$(OUT)/libcourse_slots.geas.so: $(GEAS) $(RT_SO) tests/runtime/course_slots.geas runtime/include/geas/geas_abi.h
+	$(GEAS) build tests/runtime/course_slots.geas
+
+test-course-slots: $(OUT)/libcourse_slots.geas.so $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_course_slots.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_course_slots.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_course_slots
+	./$(OUT)/test_course_slots
+
+# The foreign symbols: abstract pledges and remedies resolved through the
+# function their symbol names in this executable, linked with -rdynamic, a
+# missing symbol refusing the sign, a host binding beating the symbol, and
+# the same resolution at resume and claim, under ASan and UBSan.
+$(OUT)/libforeign.geas.so: $(GEAS) $(RT_SO) tests/runtime/foreign.geas runtime/include/geas/geas_abi.h
+	$(GEAS) build tests/runtime/foreign.geas
+
+test-foreign: $(OUT)/libforeign.geas.so $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_foreign.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_foreign.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_foreign
+	./$(OUT)/test_foreign
+
+# The descriptor sizes: a descriptor ending at a guard page registered at
+# every historical size and every eight byte step to the whole struct, so a
+# read past the reported size faults, and only a V7 one sees its symbols.
+test-desc-sizes: $(SQLITE_OBJ) $(WF_DEPS) tests/runtime/test_desc_sizes.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread -rdynamic $(RT_INC) \
+	    tests/runtime/test_desc_sizes.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_desc_sizes
+	./$(OUT)/test_desc_sizes
+
 # Amendment: a row parked under one version resumed as a later one through
 # an amends block, handwritten descriptor pairs on a fake clock. Renames,
 # retirements, added items and their seeds, vows carried, defaulted and
@@ -632,6 +668,52 @@ test-amend-python: amend-saga-modules
 	    echo "[test-amend-python] python3 not found, skipping"; \
 	fi
 
+# The hardening gate under ASan, LSan, and UBSan: the tables with no fixed
+# size and geas_contract_free, values at the edges of the codec, the walk,
+# and the helpers, park rows and their generations, saved deadlines, a clock
+# below zero, and the threads at the edges, each case in a child of its own.
+# The tables test copies the empty module to many paths; the threads test
+# wraps pthread_cond_timedwait to read every deadline the runtime waits on.
+# The Python scope check runs where python3 is.
+HARD_DEPS := $(WF_DEPS) tests/runtime/hardening_util.h
+HARD_EMPTY := $(OUT)/libhardening_empty.so
+HARD_TESTS := tests/runtime/test_hardening_values.c tests/runtime/test_hardening_tables.c \
+    tests/runtime/test_hardening_park.c tests/runtime/test_hardening_threads.c
+
+$(HARD_EMPTY): tests/runtime/hardening_module.c runtime/include/geas/geas.h
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -shared -I runtime/include tests/runtime/hardening_module.c -o $@
+
+test-hardening: $(SQLITE_OBJ) $(HARD_DEPS) $(HARD_EMPTY) $(RT_SO) $(MODULE_PAY) $(HARD_TESTS) tests/runtime/test_python_scope.py
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_hardening_values.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_hardening_values
+	./$(OUT)/test_hardening_values
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_hardening_tables.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_hardening_tables
+	HARD_EMPTY_MODULE=$(HARD_EMPTY) ./$(OUT)/test_hardening_tables
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) \
+	    tests/runtime/test_hardening_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_hardening_park
+	./$(OUT)/test_hardening_park
+	$(CC) $(CFLAGS) $(WF_SAN) -g -pthread $(RT_INC) -Wl,--wrap=pthread_cond_timedwait \
+	    tests/runtime/test_hardening_threads.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_hardening_threads
+	./$(OUT)/test_hardening_threads
+	@if command -v python3 >/dev/null 2>&1; then \
+	    python3 -B tests/runtime/test_python_scope.py; \
+	else \
+	    echo "[test-hardening] python3 not found, skipping the scope check"; \
+	fi
+
+# The hardening gate's park rows and thread cases under ThreadSanitizer
+tsan-hardening: $(SQLITE_OBJ) $(HARD_DEPS) tests/runtime/test_hardening_park.c tests/runtime/test_hardening_threads.c
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) -Wl,--wrap=pthread_cond_timedwait \
+	    tests/runtime/test_hardening_threads.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_hardening_threads_tsan
+	@for round in $$(seq 1 5); do ./$(OUT)/test_hardening_threads_tsan || exit $$?; done
+	$(CC) $(CFLAGS) -fsanitize=thread -g -pthread $(RT_INC) \
+	    tests/runtime/test_hardening_park.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_hardening_park_tsan
+	./$(OUT)/test_hardening_park_tsan
+
 # The workflow gates under ThreadSanitizer: retries with the instance lock
 # released, remedy passes and signals across threads, user bindings, and
 # the courses, handwritten and compiled
@@ -702,7 +784,14 @@ test-future: $(SQLITE_OBJ)
 # The iname gate under ASan: two compiled generations loaded side by side,
 # exact name discovery, the version mismatch miss, the freeze, and the
 # canonical dump against its golden, tests/runtime/iname.expect.
-test-iname: $(MODULE) $(MODULE_V2)
+# The split pair beside it: two modules whose contract and pledge names
+# join to one text, each held to an entry and a body of its own
+MODULE_SPLIT := $(OUT)/libiname_split_one.geas.so $(OUT)/libiname_split_two.geas.so
+
+$(OUT)/libiname_split_%.geas.so: $(GEAS) $(RT_SO) tests/runtime/iname_split_%.geas runtime/include/geas/geas_abi.h
+	$(GEAS) build tests/runtime/iname_split_$*.geas
+
+test-iname: $(MODULE) $(MODULE_V2) $(MODULE_SPLIT)
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -fsanitize=address,leak -g -pthread -rdynamic $(RT_INC) \
 	    tests/runtime/test_iname.c $(RT_UNITS) $(RT_SQLITE) -ldl -o $(OUT)/test_iname

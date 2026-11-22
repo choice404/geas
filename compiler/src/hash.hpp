@@ -26,7 +26,10 @@ std::string hashHex16(std::uint64_t hash);
 
 /**
  * The exported symbol name of a compiled pledge or remedy,
- * __geas_ash_{contract}_{symbol}_{sighash}_v{version}.
+ * __geas_ash_{len}{contract}_{len}{symbol}_{sighash}_v{version}, each name
+ * led by its length in decimal so two pairs of names never spell one symbol:
+ * contract A with pledge b_c is __geas_ash_1A_3b_c_..., contract A_b with
+ * pledge c is __geas_ash_3A_b_1c_....
  * @params contract - the contract name, symbol - the pledge or remedy name, sigHash - the hash of
  * its canonical signature, version - the contract version
  * @returns {std::string} - the mangled name

@@ -1,0 +1,31 @@
+// A version is carried in 32 bits, so an integer version runs from 1 to
+// 4294967295 and every other integer is refused
+contract Zero [version: 0] {
+    pledge go() -> Result<Unit, String> {
+        return Ok(Unit)
+    }
+}
+
+contract Past [version: 4294967296] {
+    pledge go() -> Result<Unit, String> {
+        return Ok(Unit)
+    }
+}
+
+contract Wrapped [version: 4294967297] {
+    pledge go() -> Result<Unit, String> {
+        return Ok(Unit)
+    }
+}
+
+contract Least [version: -9223372036854775808] {
+    pledge go() -> Result<Unit, String> {
+        return Ok(Unit)
+    }
+}
+
+contract Highest [version: 4294967295] {
+    pledge go() -> Result<Unit, String> {
+        return Ok(Unit)
+    }
+}

@@ -1,0 +1,62 @@
+// The right side of an assignment, and an index its target reads, may not
+// assign the binding the target is rooted in, so the order in which the
+// target's slot and the value are found is never observable, in a course
+// or in ordinary code
+contract K {
+    clause replaced() -> Int {
+        let mut values = [0]
+        values[0] = match true {
+            true -> {
+                values = [10]
+                7
+            }
+            false -> 0
+        }
+        return values[0]
+    }
+    clause grown() -> Int {
+        let mut values = [0, 1]
+        values[1] = match true {
+            true -> {
+                values[0] = 3
+                5
+            }
+            false -> 0
+        }
+        return values[1]
+    }
+    clause indexed() -> Int {
+        let mut values = [0, 1]
+        values[match true {
+            true -> {
+                values = [5]
+                0
+            }
+            false -> 1
+        }] = 4
+        return values[0]
+    }
+    clause plain() -> Int {
+        let mut n = 1
+        n = match n {
+            1 -> {
+                n = 5
+                2
+            }
+            _ -> 3
+        }
+        return n
+    }
+    signal tick()
+    course {
+        let mut values = [0]
+        values[0] = match true {
+            true -> {
+                await tick
+                values = [10]
+                7
+            }
+            false -> 0
+        }
+    }
+}

@@ -1,0 +1,50 @@
+// A right side may assign other bindings, read the target's own binding,
+// and assign a binding of the same name a let, a for variable, or a match
+// pattern shadows inside it; a value bound with let first may replace the
+// container freely
+contract K {
+    clause shadowed(xs: List<Int>) -> Int {
+        let mut values = [0]
+        let mut other = 0
+        values[0] = match true {
+            true -> {
+                other = 4
+                let mut values = [1]
+                values = [2]
+                values[0] + other
+            }
+            false -> values[0]
+        }
+        values[0] = match Some(3) {
+            Some(values) -> values
+            None -> 0
+        }
+        return values[0]
+    }
+    clause looped(xs: List<Int>) -> Int {
+        let mut values = [0]
+        values[0] = match true {
+            true -> {
+                let mut total = 0
+                for values in xs {
+                    total = total + values
+                }
+                total
+            }
+            false -> 0
+        }
+        return values[0]
+    }
+    clause bound() -> Int {
+        let mut values = [0]
+        let seven = match true {
+            true -> {
+                values = [10]
+                7
+            }
+            false -> 0
+        }
+        values[0] = seven
+        return values[0]
+    }
+}

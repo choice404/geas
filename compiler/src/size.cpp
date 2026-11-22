@@ -3,18 +3,20 @@
 
 #include <limits>
 
+#include "magnitude.hpp"
+
 namespace geas {
 
 namespace {
 
-constexpr std::int64_t decimalBase = 10;
-constexpr std::int64_t kibibyte = 1024;
-constexpr std::int64_t mebibyte = kibibyte * kibibyte;
-constexpr std::int64_t gibibyte = mebibyte * kibibyte;
-constexpr std::int64_t tebibyte = gibibyte * kibibyte;
-constexpr std::int64_t maxInt = std::numeric_limits<std::int64_t>::max();
+constexpr std::uint64_t decimalBase = 10;
+constexpr std::uint64_t kibibyte = 1024;
+constexpr std::uint64_t mebibyte = kibibyte * kibibyte;
+constexpr std::uint64_t gibibyte = mebibyte * kibibyte;
+constexpr std::uint64_t tebibyte = gibibyte * kibibyte;
+constexpr std::uint64_t maxInt = std::numeric_limits<std::int64_t>::max();
 
-std::int64_t suffixFactor(int byte) {
+std::uint64_t suffixFactor(int byte) {
     switch (byte) {
         case 'K': return kibibyte;
         case 'M': return mebibyte;
@@ -31,25 +33,36 @@ bool isSizeSuffix(int byte) {
 }
 
 std::expected<std::int64_t, SizeError> parseSize(std::string_view literal) {
-    std::int64_t amount = 0;
+    const auto magnitude = parseSizeMagnitude(literal);
+    if (!magnitude) {
+        return std::unexpected(magnitude.error());
+    }
+    if (*magnitude > maxInt) {
+        return std::unexpected(SizeError::Overflow);
+    }
+    return static_cast<std::int64_t>(*magnitude);
+}
+
+std::expected<std::uint64_t, SizeError> parseSizeMagnitude(std::string_view literal) {
+    std::uint64_t amount = 0;
     for (std::size_t index = 0; index < literal.size(); ++index) {
         const char byte = literal[index];
         if (byte == '_' && index > 0) {
             continue;
         }
         if (byte >= '0' && byte <= '9') {
-            const std::int64_t digit = byte - '0';
-            if (amount > (maxInt - digit) / decimalBase) {
+            const auto digit = static_cast<std::uint64_t>(byte - '0');
+            if (amount > (leastIntMagnitude - digit) / decimalBase) {
                 return std::unexpected(SizeError::Overflow);
             }
             amount = amount * decimalBase + digit;
             continue;
         }
-        const std::int64_t factor = suffixFactor(byte);
+        const std::uint64_t factor = suffixFactor(byte);
         if (factor == 0 || index == 0 || index + 1 != literal.size()) {
             return std::unexpected(SizeError::StrayCharacter);
         }
-        if (amount > maxInt / factor) {
+        if (amount > leastIntMagnitude / factor) {
             return std::unexpected(SizeError::Overflow);
         }
         return amount * factor;

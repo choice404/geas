@@ -12,7 +12,7 @@ package geas.ledger;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/ledgerpb";
 
-// contract Ledger, version 1, shape 0x91e8dbbfad45dc44.
+// contract Ledger, version 1, shape 0xd4d7e971ff99f4e8.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

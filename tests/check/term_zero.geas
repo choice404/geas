@@ -1,0 +1,10 @@
+// A within, a retry every, and a retry cap are durations greater than zero:
+// a zero one would read as no deadline, no delay, or no cap at all
+PayError is either Declined
+
+contract Shop {
+    pledge pay() -> Result<Unit, PayError> within 0s
+    pledge charge() -> Result<Unit, PayError> retry 3 every 0s
+    pledge settle() -> Result<Unit, PayError> retry 3 every 1s backoff 2.0 cap 0ms
+    signal approved() within 0h
+}

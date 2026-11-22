@@ -1,12 +1,19 @@
-// A fulfilled seed carries no Ok value, so a remedy that takes one has
-// nothing to be handed
+// A fulfilled seed carries no value, so it is refused for an item that has
+// one to hand: a pledge with an Ok value, whether or not a remedy takes it,
+// a pledge of Option, and a signal with a payload
 contract AmendSeedRemedy [version: 2] {
     pledge ship() -> Result<Int, String>
     pledge notify() -> Result<String, String>
+    pledge count() -> Result<Int, String>
+    pledge lookup() -> Option<String>
+    signal arrived(code: Int, note: String)
 
     remedy recall for notify(sent: String) -> Unit
 
     amends 1 {
         latch notify as fulfilled
+        latch count as fulfilled
+        latch lookup as fulfilled
+        latch arrived as fulfilled
     }
 }

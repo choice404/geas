@@ -15,11 +15,15 @@ namespace geas {
 
 namespace {
 
-constexpr std::string_view formatLine = "geas shape 2";
+constexpr std::string_view formatLine = "geas shape 3";
 constexpr std::string_view formatPrefix = "geas shape ";
 
-// The format before type layouts were recorded, read only to name it
+// The formats before this one, read only to name them: 1 records no type
+// layouts, and 2 holds a shape string whose hash leaves out the subcontract
+// members, the transactional flags, and the requirements block, so neither
+// hash is one a module of this compiler carries
 constexpr std::string_view layoutlessFormat = "1";
+constexpr std::string_view memberlessFormat = "2";
 constexpr std::string_view shapesDirectory = "shapes";
 constexpr std::string_view shapeExtension = ".shape";
 constexpr std::string_view hexPrefix = "0x";
@@ -131,8 +135,9 @@ std::expected<void, std::string> checkFormatLine(std::string_view line) {
         return Fault{"the first line is not '" + std::string{formatLine} + "'"};
     }
     const std::string_view version = line.substr(formatPrefix.size());
-    if (version == layoutlessFormat) {
-        return Fault{"format version '1' records no type layouts, so this compiler no longer "
+    if (version == layoutlessFormat || version == memberlessFormat) {
+        return Fault{"format version '" + std::string{version} +
+                     "' records a shape hash this compiler no longer computes, so it no longer "
                      "reads it; run geas record on the source of that version again"};
     }
     const std::string_view current = formatLine.substr(formatPrefix.size());

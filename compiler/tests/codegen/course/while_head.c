@@ -54,8 +54,8 @@ label_2:
 }
 
 static const GeasPledgeDesc k4_Flow_pledges[] = {
-    { "again", "__geas_ash_Flow_again_a69749ba617797cf_v1", 0, NULL, -1 },
-    { "visit", "__geas_ash_Flow_visit_0e2ba22315b89a85_v1", 0, NULL, -1 },
+    { "again", "__geas_ash_4Flow_5again_a69749ba617797cf_v1", 0, NULL, -1 },
+    { "visit", "__geas_ash_4Flow_5visit_0e2ba22315b89a85_v1", 0, NULL, -1 },
 };
 
 static const GeasReqAtom k4_Flow_atoms[] = {
@@ -90,6 +90,8 @@ static const GeasItemTypes k4_Flow_item_types[] = {
     { 0, NULL, 2 },
 };
 
+static const uint32_t k4_Flow_course_slot_types[] = { 0, 1, 2 };
+
 static const GeasContractDesc k4_Flow = {
     "Flow", 0xee3378b27c91f5fdULL,
     1, 2, k4_Flow_pledges,
@@ -100,10 +102,11 @@ static const GeasContractDesc k4_Flow = {
     k4_Flow_rf, NULL, k4_Flow_rb,
     0, NULL,
     NULL,
-    .course_fn = k4_Flow_course, .course_nslots = 3, .course_hash = 0xe473fde7b1aecfbaULL,
+    .course_fn = k4_Flow_course, .course_nslots = 3, .course_hash = 0x578b2cf436d756b3ULL,
     .ntypes = 3, .types = k4_Flow_types,
     .item_types = k4_Flow_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .course_slot_types = k4_Flow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

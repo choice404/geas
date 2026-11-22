@@ -41,6 +41,11 @@ bool isShadowableScalar(TyKind kind) {
     return kind == TyKind::Duration || kind == TyKind::Time || kind == TyKind::Bytes;
 }
 
+// The one type name the compiler brings in without a declaration behind
+// it: StoreError, the Err side of every Store answer. Every other name a
+// type annotation spells has to be declared
+constexpr std::string_view storeErrorName = "StoreError";
+
 // Whether a lowered type may key a Map, the unknown recovery type passing
 bool isMapKeyable(TyKind kind) {
     switch (kind) {
@@ -73,20 +78,11 @@ TyId TypeLowering::lower(TypeId type, std::int64_t lo, std::int64_t hi) {
     if (const auto* named = std::get_if<NamedType>(&node)) {
         return lowerNamed(*named, lo, hi);
     }
-    const auto& pledge = std::get<PledgeType>(node);
-    // A pledge value is bound to the instance that made it, a handle with no
-    // meaning outside the process and no lifetime of its own, so like a
-    // contract type it stays out of every position a value crosses
-    if (isABIPosition) {
-        emit(lo, hi, "a pledge type cannot cross the contract boundary");
-        return types_.unknown();
-    }
-    std::vector<TyId> params;
-    for (const TypeId param : pledge.params) {
-        params.push_back(lower(param, lo, hi));
-    }
-    const TyId ret = lower(pledge.ret, lo, hi);
-    return types_.pledge(std::move(params), ret);
+    // The pledge type pledge(T, ...) -> R parses, so the spelling stays
+    // reserved, but pledge values are left out of this version of the
+    // language, so the type is refused wherever it appears
+    emit(lo, hi, std::string{pledgeValueFault});
+    return types_.unknown();
 }
 
 std::vector<TyId> TypeLowering::lowerParams(const std::vector<Field>& params, std::int64_t lo,
@@ -167,15 +163,20 @@ TyId TypeLowering::lowerPair(const NamedType& named, std::int64_t lo, std::int64
 }
 
 // A user named type: a contract, which only some positions may name, a name
-// that is not a type at all, or a record, a sum, or an opaque outside name
+// that is not a type at all, a record or a sum, or StoreError, which the
+// compiler brings in. A name nothing declares is a fault
 TyId TypeLowering::lowerDeclared(const NamedType& named, std::int64_t lo, std::int64_t hi) {
     const std::string& name = named.name;
     if (!named.args.empty()) {
         emit(lo, hi, quoted(name) + " takes no type arguments");
     }
     const GlobalEntry* global = resolved_.global(name);
-    if (global == nullptr) {
+    if (global == nullptr && name == storeErrorName) {
         return types_.named(name);
+    }
+    if (global == nullptr) {
+        emit(lo, hi, "unknown type " + quoted(name));
+        return types_.unknown();
     }
     if (global->kind == GlobalKind::Contract) {
         return lowerContract(named, *global, lo, hi);

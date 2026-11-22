@@ -108,7 +108,7 @@ export function resumeStepsSession(
 // ProgramRemedyShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const ProgramRemedyShapeHash: bigint = 0xafa477785f6fee52n;
+export const ProgramRemedyShapeHash: bigint = 0x05d011f668f80da4n;
 
 export interface ProgramRemedySignRequest {
   output_path?: string;  // the vow; no default is declared, so unset refuses at sign

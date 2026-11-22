@@ -110,9 +110,15 @@ static GeasStatus size_add(size_t* total, uint64_t n) {
     return GEAS_OK;
 }
 
+/* nodes counts every value the pass visits, once per path that reaches
+ * it, against GEAS_VALUE_MAX_NODES, the budget the boundary check holds, so
+ * nothing is written that a resume would refuse to read back. A value past
+ * it is GEAS_ERR_OOM, a limit on resources and not on types */
 static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
-                             size_t* total) {
+                             size_t* total, uint64_t* nodes) {
     if (depth > GEAS_WIRE_MAX_DEPTH) return GEAS_ERR_TYPE;
+    if (*nodes >= GEAS_VALUE_MAX_NODES) return GEAS_ERR_OOM;
+    (*nodes)++;
     GeasStatus st = size_add(total, 8); /* the u32 ty, u32 tag header */
     if (st != GEAS_OK) return st;
 
@@ -143,11 +149,12 @@ static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
         if (v->tag != 0) return GEAS_ERR_TYPE;
         if (!tag_crosses(v->as.list.elem_ty)) return GEAS_ERR_TYPE;
         if (v->as.list.len && !v->as.list.data) return GEAS_ERR_TYPE;
+        if (v->as.list.len > v->as.list.cap) return GEAS_ERR_TYPE;
         if ((st = size_add(total, 12)) != GEAS_OK) return st;
         const GeasValue* e = (const GeasValue*)v->as.list.data;
         for (uint64_t i = 0; i < v->as.list.len; i++) {
             if (e[i].ty != v->as.list.elem_ty) return GEAS_ERR_TYPE;
-            if ((st = encode_size(&e[i], depth + 1, total)) != GEAS_OK)
+            if ((st = encode_size(&e[i], depth + 1, total, nodes)) != GEAS_OK)
                 return st;
         }
         return GEAS_OK;
@@ -157,25 +164,31 @@ static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
         if (!tag_keyable(v->as.list.elem_ty)) return GEAS_ERR_TYPE;
         if (v->as.list.len % 2) return GEAS_ERR_TYPE;
         if (v->as.list.len && !v->as.list.data) return GEAS_ERR_TYPE;
+        if (v->as.list.len > v->as.list.cap) return GEAS_ERR_TYPE;
         if ((st = size_add(total, 12)) != GEAS_OK) return st;
         const GeasValue* e = (const GeasValue*)v->as.list.data;
         for (uint64_t i = 0; i < v->as.list.len; i++) {
             if (i % 2 == 0 && e[i].ty != v->as.list.elem_ty)
                 return GEAS_ERR_TYPE;
-            if ((st = encode_size(&e[i], depth + 1, total)) != GEAS_OK)
+            if ((st = encode_size(&e[i], depth + 1, total, nodes)) != GEAS_OK)
                 return st;
         }
-        return GEAS_OK;
+        /* The decoder refuses a map with a key twice, so the encoder never
+         * writes one: each key was checked above, the pairs are checked
+         * against each other here */
+        return geas_rt_map_keys_distinct(e, v->as.list.len / 2);
     }
     case GEAS_TY_TUPLE:
     case GEAS_TY_RECORD:
     case GEAS_TY_SUM: {
+        /* A fixed arity holds data behind any length; its capacity is never
+         * read, here, by the decoder, or by the boundary check */
         if (v->ty != GEAS_TY_SUM && v->tag != 0) return GEAS_ERR_TYPE;
         if (v->as.list.len && !v->as.list.data) return GEAS_ERR_TYPE;
         if ((st = size_add(total, 8)) != GEAS_OK) return st;
         const GeasValue* e = (const GeasValue*)v->as.list.data;
         for (uint64_t i = 0; i < v->as.list.len; i++) {
-            if ((st = encode_size(&e[i], depth + 1, total)) != GEAS_OK)
+            if ((st = encode_size(&e[i], depth + 1, total, nodes)) != GEAS_OK)
                 return st;
         }
         return GEAS_OK;
@@ -184,7 +197,7 @@ static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
         if (v->tag > 1) return GEAS_ERR_TYPE;
         if (v->tag == 0) return v->as.box ? GEAS_ERR_TYPE : GEAS_OK;
         if (!v->as.box) return GEAS_ERR_TYPE;
-        return encode_size((const GeasValue*)v->as.box, depth + 1, total);
+        return encode_size((const GeasValue*)v->as.box, depth + 1, total, nodes);
     case GEAS_TY_RESULT:
         /* An arm with no box is the Ok or Err of Unit a body may answer,
          * written as the boxed Unit it stands for, one header */
@@ -193,7 +206,7 @@ static GeasStatus encode_size(const GeasValue* v, uint32_t depth,
             if (depth + 1 > GEAS_WIRE_MAX_DEPTH) return GEAS_ERR_TYPE;
             return size_add(total, 8);
         }
-        return encode_size((const GeasValue*)v->as.box, depth + 1, total);
+        return encode_size((const GeasValue*)v->as.box, depth + 1, total, nodes);
     default:
         /* GEAS_TY_INSTANCE, GEAS_TY_PLEDGE_REF, and anything unknown. */
         return GEAS_ERR_TYPE;
@@ -282,7 +295,9 @@ GeasStatus geas_wire_encode_value(const GeasValue* v, uint8_t* buf, size_t cap,
                                 size_t* need) {
     if (!v || !need) return GEAS_ERR_TYPE;
     size_t total = 0;
-    GeasStatus st = encode_size(v, 1, &total);
+    uint64_t nodes = 0;
+    GeasStatus st = encode_size(v, 1, &total, &nodes);
+    if (st == GEAS_ERR_OOM && nodes >= GEAS_VALUE_MAX_NODES) *need = 0;
     if (st != GEAS_OK) return st;
     *need = total;
     if (!buf || cap < total) return GEAS_ERR_OOM;
@@ -299,6 +314,13 @@ GeasStatus geas_wire_encode_value(const GeasValue* v, uint8_t* buf, size_t cap,
 typedef struct WireCur {
     const uint8_t* p;
     size_t left;
+    /* The GeasValue slots the decode may still allocate. Every slot a
+     * container or a box allocates holds a value whose header is 8 bytes of
+     * the input no other slot shares, so one buffer of len bytes never needs
+     * more than len / 8 slots in all. Charging every allocation against that
+     * keeps the memory a decode can claim linear in its input, however the
+     * containers nest */
+    uint64_t slots;
 } WireCur;
 
 static int take(WireCur* c, size_t n, const uint8_t** out) {
@@ -314,6 +336,14 @@ static int take(WireCur* c, size_t n, const uint8_t** out) {
  * 8 bytes each is a lie, refused before a single byte is allocated. */
 static int count_plausible(const WireCur* c, uint64_t count) {
     return count <= c->left / 8;
+}
+
+/* Charges count slots against the budget, refusing a count past what is left
+ * of it before a single slot is allocated */
+static int slots_take(WireCur* c, uint64_t count) {
+    if (count > c->slots) return 0;
+    c->slots -= count;
+    return 1;
 }
 
 static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
@@ -380,7 +410,7 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
         uint64_t count = get_u64(h);
         uint32_t elem_ty = get_u32(h + 8);
         if (!tag_crosses(elem_ty)) return GEAS_ERR_TYPE;
-        if (!count_plausible(c, count)) return GEAS_ERR_TYPE;
+        if (!count_plausible(c, count) || !slots_take(c, count)) return GEAS_ERR_TYPE;
         GeasStatus st = geas_list_new(owner, elem_ty, count, out);
         if (st != GEAS_OK) return st;
         for (uint64_t i = 0; i < count; i++) {
@@ -395,7 +425,7 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
     case GEAS_TY_TUPLE: {
         if (tag != 0 || !take(c, 8, &h)) return GEAS_ERR_TYPE;
         uint64_t arity = get_u64(h);
-        if (!count_plausible(c, arity)) return GEAS_ERR_TYPE;
+        if (!count_plausible(c, arity) || !slots_take(c, arity)) return GEAS_ERR_TYPE;
         GeasStatus st = geas_tuple_new(owner, arity, out);
         if (st != GEAS_OK) return st;
         GeasValue* slots = (GeasValue*)out->as.list.data;
@@ -410,7 +440,7 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
         if (ty == GEAS_TY_RECORD && tag != 0) return GEAS_ERR_TYPE;
         if (!take(c, 8, &h)) return GEAS_ERR_TYPE;
         uint64_t count = get_u64(h);
-        if (!count_plausible(c, count)) return GEAS_ERR_TYPE;
+        if (!count_plausible(c, count) || !slots_take(c, count)) return GEAS_ERR_TYPE;
         GeasValue* fields = NULL;
         if (count) {
             fields = (GeasValue*)geas_bytes(owner,
@@ -433,7 +463,7 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
         uint32_t key_ty = get_u32(h + 8);
         if (slots % 2) return GEAS_ERR_TYPE;
         if (!tag_keyable(key_ty)) return GEAS_ERR_TYPE;
-        if (!count_plausible(c, slots)) return GEAS_ERR_TYPE;
+        if (!count_plausible(c, slots) || !slots_take(c, slots)) return GEAS_ERR_TYPE;
         *out = geas_map_new(owner, key_ty);
         GeasValue* data = NULL;
         if (slots) {
@@ -457,6 +487,7 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
     case GEAS_TY_OPTION: {
         if (tag > 1) return GEAS_ERR_TYPE;
         if (tag == 0) return GEAS_OK; /* None: eight bytes of header only */
+        if (!slots_take(c, 1)) return GEAS_ERR_TYPE;
         GeasValue* box = geas_box(owner);
         if (!box) return GEAS_ERR_OOM;
         out->as.box = box;
@@ -464,6 +495,7 @@ static GeasStatus decode_rec(GeasContract* owner, WireCur* c, uint32_t depth,
     }
     case GEAS_TY_RESULT: {
         if (tag > 1) return GEAS_ERR_TYPE;
+        if (!slots_take(c, 1)) return GEAS_ERR_TYPE;
         GeasValue* box = geas_box(owner);
         if (!box) return GEAS_ERR_OOM;
         out->as.box = box;
@@ -481,7 +513,7 @@ GeasStatus geas_wire_decode_value(GeasContract* owner, const uint8_t* buf,
     if (consumed) *consumed = 0;
     if (!owner || !out) return GEAS_ERR_TYPE;
     if (!buf && len) return GEAS_ERR_TYPE;
-    WireCur c = { buf, len };
+    WireCur c = { buf, len, len / 8 };
     GeasStatus st = decode_rec(owner, &c, 1, out);
     if (st != GEAS_OK) {
         memset(out, 0, sizeof(*out));

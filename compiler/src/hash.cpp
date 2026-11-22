@@ -13,6 +13,13 @@ constexpr std::uint64_t digitMask = 0xF;
 constexpr std::string_view hexDigits = "0123456789abcdef";
 constexpr std::string_view manglePrefix = "__geas_ash_";
 
+// One name with its byte length in front, so the name ends where the length
+// says and no underscore inside it can run into the next segment
+void appendLengthPrefixed(std::string& out, std::string_view name) {
+    out.append(std::to_string(name.size()));
+    out.append(name);
+}
+
 }  // namespace
 
 std::uint64_t fnv1a64(std::string_view bytes) {
@@ -35,9 +42,9 @@ std::string hashHex16(std::uint64_t hash) {
 std::string mangleSymbol(std::string_view contract, std::string_view symbol, std::uint64_t sigHash,
                          std::int64_t version) {
     std::string out{manglePrefix};
-    out.append(contract);
+    appendLengthPrefixed(out, contract);
     out.push_back('_');
-    out.append(symbol);
+    appendLengthPrefixed(out, symbol);
     out.push_back('_');
     out.append(hashHex16(sigHash));
     out.append("_v");

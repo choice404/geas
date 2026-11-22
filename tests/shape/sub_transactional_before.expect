@@ -1,0 +1,3 @@
+// shape Bank v1: contract Bank;vow dsn:S;pledge debit:(I)->R(V,I);schema Accounts:id:I,balance:F;sub Move:debit;
+#define GEAS_HASH_Bank 0x728f088b43683cc0ULL
+#define GEAS_MANGLED_Bank_debit "__geas_ash_4Bank_5debit_c796594399fcc0bc_v1"

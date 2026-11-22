@@ -1,6 +1,6 @@
 Courses [
     Course "OrderSaga" {
-        hash: 0x7e1109ece4727240,
+        hash: 0xbb371a72988aed8b,
         entry: 0,
         slots: [
             Slot(0) "$hidden0": Card (temporary),

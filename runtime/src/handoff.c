@@ -26,8 +26,9 @@
  * publishes. A build that fails leaves the row untouched.
  *
  * Locks. The request takes only cancel_mu, a leaf. The release takes the
- * instance lock once, and waits on remedy_cv under it for another thread's
- * pass the way break waits. The claim holds no instance lock while it talks
+ * instance lock once, waits on delivery_cv under it for another thread's
+ * event delivery, and waits on remedy_cv for another thread's pass the way
+ * break waits. The claim holds no instance lock while it talks
  * to the store; the runtime lock is taken alone to reserve a table slot, and
  * the publish takes the instance lock above the runtime lock, the order sign
  * and resume already keep. */
@@ -99,6 +100,11 @@ static GeasStatus release_last_row(GeasContract* c) {
 
 GeasStatus geas_rt_release_locked(GeasContract* c) {
     GeasFlow* f = &c->flow;
+    /* This thread's own pass carries the release at its end */
+    if (f->remedy_active && pthread_equal(f->remedy_owner, pthread_self())) {
+        f->release_pending = 1;
+        return GEAS_OK;
+    }
     /* A pass already under way on another thread finishes first, as for a
      * break; the release starts none of its own */
     while (f->remedy_active) pthread_cond_wait(&f->remedy_cv, &c->mu);
@@ -120,11 +126,13 @@ GeasStatus geas_rt_release_locked(GeasContract* c) {
     return GEAS_OK;
 }
 
+/* A failure goes to a release caller still inside its call and to nobody
+ * else: a break never answers for a release */
 void geas_rt_release_carry(GeasContract* c) {
     GeasStatus st = geas_rt_release_locked(c);
     if (st == GEAS_OK) return;
-    if (__atomic_load_n(&c->break_callers, __ATOMIC_SEQ_CST)) {
-        __atomic_store_n(&c->event_cancel_status, st, __ATOMIC_SEQ_CST);
+    if (__atomic_load_n(&c->release_callers, __ATOMIC_SEQ_CST)) {
+        __atomic_store_n(&c->release_status, st, __ATOMIC_SEQ_CST);
         return;
     }
     fprintf(stderr, "[libgeasrt] deferred release of %s failed: %d\n", c->desc->name, st);
@@ -151,18 +159,25 @@ static GeasStatus release_begin(GeasContract* c) {
 
 GeasStatus geas_contract_release(GeasContract* c) {
     if (!c) return GEAS_ERR_TYPE;
-    if (geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
+    /* A hook, a body, or a write back meeting another delivery is refused;
+     * a host thread goes on and waits it out under the lock */
+    if (geas_rt_events_blocked(c) && !geas_rt_host_may_wait()) return GEAS_ERR_STATE;
     if (geas_rt_cancel_bits(c) & CANCEL_GONE) return GEAS_ERR_STATE;
-    __atomic_add_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
+    __atomic_add_fetch(&c->release_callers, 1, __ATOMIC_SEQ_CST);
     /* Published before the lock, so a body that polls returns and a retry
      * wait wakes while this call waits for the lock */
     geas_rt_publish_cancel(c, CANCEL_RELEASE);
     geas_rt_lock(c);
+    geas_rt_await_delivery(c, GEAS_AWAIT_ALL);
     GeasStatus st = release_begin(c);
-    geas_rt_unlock(c);
-    __atomic_sub_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
-    GeasStatus deferred = __atomic_exchange_n(&c->event_cancel_status, GEAS_OK,
+    /* Read and depart under the lock geas_rt_release_carry answers under, so
+     * a carried failure is either read here or written to stderr. The
+     * departure is this call's last write to the instance, which
+     * geas_contract_free may take once the count reads zero */
+    GeasStatus deferred = __atomic_exchange_n(&c->release_status, GEAS_OK,
                                               __ATOMIC_SEQ_CST);
+    __atomic_sub_fetch(&c->release_callers, 1, __ATOMIC_SEQ_CST);
+    geas_rt_unlock(c);
     if (st == GEAS_OK && deferred != GEAS_OK) st = deferred;
     return st;
 }
@@ -194,23 +209,26 @@ static GeasValue int_param(int64_t i) {
     return v;
 }
 
-/* Takes the row the build read, matched on every column, one statement and
- * so one transaction of its own. A row another claimer took, or one parked
- * again since the read, matches nothing, and *is_taken stays 0. A column the
- * reader saw as an empty blob may be NULL in an old row, so the blobs
- * compare through coalesce */
-static GeasStatus claim_take(const char* dsn, const char* key, const GeasResumed* r,
-                             int* is_taken) {
+/* Takes the row the build read, matched on every column and on the write's
+ * generation, one statement and so one transaction of its own. A row another
+ * claimer took, or one parked again since the read, the same bytes parked
+ * again by whoever claimed it among them, matches nothing, and *is_taken
+ * stays 0. A column the reader saw as an empty blob may be NULL in an old
+ * row, so the blobs compare through coalesce, and a row from before the
+ * generation column reads generation 0 on both sides */
+GeasStatus geas_rt_claim_take(const char* dsn, const char* key, const GeasResumed* r,
+                              int* is_taken) {
     *is_taken = 0;
     GeasStore* s = NULL;
     GeasStatus st = geas_store_open(dsn, &s);
     if (st != GEAS_OK) return st;
     const GeasParkRow* row = &r->row;
-    GeasValue params[11] = {
+    GeasValue params[12] = {
         text_param(key), blob_param(&r->contract), int_param(row->version),
         int_param((int64_t)row->shape_hash), int_param(row->state),
         int_param(row->signed_at), blob_param(&row->vows), blob_param(&row->latches),
         blob_param(&row->errs), blob_param(&row->subtxn), blob_param(&row->flow),
+        int_param(row->gen),
     };
     uint64_t affected = 0;
     st = geas_store_exec_params(s,
@@ -218,8 +236,8 @@ static GeasStatus claim_take(const char* dsn, const char* key, const GeasResumed
         "AND shape_hash = ?4 AND state = ?5 AND signed_at = ?6 "
         "AND coalesce(vows, x'') = ?7 AND coalesce(latches, x'') = ?8 "
         "AND coalesce(errs, x'') = ?9 AND coalesce(subtxn, x'') = ?10 "
-        "AND coalesce(flow, x'') = ?11",
-        params, 11, &affected);
+        "AND coalesce(flow, x'') = ?11 AND coalesce(gen, 0) = ?12",
+        params, 12, &affected);
     geas_store_close(s);
     if (st == GEAS_OK) *is_taken = affected == 1;
     return st;
@@ -230,15 +248,14 @@ static GeasStatus claim_take(const char* dsn, const char* key, const GeasResumed
 static GeasStatus claim_reserve(GeasRuntime* rt) {
     GeasStatus st = GEAS_OK;
     pthread_mutex_lock(&rt->lock);
-    if (rt->ninstances + rt->nreserved >= GEAS_MAX_INSTANCES) st = GEAS_ERR_OOM;
-    else rt->nreserved++;
+    st = geas_rt_instance_reserve(rt);
     pthread_mutex_unlock(&rt->lock);
     return st;
 }
 
 static void claim_unreserve(GeasRuntime* rt) {
     pthread_mutex_lock(&rt->lock);
-    rt->nreserved--;
+    geas_rt_instance_unreserve(rt);
     pthread_mutex_unlock(&rt->lock);
 }
 
@@ -256,7 +273,7 @@ static GeasStatus claim_round(GeasRuntime* rt, const char* dsn, const char* key,
         return st;
     }
     int is_taken = 0;
-    st = claim_take(dsn, key, &r, &is_taken);
+    st = geas_rt_claim_take(dsn, key, &r, &is_taken);
     if (st != GEAS_OK || !is_taken) {
         claim_unreserve(rt);
         geas_rt_resume_discard(&r);

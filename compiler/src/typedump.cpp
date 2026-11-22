@@ -10,6 +10,7 @@
 //   signal moved(1) -> none      none is GEAS_NO_TYPE
 //   vow limit 1
 //   remedy undo(0) -> 5
+//   slot 0 2                     a course slot and its index
 #include "emittext.hpp"
 #include "typetable.hpp"
 
@@ -68,6 +69,10 @@ void appendItems(std::string& out, const ContractShape& shape, const ContractTyp
     }
     for (std::size_t i = 0; i < shape.remedies.size(); ++i) {
         appendItem(out, "remedy", shape.remedies[i].decl->name, types.remedies[i]);
+    }
+    for (std::size_t i = 0; i < types.courseSlots.size(); ++i) {
+        out.append(joined("slot ", decimal(static_cast<std::int64_t>(i)), " ",
+                          indexText(types.courseSlots[i]), "\n"));
     }
 }
 

@@ -113,7 +113,7 @@ step_3:
         t23.as.i = 2;
         GeasValue t24 = {0};
         t24.ty = GEAS_TY_INT;
-        t24.as.i = t21.as.i * t23.as.i;
+        if (__builtin_mul_overflow(t21.as.i, t23.as.i, &t24.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         f->slots[6] = t24;
     }
     f->step = 4;
@@ -304,10 +304,10 @@ label_0:
     {
         GeasValue t63 = {0};
         t63.ty = GEAS_TY_INT;
-        t63.as.i = f->slots[1].as.i + f->slots[3].as.i;
+        if (__builtin_add_overflow(f->slots[1].as.i, f->slots[3].as.i, &t63.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         GeasValue t64 = {0};
         t64.ty = GEAS_TY_INT;
-        t64.as.i = t63.as.i + f->slots[5].as.i;
+        if (__builtin_add_overflow(t63.as.i, f->slots[5].as.i, &t64.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         f->slots[25] = t64;
     }
     {
@@ -361,9 +361,9 @@ static const GeasVowDesc k4_Flow_vows[] = {
 };
 
 static const GeasPledgeDesc k4_Flow_pledges[] = {
-    { "first", "__geas_ash_Flow_first_e91432aef8c897b2_v1", 1, NULL, 0 },
-    { "second", "__geas_ash_Flow_second_1da73ef4d721fbeb_v1", 1, NULL, -1 },
-    { "third", "__geas_ash_Flow_third_0e2ba22315b89a85_v1", 0, NULL, -1 },
+    { "first", "__geas_ash_4Flow_5first_e91432aef8c897b2_v1", 1, NULL, 0 },
+    { "second", "__geas_ash_4Flow_6second_1da73ef4d721fbeb_v1", 1, NULL, -1 },
+    { "third", "__geas_ash_4Flow_5third_0e2ba22315b89a85_v1", 0, NULL, -1 },
     { "approved", NULL, 1, NULL, -1 },
     { "rejected", NULL, 0, NULL, -1 },
     { "moved", NULL, 2, NULL, -1 },
@@ -431,6 +431,8 @@ static const uint8_t k4_Flow_kinds[] = {
 
 static const uint32_t k4_Flow_type_kids_1[] = { 0, 2 };
 static const uint32_t k4_Flow_type_kids_4[] = { 0 };
+static const uint32_t k4_Flow_type_kids_6[] = { 3, 0 };
+static const uint32_t k4_Flow_type_kids_7[] = { 3 };
 
 static const uint32_t k4_Flow_type_fields_2_0[] = { 3 };
 static const uint32_t k4_Flow_type_fields_2_2[] = { 0 };
@@ -447,6 +449,8 @@ static const GeasTypeNode k4_Flow_types[] = {
     { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
     { GEAS_TY_OPTION, 1, k4_Flow_type_kids_4, NULL, 0, NULL },
     { GEAS_TY_UNIT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_TUPLE, 2, k4_Flow_type_kids_6, NULL, 0, NULL },
+    { GEAS_TY_OPTION, 1, k4_Flow_type_kids_7, NULL, 0, NULL },
 };
 
 static const uint32_t k4_Flow_item_params_0[] = { 0 };
@@ -465,8 +469,10 @@ static const GeasItemTypes k4_Flow_item_types[] = {
 
 static const uint32_t k4_Flow_vow_types[] = { 0 };
 
+static const uint32_t k4_Flow_course_slot_types[] = { 1, 0, 1, 0, 4, 0, 0, 5, 3, 3, 5, 5, 6, 6, 7, 7, 0, 3, 5, 6, 3, 3, 3, 6, 3, 0, 0, 0, 1 };
+
 static const GeasContractDesc k4_Flow = {
-    "Flow", 0xb421a32f1492afa4ULL,
+    "Flow", 0x8fe20527ac68b37eULL,
     1, 6, k4_Flow_pledges,
     1, k4_Flow_vows,
     1, k4_Flow_subs, 12,
@@ -478,10 +484,11 @@ static const GeasContractDesc k4_Flow = {
     k4_Flow_kinds, NULL, NULL,
     0, NULL,
     0,
-    .course_fn = k4_Flow_course, .course_nslots = 29, .course_hash = 0x12ed7a77e1c2d779ULL,
-    .ntypes = 6, .types = k4_Flow_types,
+    .course_fn = k4_Flow_course, .course_nslots = 29, .course_hash = 0x48f69cebb4d691deULL,
+    .ntypes = 8, .types = k4_Flow_types,
     .item_types = k4_Flow_item_types, .vow_types = k4_Flow_vow_types,
     .remedy_types = NULL,
+    .course_slot_types = k4_Flow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

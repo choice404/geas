@@ -5,24 +5,12 @@ compiler/tests/codegen/src/faults_body.geas: 16:5: error: codegen: not yet suppo
 compiler/tests/codegen/src/faults_body.geas: 23:27: error: codegen: the version attribute must be an integer literal
   contract Faulty [version: "two"] {
                             ^~~~~
-compiler/tests/codegen/src/faults_body.geas: 27:5: error: codegen: not yet supported: pledge attributes in a compiled module
-      pledge tagged(x: Int) -> Result<Int, Int> [symbol: "tagged_sym"] {
-      ^~~~~~~~~~~~~
-compiler/tests/codegen/src/faults_body.geas: 33:17: error: codegen: not yet supported: a first class pledge value in a pledge body
-          let f = o.get
-                  ^~~~~
-compiler/tests/codegen/src/faults_body.geas: 34:16: error: codegen: not yet supported: a call in a pledge body
-          return f(x)
-                 ^~~~
-compiler/tests/codegen/src/faults_body.geas: 38:17: error: codegen: not yet supported: signing the internal contract 'Secret' in a pledge body
+compiler/tests/codegen/src/faults_body.geas: 28:17: error: codegen: not yet supported: signing the internal contract 'Secret' in a pledge body
           let s = Secret.sign()
                   ^~~~~~~~~~~~~
-compiler/tests/codegen/src/faults_body.geas: 39:16: error: codegen: not yet supported: a call in a pledge body
+compiler/tests/codegen/src/faults_body.geas: 29:16: error: codegen: not yet supported: a call in a pledge body
           return s.peek(x)
                  ^~~~~~~~~
-compiler/tests/codegen/src/faults_body.geas: 43:17: error: codegen: not yet supported: '%' on Float
-          let r = x % 2.0
-                  ^~~~~~~
 compiler/tests/codegen/src/faults_body.geas: 24:5: error: codegen: not yet supported: a vow of this type in a compiled module
       vow pair: Pair
       ^~~~~~~~

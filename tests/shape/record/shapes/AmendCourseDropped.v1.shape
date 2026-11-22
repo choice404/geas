@@ -1,7 +1,7 @@
-geas shape 2
+geas shape 3
 contract AmendCourseDropped
 version 1
 hash 0x89d504a618a07b8a
-course 0x8aa5e5adeedf07a8
+course 0xaeda96d9c6bc5f82
 shape contract AmendCourseDropped;pledge step:(I)->R(I,S);course;
 pledge step (I)->R(I,S) I

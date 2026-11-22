@@ -2,11 +2,11 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k4_Shop_pledges[] = {
-    { "authorize", "__geas_ash_Shop_authorize_6b898bccc14bc9bf_v1", 1, NULL, 0 },
-    { "capture", "__geas_ash_Shop_capture_bb54dfb8b90dc41d_v1", 1, NULL, 0 },
-    { "reserve", "__geas_ash_Shop_reserve_8d0d444673e235b8_v1", 1, NULL, -1 },
-    { "ship", "__geas_ash_Shop_ship_c218b655ee1b7462_v1", 0, NULL, -1 },
-    { "review", "__geas_ash_Shop_review_0e2ba22315b89a85_v1", 0, NULL, 1 },
+    { "authorize", "__geas_ash_4Shop_9authorize_6b898bccc14bc9bf_v1", 1, NULL, 0 },
+    { "capture", "__geas_ash_4Shop_7capture_bb54dfb8b90dc41d_v1", 1, NULL, 0 },
+    { "reserve", "__geas_ash_4Shop_7reserve_8d0d444673e235b8_v1", 1, NULL, -1 },
+    { "ship", "__geas_ash_4Shop_4ship_c218b655ee1b7462_v1", 0, NULL, -1 },
+    { "review", "__geas_ash_4Shop_6review_0e2ba22315b89a85_v1", 0, NULL, 1 },
     { "delivered", NULL, 0, NULL, -1 },
 };
 
@@ -108,7 +108,7 @@ static const uint32_t k4_Shop_retry_on_remedy_0[] = {
 };
 
 static const GeasRemedyDesc k4_Shop_remedies[] = {
-    { "refund", "__geas_ash_Shop_refund_476b7004a9825223_v1", 1, 1, NULL, { .within_ms = 3600000, .retry_count = 10, .retry_every_ms = 60000, .retry_backoff = 1.0, .retry_cap_ms = 3600000, .nretry_on = 1, .retry_on = k4_Shop_retry_on_remedy_0 } },
+    { "refund", "__geas_ash_4Shop_6refund_476b7004a9825223_v1", 1, 1, NULL, { .within_ms = 3600000, .retry_count = 10, .retry_every_ms = 60000, .retry_backoff = 1.0, .retry_cap_ms = 3600000, .nretry_on = 1, .retry_on = k4_Shop_retry_on_remedy_0 } },
 };
 
 static const uint32_t k4_Shop_type_kids_1[] = { 2, 4 };
@@ -158,7 +158,7 @@ static const GeasItemTypes k4_Shop_remedy_types[] = {
 };
 
 static const GeasContractDesc k4_Shop = {
-    "Shop", 0xb1480b46753cb1a3ULL,
+    "Shop", 0x09d52aa421de1210ULL,
     1, 6, k4_Shop_pledges,
     0, NULL,
     2, k4_Shop_subs, 10,

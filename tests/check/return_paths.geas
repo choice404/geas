@@ -1,0 +1,56 @@
+// A body whose return type is not Unit returns on every path: falling off
+// the end, an if with no else, an if or a match with one branch that falls
+// through, a loop that may end, and a while true a break leaves are all
+// refused, for a clause, a pledge, and a remedy alike
+record R {
+    name: String
+    xs: List<Int>
+}
+
+PayError is either Declined
+
+contract A {
+    clause mk(x: Int) -> R {
+        x
+    }
+    clause halfIf(x: Int) -> Int {
+        if x > 0 {
+            return 1
+        }
+    }
+    clause oneBranch(x: Int) -> Int {
+        if x > 0 {
+            return 1
+        } else {
+            let y = x
+        }
+    }
+    clause oneArm(x: Option<Int>) -> Int {
+        match x {
+            Some(n) -> { return n }
+            None -> { let z = 0 }
+        }
+    }
+    clause forLoop(xs: List<Int>) -> Int {
+        for x in xs {
+            return x
+        }
+    }
+    clause broken() -> Int {
+        while true {
+            break
+        }
+    }
+    clause guarded(x: Int) -> Int {
+        while x > 0 {
+            return x
+        }
+    }
+    pledge p() -> Option<Int> {
+        let r = mk(5)
+    }
+    pledge take() -> Result<Int, PayError>
+    remedy undo for take(v: Int) -> Result<Unit, PayError> {
+        let w = v
+    }
+}

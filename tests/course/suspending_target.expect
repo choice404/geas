@@ -1,6 +1,6 @@
 Courses [
     Course "Flow" {
-        hash: 0xee32573ed7850d2c,
+        hash: 0x745f439e37176731,
         entry: 0,
         slots: [
             Slot(0) "values": List<Int> (local, mut),

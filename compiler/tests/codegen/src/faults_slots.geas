@@ -1,0 +1,146 @@
+// Course slots the runtime could not start: every slot begins at the
+// smallest value of its type when an instance signs, so a type with no
+// finite value, and one whose smallest value holds more nodes than a slot
+// may start with, are build faults. R0 doubles at each of its 13 levels, so
+// its smallest value holds 16383 nodes, past the 4096 a slot may hold. A sum
+// and a Result start at the variant or arm that nests least, R0 here over
+// the 22 levels of K0, though K0 holds fewer nodes
+
+record R0 {
+    a: R1
+    b: R1
+}
+record R1 {
+    a: R2
+    b: R2
+}
+record R2 {
+    a: R3
+    b: R3
+}
+record R3 {
+    a: R4
+    b: R4
+}
+record R4 {
+    a: R5
+    b: R5
+}
+record R5 {
+    a: R6
+    b: R6
+}
+record R6 {
+    a: R7
+    b: R7
+}
+record R7 {
+    a: R8
+    b: R8
+}
+record R8 {
+    a: R9
+    b: R9
+}
+record R9 {
+    a: R10
+    b: R10
+}
+record R10 {
+    a: R11
+    b: R11
+}
+record R11 {
+    a: R12
+    b: R12
+}
+record R12 {
+    a: R13
+    b: R13
+}
+record R13 {
+    z: Int
+}
+
+record K0 {
+    next: K1
+}
+record K1 {
+    next: K2
+}
+record K2 {
+    next: K3
+}
+record K3 {
+    next: K4
+}
+record K4 {
+    next: K5
+}
+record K5 {
+    next: K6
+}
+record K6 {
+    next: K7
+}
+record K7 {
+    next: K8
+}
+record K8 {
+    next: K9
+}
+record K9 {
+    next: K10
+}
+record K10 {
+    next: K11
+}
+record K11 {
+    next: K12
+}
+record K12 {
+    next: K13
+}
+record K13 {
+    next: K14
+}
+record K14 {
+    next: K15
+}
+record K15 {
+    next: K16
+}
+record K16 {
+    next: K17
+}
+record K17 {
+    next: K18
+}
+record K18 {
+    next: K19
+}
+record K19 {
+    next: K20
+}
+record K20 {
+    z: Int
+}
+
+Pick is either Wide(w: R0) or Narrow(k: K0)
+
+record Loop {
+    next: Loop
+}
+
+contract Slots {
+    signal wide(v: R0)
+    signal endless(v: Loop)
+    signal picked(v: Pick)
+    signal armed(v: Result<K0, R0>)
+    course {
+        let w = await wide
+        let e = await endless
+        let p = await picked
+        let a = await armed
+    }
+}

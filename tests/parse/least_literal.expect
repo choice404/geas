@@ -1,0 +1,97 @@
+File {
+    imports: [],
+    decls: [
+        Contract {
+            internal: false,
+            name: "Least",
+            attrs: [
+                Attr {
+                    key: "floor",
+                    value: Int(-9223372036854775808),
+                },
+            ],
+            members: [
+                Vow {
+                    name: "least",
+                    ty: Named("Int"),
+                    init: Int(-9223372036854775808),
+                },
+                Clause {
+                    name: "pick",
+                    params: [
+                        Field {
+                            name: "x",
+                            ty: Named("Int"),
+                        },
+                    ],
+                    ret: Named("Int"),
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Match {
+                                    scrutinee: Ident("x"),
+                                    arms: [
+                                        Arm {
+                                            pat: Lit(Int(-9223372036854775808)),
+                                            body: Int(1),
+                                        },
+                                        Arm {
+                                            pat: Lit(Unary(
+                                                Neg,
+                                                Int(1),
+                                            )),
+                                            body: Int(2),
+                                        },
+                                        Arm {
+                                            pat: Wildcard,
+                                            body: Int(-9223372036854775808),
+                                        },
+                                    ],
+                                },
+                            ),
+                        ],
+                    },
+                },
+                Clause {
+                    name: "span",
+                    params: [],
+                    ret: Named("Duration"),
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Duration(-9223372036854775808),
+                            ),
+                        ],
+                    },
+                },
+                Clause {
+                    name: "size",
+                    params: [],
+                    ret: Named("Int"),
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Size(-9223372036854775808),
+                            ),
+                        ],
+                    },
+                },
+                Clause {
+                    name: "twice",
+                    params: [],
+                    ret: Named("Int"),
+                    body: Block {
+                        stmts: [
+                            Return(
+                                Unary(
+                                    Neg,
+                                    Int(-9223372036854775808),
+                                ),
+                            ),
+                        ],
+                    },
+                },
+            ],
+        },
+    ],
+}

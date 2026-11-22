@@ -1,0 +1,18 @@
+// The foreign binding refused: an abi other than "c", a symbol that is no C
+// identifier, a symbol with no abi and an abi with no symbol, the pair on a
+// pledge and a remedy that carry a body, the pair on a signal, and a
+// symbol that is not a String
+contract Foreign {
+    pledge rust() -> Unit [abi: "rust", symbol: "rust_fn"]
+    pledge dashed() -> Unit [abi: "c", symbol: "not-a-name"]
+    pledge lonely() -> Unit [symbol: "lonely_fn"]
+    pledge headless() -> Unit [abi: "c"]
+    pledge bodied() -> Option<Int> [abi: "c", symbol: "bodied_fn"] {
+        return Some(1)
+    }
+    signal heard() [abi: "c", symbol: "heard_fn"]
+    pledge numbered() -> Unit [abi: "c", symbol: 7]
+    pledge charge() -> Result<Int, Int>
+    remedy undo for charge(value: Int) -> Unit [abi: "c", symbol: "undo_fn"] {
+    }
+}

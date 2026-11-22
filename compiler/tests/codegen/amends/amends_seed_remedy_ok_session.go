@@ -18,7 +18,7 @@ import (
 // AmendSeedRemedyShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const AmendSeedRemedyShapeHash uint64 = 0xec16f4d1753ce765
+const AmendSeedRemedyShapeHash uint64 = 0xaad096debfee8a1e
 
 // AmendSeedRemedySession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server
@@ -81,3 +81,12 @@ func ResumeAmendSeedRemedySession(ctx context.Context, c AmendSeedRemedyClient, 
 
 // Close ends the session; the server breaks the instance and drops it.
 func (s *AmendSeedRemedySession) Close() { s.cancel() }
+
+// SignalReady hands the ready signal to this session's instance, the
+// request's instance id set from the signature. A refused delivery, an
+// early one or one past its deadline, comes back as the call's error.
+func (s *AmendSeedRemedySession) SignalReady(ctx context.Context, c AmendSeedRemedyClient, req *SignalReadyRequest) error {
+	req.InstanceId = s.Signed.InstanceId
+	_, err := c.SignalReady(ctx, req)
+	return err
+}

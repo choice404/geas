@@ -1,0 +1,8 @@
+// A local's name is not part of the frame, which keeps its slots by index
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    course {
+        let first = visit(1)?
+        visit(first)?
+    }
+}

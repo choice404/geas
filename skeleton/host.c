@@ -184,7 +184,7 @@ int main(void) {
         return fail("iname entry for greet carries the wrong facts");
     }
     GeasInameEntry miss;
-    if (geas_iname_lookup(rt, "__geas_ash_Greeter_greet_0000000000000000_v1",
+    if (geas_iname_lookup(rt, "__geas_ash_7Greeter_5greet_0000000000000000_v1",
                          &miss) != GEAS_ERR_NAME) {
         geas_runtime_shutdown(rt);
         return fail("a wrong mangled name did not report GEAS_ERR_NAME");

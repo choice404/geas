@@ -7,8 +7,8 @@
  *
  * The columns are the ones a plain resume reads: the vows back to back, one
  * latch byte per item, one presence byte and an optional Err payload per
- * item, one fate byte per subcontract, and the workflow blob of version 2,
- * 3, or 4, or none at all for a row from before the workflow state. The
+ * item, one fate byte per subcontract, and the workflow blob of version 2
+ * through 5, or none at all for a row from before the workflow state. The
  * checks are the ones a plain resume runs that need no descriptor: latch,
  * presence, and fate bytes in range, an open episode refused, a lapse only
  * on a broken latch, a due time only with attempts saved, a course state
@@ -192,12 +192,20 @@ static GeasStatus decode_subtxn(const GeasAmendDesc* a, const GeasParkRow* row,
 
 /* ---- the workflow blob ---- */
 
+/* An eligibility stamp as a blob of this version wrote it: through version
+ * 4 any negative stamp is the item not eligible yet, from version 5 that is
+ * GEAS_NOT_ELIGIBLE and every other stamp is verbatim */
+static int64_t read_stamp(int64_t stamp, uint32_t version) {
+    if (version <= 4 && stamp < 0) return GEAS_NOT_ELIGIBLE;
+    return stamp;
+}
+
 static GeasStatus decode_items(GeasContract* c, const GeasAmendDesc* a, RowIn* in,
                                uint32_t version, GeasAmendImage* img) {
     uint32_t n = in_u32(in);
     if (in->bad || n != a->nold_items) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < n; i++) {
-        img->eligible_ms[i] = in_i64(in);
+        img->eligible_ms[i] = read_stamp(in_i64(in), version);
         img->lapsed[i] = in_u8(in);
         img->latch_seq[i] = in_u32(in);
         GeasStatus st = in_value(in, c, &img->ok[i], &img->ok_set[i]);
@@ -267,7 +275,7 @@ static GeasStatus decode_join(GeasContract* c, const GeasAmendDesc* a, RowIn* in
 /* The course frame, its slot count read from the frame itself since N's
  * descriptor is not here; amend.c holds it against the registered one */
 static GeasStatus decode_frame(GeasContract* c, const GeasAmendDesc* a, RowIn* in,
-                               GeasAmendImage* img) {
+                               uint32_t version, GeasAmendImage* img) {
     uint8_t present = in_u8(in);
     if (in->bad || present > 1) return GEAS_ERR_TYPE;
     if (!present) return GEAS_OK;
@@ -283,7 +291,8 @@ static GeasStatus decode_frame(GeasContract* c, const GeasAmendDesc* a, RowIn* i
     if (img->course_state < GEAS_COURSE_RUNNING || img->course_state > GEAS_COURSE_CANCELLED) {
         return GEAS_ERR_TYPE;
     }
-    if (img->frame.wait_due_ms < 0) return GEAS_ERR_TYPE;
+    /* A clock below zero sets a deadline below zero from version 5 */
+    if (version <= 4 && img->frame.wait_due_ms < 0) return GEAS_ERR_TYPE;
     /* Every slot carries at least its presence byte */
     if (nslots > in->len - in->off) return GEAS_ERR_TYPE;
     if (nslots > 0) {
@@ -307,7 +316,7 @@ static GeasStatus decode_flow(GeasContract* c, const GeasAmendDesc* a, GeasStrin
     const uint8_t* magic = in_take(&in, 4);
     if (!magic || memcmp(magic, FLOW_MAGIC, 4) != 0) return GEAS_ERR_TYPE;
     uint32_t version = in_u32(&in);
-    if (in.bad || version < 2 || version > 4) return GEAS_ERR_TYPE;
+    if (in.bad || version < 2 || version > 5) return GEAS_ERR_TYPE;
     img->has_flow = 1;
     img->signed_ms = in_i64(&in);
     img->term_lapsed = in_u8(&in);
@@ -317,10 +326,10 @@ static GeasStatus decode_flow(GeasContract* c, const GeasAmendDesc* a, GeasStrin
     if (st != GEAS_OK) return st;
     uint32_t nsubs = in_u32(&in);
     if (in.bad || nsubs != a->nold_subs) return GEAS_ERR_TYPE;
-    for (uint32_t s = 0; s < nsubs; s++) img->sub_eligible_ms[s] = in_i64(&in);
+    for (uint32_t s = 0; s < nsubs; s++) img->sub_eligible_ms[s] = read_stamp(in_i64(&in), version);
     st = decode_remedies(c, a, &in, img);
     if (st != GEAS_OK) return st;
-    if (version >= 4) st = decode_frame(c, a, &in, img);
+    if (version >= 4) st = decode_frame(c, a, &in, version, img);
     if (st != GEAS_OK) return st;
     return in.off == in.len ? GEAS_OK : GEAS_ERR_TYPE;
 }

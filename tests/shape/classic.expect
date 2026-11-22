@@ -1,6 +1,6 @@
-// shape Ledger v4: contract Ledger;vow dsn:S;vow limit:U;pledge charge:(NCard,F)->R(T(I,B),NPayError);pledge seen:(L(Y),M(S,C))->O(NCard);pledge close:()->V;pledge hand:(I)->V;schema Accounts:id:I,balance:F,owner:S;type Card{number:S,expiry:S};type PayError=Declined(reason:S)|Timeout;
-#define GEAS_HASH_Ledger 0x32661908bac60447ULL
-#define GEAS_MANGLED_Ledger_charge "__geas_ash_Ledger_charge_99c4b8c13f835534_v4"
-#define GEAS_MANGLED_Ledger_seen "__geas_ash_Ledger_seen_50abea8202976652_v4"
-#define GEAS_MANGLED_Ledger_close "__geas_ash_Ledger_close_0e2ba22315b89a85_v4"
-#define GEAS_MANGLED_Ledger_hand "__geas_ash_Ledger_hand_38a3aab7fdf5db00_v4"
+// shape Ledger v4: contract Ledger;vow dsn:S;vow limit:U;pledge charge:(NCard,F)->R(T(I,B),NPayError);pledge seen:(L(Y),M(S,C))->O(NCard);pledge close:()->V;pledge hand:(I)->V;schema Accounts:id:I,balance:F,owner:S;sub Payment:charge;sub #1:seen;type Card{number:S,expiry:S};type PayError=Declined(reason:S)|Timeout;
+#define GEAS_HASH_Ledger 0x7b96c8cb7ef93a0aULL
+#define GEAS_MANGLED_Ledger_charge "__geas_ash_6Ledger_6charge_99c4b8c13f835534_v4"
+#define GEAS_MANGLED_Ledger_seen "__geas_ash_6Ledger_4seen_50abea8202976652_v4"
+#define GEAS_MANGLED_Ledger_close "__geas_ash_6Ledger_5close_0e2ba22315b89a85_v4"
+#define GEAS_MANGLED_Ledger_hand "__geas_ash_6Ledger_4hand_38a3aab7fdf5db00_v4"

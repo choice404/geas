@@ -93,11 +93,12 @@ static GeasStatus geas_clause6_Values_nothing(GeasContract* cc, const GeasValue*
     t0.ty = GEAS_TY_INT;
     t0.as.i = 1;
     GeasValue t1 = t0;
+    (void)t1;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_4maps_029bb8b0d37e9f59_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -145,6 +146,7 @@ static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const Ge
             t18.as.box = t19;
         }
         GeasValue t21 = {0};
+        (void)t21;
         GeasValue t22 = {0};
         int t23 = 0;
         do {
@@ -157,7 +159,7 @@ static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const Ge
             GeasValue* t25 = &t12;
             GeasValue t26 = {0};
             t26.ty = GEAS_TY_INT;
-            t26.as.i = t12.as.i + t22.as.i;
+            if (__builtin_add_overflow(t12.as.i, t22.as.i, &t26.as.i)) return GEAS_ERR_TYPE;
             *t25 = t26;
         } else {
             int t27 = 0;
@@ -172,7 +174,7 @@ static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const Ge
                 t29.as.i = 1;
                 GeasValue t30 = {0};
                 t30.ty = GEAS_TY_INT;
-                t30.as.i = t12.as.i - t29.as.i;
+                if (__builtin_sub_overflow(t12.as.i, t29.as.i, &t30.as.i)) return GEAS_ERR_TYPE;
                 *t28 = t30;
             }
         }
@@ -198,6 +200,7 @@ static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const Ge
     if (t38 != GEAS_OK) return t38;
     GeasValue t39 = t37;
     GeasValue t40 = {0};
+    (void)t40;
     GeasValue t41 = {0};
     int t42 = 0;
     do {
@@ -230,7 +233,7 @@ static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const Ge
     t47.as.i = (int64_t)(t3.as.list.len / 2);
     GeasValue t48 = {0};
     t48.ty = GEAS_TY_INT;
-    t48.as.i = t12.as.i + t47.as.i;
+    if (__builtin_add_overflow(t12.as.i, t47.as.i, &t48.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t49 = geas_box(cc);
     if (!t49) return GEAS_ERR_OOM;
     *t49 = t48;
@@ -244,7 +247,7 @@ static GeasStatus __geas_ash_Values_maps_029bb8b0d37e9f59_v3(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_chains_a821ae9487abd245_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_6chains_a821ae9487abd245_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -320,197 +323,198 @@ static GeasStatus __geas_ash_Values_chains_a821ae9487abd245_v3(void* ctx, const 
     t26.as.s.len = 1;
     GeasValue t27 = {0};
     t27.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t25, &t26, &t27) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasStatus t28 = geas_string_concat(cc, &t25, &t26, &t27);
+    if (t28 != GEAS_OK) return t28;
     *t21 = t27;
-    GeasValue* t28 = &t13;
-    GeasValue* t29 = ((GeasValue*)t28->as.list.data) + 2;
-    GeasValue t30 = {0};
-    t30.ty = GEAS_TY_STRING;
-    t30.as.s.ptr = (uint8_t*)"k";
-    t30.as.s.len = 1;
-    GeasStatus t31 = geas_map_set(cc, t29, &t30, &args[0]);
-    if (t31 != GEAS_OK) return t31;
-    GeasValue t32 = {0};
-    t32.ty = GEAS_TY_INT;
-    t32.as.i = 1;
+    GeasValue* t29 = &t13;
+    GeasValue* t30 = ((GeasValue*)t29->as.list.data) + 2;
+    GeasValue t31 = {0};
+    t31.ty = GEAS_TY_STRING;
+    t31.as.s.ptr = (uint8_t*)"k";
+    t31.as.s.len = 1;
+    GeasStatus t32 = geas_map_set(cc, t30, &t31, &args[0]);
+    if (t32 != GEAS_OK) return t32;
     GeasValue t33 = {0};
     t33.ty = GEAS_TY_INT;
-    t33.as.i = 2;
+    t33.as.i = 1;
     GeasValue t34 = {0};
-    if (geas_list_new(cc, GEAS_TY_INT, 2, &t34) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t34, &t32) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t34, &t33) != GEAS_OK) return GEAS_ERR_OOM;
+    t34.ty = GEAS_TY_INT;
+    t34.as.i = 2;
     GeasValue t35 = {0};
-    t35.ty = GEAS_TY_INT;
-    t35.as.i = 3;
+    if (geas_list_new(cc, GEAS_TY_INT, 2, &t35) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t35, &t33) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t35, &t34) != GEAS_OK) return GEAS_ERR_OOM;
     GeasValue t36 = {0};
     t36.ty = GEAS_TY_INT;
-    t36.as.i = 4;
+    t36.as.i = 3;
     GeasValue t37 = {0};
-    if (geas_list_new(cc, GEAS_TY_INT, 2, &t37) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t37, &t35) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t37, &t36) != GEAS_OK) return GEAS_ERR_OOM;
+    t37.ty = GEAS_TY_INT;
+    t37.as.i = 4;
     GeasValue t38 = {0};
-    if (geas_list_new(cc, GEAS_TY_LIST, 2, &t38) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t38, &t34) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_new(cc, GEAS_TY_INT, 2, &t38) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t38, &t36) != GEAS_OK) return GEAS_ERR_OOM;
     if (geas_list_push(cc, &t38, &t37) != GEAS_OK) return GEAS_ERR_OOM;
     GeasValue t39 = {0};
-    GeasStatus t40 = geas_value_deep_copy(cc, &t38, &t39);
-    if (t40 != GEAS_OK) return t40;
-    GeasValue t41 = t39;
-    GeasValue* t42 = &t41;
-    GeasValue t43 = {0};
-    t43.ty = GEAS_TY_INT;
-    t43.as.i = 1;
-    GeasValue* t44 = (GeasValue*)geas_list_get(t42, (uint64_t)t43.as.i);
-    if (!t44) return GEAS_ERR_TYPE;
-    GeasValue t45 = {0};
-    t45.ty = GEAS_TY_INT;
-    t45.as.i = 0;
-    GeasValue* t46 = (GeasValue*)geas_list_get(t44, (uint64_t)t45.as.i);
-    if (!t46) return GEAS_ERR_TYPE;
-    *t46 = args[0];
-    GeasValue t47 = geas_map_new(cc, GEAS_TY_STRING);
-    GeasValue t48 = {0};
-    GeasStatus t49 = geas_value_deep_copy(cc, &t47, &t48);
-    if (t49 != GEAS_OK) return t49;
-    GeasValue t50 = t48;
-    GeasValue* t51 = &t50;
-    GeasValue t52 = {0};
-    t52.ty = GEAS_TY_STRING;
-    t52.as.s.ptr = (uint8_t*)"row";
-    t52.as.s.len = 3;
+    if (geas_list_new(cc, GEAS_TY_LIST, 2, &t39) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t39, &t35) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t39, &t38) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasValue t40 = {0};
+    GeasStatus t41 = geas_value_deep_copy(cc, &t39, &t40);
+    if (t41 != GEAS_OK) return t41;
+    GeasValue t42 = t40;
+    GeasValue* t43 = &t42;
+    GeasValue t44 = {0};
+    t44.ty = GEAS_TY_INT;
+    t44.as.i = 1;
+    GeasValue* t45 = (GeasValue*)geas_list_get(t43, (uint64_t)t44.as.i);
+    if (!t45) return GEAS_ERR_TYPE;
+    GeasValue t46 = {0};
+    t46.ty = GEAS_TY_INT;
+    t46.as.i = 0;
+    GeasValue* t47 = (GeasValue*)geas_list_get(t45, (uint64_t)t46.as.i);
+    if (!t47) return GEAS_ERR_TYPE;
+    *t47 = args[0];
+    GeasValue t48 = geas_map_new(cc, GEAS_TY_STRING);
+    GeasValue t49 = {0};
+    GeasStatus t50 = geas_value_deep_copy(cc, &t48, &t49);
+    if (t50 != GEAS_OK) return t50;
+    GeasValue t51 = t49;
+    GeasValue* t52 = &t51;
     GeasValue t53 = {0};
-    t53.ty = GEAS_TY_INT;
-    t53.as.i = 5;
+    t53.ty = GEAS_TY_STRING;
+    t53.as.s.ptr = (uint8_t*)"row";
+    t53.as.s.len = 3;
     GeasValue t54 = {0};
     t54.ty = GEAS_TY_INT;
-    t54.as.i = 6;
+    t54.as.i = 5;
     GeasValue t55 = {0};
-    if (geas_list_new(cc, GEAS_TY_INT, 2, &t55) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t55, &t53) != GEAS_OK) return GEAS_ERR_OOM;
-    if (geas_list_push(cc, &t55, &t54) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasStatus t56 = geas_map_set(cc, t51, &t52, &t55);
-    if (t56 != GEAS_OK) return t56;
-    GeasValue* t57 = &t50;
-    GeasValue t58 = {0};
-    t58.ty = GEAS_TY_STRING;
-    t58.as.s.ptr = (uint8_t*)"row";
-    t58.as.s.len = 3;
-    const GeasValue* t59 = NULL;
-    if (!geas_map_get(t57, &t58, &t59)) return GEAS_ERR_TYPE;
-    GeasValue* t60 = (GeasValue*)t59;
-    GeasValue t61 = {0};
-    t61.ty = GEAS_TY_INT;
-    t61.as.i = 1;
-    GeasValue* t62 = (GeasValue*)geas_list_get(t60, (uint64_t)t61.as.i);
-    if (!t62) return GEAS_ERR_TYPE;
-    *t62 = args[0];
-    GeasValue t63 = ((const GeasValue*)t13.as.list.data)[1];
-    GeasValue t64 = {0};
-    GeasStatus t65 = geas_value_deep_copy(cc, &t63, &t64);
-    if (t65 != GEAS_OK) return t65;
-    GeasValue t66 = {0};
-    GeasStatus t67 = geas_value_deep_copy(cc, &t64, &t66);
-    if (t67 != GEAS_OK) return t67;
-    GeasValue t68 = t66;
-    GeasValue t69 = ((const GeasValue*)t13.as.list.data)[1];
-    GeasValue t70 = {0};
-    GeasStatus t71 = geas_value_deep_copy(cc, &t69, &t70);
-    if (t71 != GEAS_OK) return t71;
-    GeasValue t72 = {0};
-    t72.ty = GEAS_TY_BOOL;
-    t72.as.b = geas_value_eq(&t68, &t70);
+    t55.ty = GEAS_TY_INT;
+    t55.as.i = 6;
+    GeasValue t56 = {0};
+    if (geas_list_new(cc, GEAS_TY_INT, 2, &t56) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t56, &t54) != GEAS_OK) return GEAS_ERR_OOM;
+    if (geas_list_push(cc, &t56, &t55) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasStatus t57 = geas_map_set(cc, t52, &t53, &t56);
+    if (t57 != GEAS_OK) return t57;
+    GeasValue* t58 = &t51;
+    GeasValue t59 = {0};
+    t59.ty = GEAS_TY_STRING;
+    t59.as.s.ptr = (uint8_t*)"row";
+    t59.as.s.len = 3;
+    const GeasValue* t60 = NULL;
+    if (!geas_map_get(t58, &t59, &t60)) return GEAS_ERR_TYPE;
+    GeasValue* t61 = (GeasValue*)t60;
+    GeasValue t62 = {0};
+    t62.ty = GEAS_TY_INT;
+    t62.as.i = 1;
+    GeasValue* t63 = (GeasValue*)geas_list_get(t61, (uint64_t)t62.as.i);
+    if (!t63) return GEAS_ERR_TYPE;
+    *t63 = args[0];
+    GeasValue t64 = ((const GeasValue*)t13.as.list.data)[1];
+    GeasValue t65 = {0};
+    GeasStatus t66 = geas_value_deep_copy(cc, &t64, &t65);
+    if (t66 != GEAS_OK) return t66;
+    GeasValue t67 = {0};
+    GeasStatus t68 = geas_value_deep_copy(cc, &t65, &t67);
+    if (t68 != GEAS_OK) return t68;
+    GeasValue t69 = t67;
+    GeasValue t70 = ((const GeasValue*)t13.as.list.data)[1];
+    GeasValue t71 = {0};
+    GeasStatus t72 = geas_value_deep_copy(cc, &t70, &t71);
+    if (t72 != GEAS_OK) return t72;
     GeasValue t73 = {0};
     t73.ty = GEAS_TY_BOOL;
-    t73.as.b = t72.as.b;
-    if (t73.as.b) {
-        GeasValue t74 = ((const GeasValue*)t13.as.list.data)[0];
-        GeasValue t75 = {0};
-        t75.ty = GEAS_TY_STRING;
-        t75.as.s.ptr = (uint8_t*)"x";
-        t75.as.s.len = 1;
+    t73.as.b = geas_value_eq(&t69, &t71);
+    GeasValue t74 = {0};
+    t74.ty = GEAS_TY_BOOL;
+    t74.as.b = t73.as.b;
+    if (t74.as.b) {
+        GeasValue t75 = ((const GeasValue*)t13.as.list.data)[0];
         GeasValue t76 = {0};
-        t76.ty = GEAS_TY_BOOL;
-        t76.as.b = !geas_string_eq(&t74, &t75);
-        t73.as.b = t76.as.b;
+        t76.ty = GEAS_TY_STRING;
+        t76.as.s.ptr = (uint8_t*)"x";
+        t76.as.s.len = 1;
+        GeasValue t77 = {0};
+        t77.ty = GEAS_TY_BOOL;
+        t77.as.b = !geas_string_eq(&t75, &t76);
+        t74.as.b = t77.as.b;
     }
-    if (t73.as.b) {
-        GeasValue t77 = ((const GeasValue*)t13.as.list.data)[1];
-        GeasValue t78 = {0};
-        GeasStatus t79 = geas_value_deep_copy(cc, &t77, &t78);
-        if (t79 != GEAS_OK) return t79;
-        GeasValue t80 = ((const GeasValue*)t78.as.list.data)[1];
-        GeasValue t81 = {0};
-        GeasStatus t82 = geas_value_deep_copy(cc, &t80, &t81);
-        if (t82 != GEAS_OK) return t82;
-        GeasValue t83 = {0};
-        t83.ty = GEAS_TY_INT;
-        t83.as.i = 1;
-        const GeasValue* t84 = geas_list_get(&t81, (uint64_t)t83.as.i);
-        if (!t84) return GEAS_ERR_TYPE;
-        GeasValue t85 = *t84;
-        GeasValue t86 = {0};
-        t86.ty = GEAS_TY_INT;
-        t86.as.i = 1;
-        const GeasValue* t87 = geas_list_get(&t41, (uint64_t)t86.as.i);
-        if (!t87) return GEAS_ERR_TYPE;
-        GeasValue t88 = *t87;
-        GeasValue t89 = {0};
-        GeasStatus t90 = geas_value_deep_copy(cc, &t88, &t89);
-        if (t90 != GEAS_OK) return t90;
-        GeasValue t91 = {0};
-        t91.ty = GEAS_TY_INT;
-        t91.as.i = 0;
-        const GeasValue* t92 = geas_list_get(&t89, (uint64_t)t91.as.i);
-        if (!t92) return GEAS_ERR_TYPE;
-        GeasValue t93 = *t92;
-        GeasValue t94 = {0};
-        t94.ty = GEAS_TY_INT;
-        t94.as.i = t85.as.i + t93.as.i;
-        GeasValue t95 = ((const GeasValue*)t13.as.list.data)[1];
-        GeasValue t96 = {0};
-        GeasStatus t97 = geas_value_deep_copy(cc, &t95, &t96);
-        if (t97 != GEAS_OK) return t97;
-        GeasValue t98 = ((const GeasValue*)t96.as.list.data)[1];
-        GeasValue t99 = {0};
-        GeasStatus t100 = geas_value_deep_copy(cc, &t98, &t99);
-        if (t100 != GEAS_OK) return t100;
-        GeasValue t101 = {0};
-        t101.ty = GEAS_TY_INT;
-        t101.as.i = (int64_t)t99.as.list.len;
+    if (t74.as.b) {
+        GeasValue t78 = ((const GeasValue*)t13.as.list.data)[1];
+        GeasValue t79 = {0};
+        GeasStatus t80 = geas_value_deep_copy(cc, &t78, &t79);
+        if (t80 != GEAS_OK) return t80;
+        GeasValue t81 = ((const GeasValue*)t79.as.list.data)[1];
+        GeasValue t82 = {0};
+        GeasStatus t83 = geas_value_deep_copy(cc, &t81, &t82);
+        if (t83 != GEAS_OK) return t83;
+        GeasValue t84 = {0};
+        t84.ty = GEAS_TY_INT;
+        t84.as.i = 1;
+        const GeasValue* t85 = geas_list_get(&t82, (uint64_t)t84.as.i);
+        if (!t85) return GEAS_ERR_TYPE;
+        GeasValue t86 = *t85;
+        GeasValue t87 = {0};
+        t87.ty = GEAS_TY_INT;
+        t87.as.i = 1;
+        const GeasValue* t88 = geas_list_get(&t42, (uint64_t)t87.as.i);
+        if (!t88) return GEAS_ERR_TYPE;
+        GeasValue t89 = *t88;
+        GeasValue t90 = {0};
+        GeasStatus t91 = geas_value_deep_copy(cc, &t89, &t90);
+        if (t91 != GEAS_OK) return t91;
+        GeasValue t92 = {0};
+        t92.ty = GEAS_TY_INT;
+        t92.as.i = 0;
+        const GeasValue* t93 = geas_list_get(&t90, (uint64_t)t92.as.i);
+        if (!t93) return GEAS_ERR_TYPE;
+        GeasValue t94 = *t93;
+        GeasValue t95 = {0};
+        t95.ty = GEAS_TY_INT;
+        if (__builtin_add_overflow(t86.as.i, t94.as.i, &t95.as.i)) return GEAS_ERR_TYPE;
+        GeasValue t96 = ((const GeasValue*)t13.as.list.data)[1];
+        GeasValue t97 = {0};
+        GeasStatus t98 = geas_value_deep_copy(cc, &t96, &t97);
+        if (t98 != GEAS_OK) return t98;
+        GeasValue t99 = ((const GeasValue*)t97.as.list.data)[1];
+        GeasValue t100 = {0};
+        GeasStatus t101 = geas_value_deep_copy(cc, &t99, &t100);
+        if (t101 != GEAS_OK) return t101;
         GeasValue t102 = {0};
         t102.ty = GEAS_TY_INT;
-        t102.as.i = t94.as.i + t101.as.i;
-        GeasValue* t103 = geas_box(cc);
-        if (!t103) return GEAS_ERR_OOM;
-        *t103 = t102;
-        GeasValue t104 = {0};
-        t104.ty = GEAS_TY_RESULT;
-        t104.tag = 0;
-        t104.as.box = t103;
-        *out = t104;
+        t102.as.i = (int64_t)t100.as.list.len;
+        GeasValue t103 = {0};
+        t103.ty = GEAS_TY_INT;
+        if (__builtin_add_overflow(t95.as.i, t102.as.i, &t103.as.i)) return GEAS_ERR_TYPE;
+        GeasValue* t104 = geas_box(cc);
+        if (!t104) return GEAS_ERR_OOM;
+        *t104 = t103;
+        GeasValue t105 = {0};
+        t105.ty = GEAS_TY_RESULT;
+        t105.tag = 0;
+        t105.as.box = t104;
+        *out = t105;
         return GEAS_OK;
     }
-    GeasValue t105 = ((const GeasValue*)t13.as.list.data)[1];
-    GeasValue t106 = {0};
-    GeasStatus t107 = geas_value_deep_copy(cc, &t105, &t106);
-    if (t107 != GEAS_OK) return t107;
-    GeasValue t108 = ((const GeasValue*)t106.as.list.data)[0];
-    GeasValue* t109 = geas_box(cc);
-    if (!t109) return GEAS_ERR_OOM;
-    *t109 = t108;
-    GeasValue t110 = {0};
-    t110.ty = GEAS_TY_RESULT;
-    t110.tag = 1;
-    t110.as.box = t109;
-    *out = t110;
+    GeasValue t106 = ((const GeasValue*)t13.as.list.data)[1];
+    GeasValue t107 = {0};
+    GeasStatus t108 = geas_value_deep_copy(cc, &t106, &t107);
+    if (t108 != GEAS_OK) return t108;
+    GeasValue t109 = ((const GeasValue*)t107.as.list.data)[0];
+    GeasValue* t110 = geas_box(cc);
+    if (!t110) return GEAS_ERR_OOM;
+    *t110 = t109;
+    GeasValue t111 = {0};
+    t111.ty = GEAS_TY_RESULT;
+    t111.tag = 1;
+    t111.as.box = t110;
+    *out = t111;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_tuples_5076f6479396a250_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_6tuples_5076f6479396a250_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -544,6 +548,7 @@ static GeasStatus __geas_ash_Values_tuples_5076f6479396a250_v3(void* ctx, const 
     GeasStatus t9 = geas_value_deep_copy(cc, &t7, &t8);
     if (t9 != GEAS_OK) return t9;
     GeasValue t10 = t8;
+    (void)t10;
     GeasValue t11 = {0};
     if (geas_tuple_new(cc, 2, &t11) != GEAS_OK) return GEAS_ERR_OOM;
     ((GeasValue*)t11.as.list.data)[0] = args[0];
@@ -594,7 +599,7 @@ static GeasStatus __geas_ash_Values_tuples_5076f6479396a250_v3(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_7scalars_ea37b8ae2217b8a8_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -609,9 +614,10 @@ static GeasStatus __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3(void* ctx, const
     t0.as.u = 1;
     GeasValue t1 = {0};
     t1.ty = GEAS_TY_UINT;
-    t1.as.u = args[0].as.u + t0.as.u;
+    if (__builtin_add_overflow(args[0].as.u, t0.as.u, &t1.as.u)) return GEAS_ERR_TYPE;
     GeasValue t2 = t1;
     GeasValue t3 = args[2];
+    (void)t3;
     const GeasValue* t4 = geas_vow_ref(cc, "mark");
     if (!t4) return GEAS_ERR_NAME;
     GeasValue t5 = *t4;
@@ -688,7 +694,7 @@ static GeasStatus __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3(void* ctx, const
     GeasValue t30 = *t29;
     GeasValue t31 = {0};
     t31.ty = GEAS_TY_INT;
-    t31.as.i = -t30.as.i;
+    if (__builtin_sub_overflow((int64_t)0, t30.as.i, &t31.as.i)) return GEAS_ERR_TYPE;
     GeasValue t32 = {0};
     t32.ty = GEAS_TY_INT;
     t32.as.i = 3;
@@ -729,6 +735,7 @@ static GeasStatus __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3(void* ctx, const
     t42.as.i = 3;
     GeasValue t43 = {0};
     t43.ty = GEAS_TY_INT;
+    if (t42.as.i == 0 || (t42.as.i == -1 && t41.as.i == INT64_MIN)) return GEAS_ERR_TYPE;
     t43.as.i = t41.as.i % t42.as.i;
     GeasValue* t44 = geas_box(cc);
     if (!t44) return GEAS_ERR_OOM;
@@ -743,7 +750,7 @@ static GeasStatus __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_shapes_c99ed8be3812f8ec_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_6shapes_c99ed8be3812f8ec_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -889,47 +896,48 @@ static GeasStatus __geas_ash_Values_shapes_c99ed8be3812f8ec_v3(void* ctx, const 
             t40.as.s.len = 2;
             GeasValue t41 = {0};
             t41.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t39, &t40, &t41) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t42 = geas_string_concat(cc, &t39, &t40, &t41);
+            if (t42 != GEAS_OK) return t42;
             t34 = t41;
         }
     }
-    GeasValue t42 = t34;
-    GeasValue t43 = {0};
-    t43.ty = GEAS_TY_STRING;
-    t43.as.s.ptr = (uint8_t*)"calm";
-    t43.as.s.len = 4;
+    GeasValue t43 = t34;
     GeasValue t44 = {0};
-    t44.ty = GEAS_TY_BOOL;
-    t44.as.b = geas_string_eq(&t42, &t43);
-    if (t44.as.b) {
-        GeasValue* t45 = geas_box(cc);
-        if (!t45) return GEAS_ERR_OOM;
-        *t45 = t21;
-        GeasValue t46 = {0};
-        t46.ty = GEAS_TY_RESULT;
-        t46.tag = 0;
-        t46.as.box = t45;
-        *out = t46;
+    t44.ty = GEAS_TY_STRING;
+    t44.as.s.ptr = (uint8_t*)"calm";
+    t44.as.s.len = 4;
+    GeasValue t45 = {0};
+    t45.ty = GEAS_TY_BOOL;
+    t45.as.b = geas_string_eq(&t43, &t44);
+    if (t45.as.b) {
+        GeasValue* t46 = geas_box(cc);
+        if (!t46) return GEAS_ERR_OOM;
+        *t46 = t21;
+        GeasValue t47 = {0};
+        t47.ty = GEAS_TY_RESULT;
+        t47.tag = 0;
+        t47.as.box = t46;
+        *out = t47;
         return GEAS_OK;
     }
-    GeasValue t47[1] = { t15 };
-    GeasValue t48 = {0};
-    GeasStatus t49 = geas_clause6_Values_area(cc, t47, &t48);
-    if (t49 != GEAS_OK) return t49;
-    GeasValue* t50 = geas_box(cc);
-    if (!t50) return GEAS_ERR_OOM;
-    *t50 = t48;
-    GeasValue t51 = {0};
-    t51.ty = GEAS_TY_RESULT;
-    t51.tag = 0;
-    t51.as.box = t50;
-    *out = t51;
+    GeasValue t48[1] = { t15 };
+    GeasValue t49 = {0};
+    GeasStatus t50 = geas_clause6_Values_area(cc, t48, &t49);
+    if (t50 != GEAS_OK) return t50;
+    GeasValue* t51 = geas_box(cc);
+    if (!t51) return GEAS_ERR_OOM;
+    *t51 = t49;
+    GeasValue t52 = {0};
+    t52.ty = GEAS_TY_RESULT;
+    t52.tag = 0;
+    t52.as.box = t51;
+    *out = t52;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_6nested_c4bfec2bbb5a3ff3_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -987,6 +995,7 @@ static GeasStatus __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3(void* ctx, const 
             t0 = t16;
         } else {
             GeasValue t17 = {0};
+            (void)t17;
             int t18 = 0;
             do {
                 if (args[0].tag != 0) break;
@@ -1025,6 +1034,7 @@ static GeasStatus __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3(void* ctx, const 
                     do {
                         if (args[0].tag != 0) break;
                         GeasValue t28 = *(const GeasValue*)args[0].as.box;
+                        (void)t28;
                         t27 = 1;
                     } while (0);
                     if (t27) {
@@ -1060,6 +1070,7 @@ static GeasStatus __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3(void* ctx, const 
                             do {
                                 if (args[0].tag != 1) break;
                                 GeasValue t37 = *(const GeasValue*)args[0].as.box;
+                                (void)t37;
                                 t36 = 1;
                             } while (0);
                             if (t36) {
@@ -1108,7 +1119,7 @@ static GeasStatus __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_lists_508db3df2a0e7d18_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_5lists_508db3df2a0e7d18_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1145,7 +1156,7 @@ static GeasStatus __geas_ash_Values_lists_508db3df2a0e7d18_v3(void* ctx, const G
     t11.as.i = (int64_t)t9.as.list.len;
     GeasValue t12 = {0};
     t12.ty = GEAS_TY_INT;
-    t12.as.i = t10.as.i + t11.as.i;
+    if (__builtin_add_overflow(t10.as.i, t11.as.i, &t12.as.i)) return GEAS_ERR_TYPE;
     GeasValue t13 = t12;
     for (uint64_t t14 = 0; t14 < args[0].as.list.len; t14++) {
         GeasValue t15 = ((const GeasValue*)args[0].as.list.data)[t14];
@@ -1167,7 +1178,7 @@ static GeasStatus __geas_ash_Values_lists_508db3df2a0e7d18_v3(void* ctx, const G
         t21.as.i = 1;
         GeasValue t22 = {0};
         t22.ty = GEAS_TY_INT;
-        t22.as.i = t13.as.i + t21.as.i;
+        if (__builtin_add_overflow(t13.as.i, t21.as.i, &t22.as.i)) return GEAS_ERR_TYPE;
         *t20 = t22;
     }
     GeasValue t23 = {0};
@@ -1226,7 +1237,7 @@ static GeasStatus __geas_ash_Values_lists_508db3df2a0e7d18_v3(void* ctx, const G
     GeasValue t42 = t36;
     GeasValue t43 = {0};
     t43.ty = GEAS_TY_INT;
-    t43.as.i = t13.as.i + t42.as.i;
+    if (__builtin_add_overflow(t13.as.i, t42.as.i, &t43.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t44 = geas_box(cc);
     if (!t44) return GEAS_ERR_OOM;
     *t44 = t43;
@@ -1240,7 +1251,7 @@ static GeasStatus __geas_ash_Values_lists_508db3df2a0e7d18_v3(void* ctx, const G
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Values_silent_38a3aab7fdf5db00_v3(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Values_6silent_38a3aab7fdf5db00_v3(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1248,6 +1259,7 @@ static GeasStatus __geas_ash_Values_silent_38a3aab7fdf5db00_v3(void* ctx, const 
     if (nargs != 1) return GEAS_ERR_TYPE;
     if (args[0].ty != GEAS_TY_INT) return GEAS_ERR_TYPE;
     GeasValue t0 = args[0];
+    (void)t0;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
@@ -1264,15 +1276,15 @@ static const GeasVowDesc k6_Values_vows[] = {
 };
 
 static const GeasPledgeDesc k6_Values_pledges[] = {
-    { "maps", "__geas_ash_Values_maps_029bb8b0d37e9f59_v3", 1, __geas_ash_Values_maps_029bb8b0d37e9f59_v3, -1 },
-    { "chains", "__geas_ash_Values_chains_a821ae9487abd245_v3", 1, __geas_ash_Values_chains_a821ae9487abd245_v3, -1 },
-    { "tuples", "__geas_ash_Values_tuples_5076f6479396a250_v3", 2, __geas_ash_Values_tuples_5076f6479396a250_v3, -1 },
-    { "scalars", "__geas_ash_Values_scalars_ea37b8ae2217b8a8_v3", 4, __geas_ash_Values_scalars_ea37b8ae2217b8a8_v3, -1 },
-    { "shapes", "__geas_ash_Values_shapes_c99ed8be3812f8ec_v3", 1, __geas_ash_Values_shapes_c99ed8be3812f8ec_v3, -1 },
-    { "nested", "__geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3", 1, __geas_ash_Values_nested_c4bfec2bbb5a3ff3_v3, -1 },
-    { "lists", "__geas_ash_Values_lists_508db3df2a0e7d18_v3", 1, __geas_ash_Values_lists_508db3df2a0e7d18_v3, -1 },
-    { "silent", "__geas_ash_Values_silent_38a3aab7fdf5db00_v3", 1, __geas_ash_Values_silent_38a3aab7fdf5db00_v3, -1 },
-    { "abstract_one", "__geas_ash_Values_abstract_one_a7c9229487606e8b_v3", 1, NULL, -1 },
+    { "maps", "__geas_ash_6Values_4maps_029bb8b0d37e9f59_v3", 1, __geas_ash_6Values_4maps_029bb8b0d37e9f59_v3, -1 },
+    { "chains", "__geas_ash_6Values_6chains_a821ae9487abd245_v3", 1, __geas_ash_6Values_6chains_a821ae9487abd245_v3, -1 },
+    { "tuples", "__geas_ash_6Values_6tuples_5076f6479396a250_v3", 2, __geas_ash_6Values_6tuples_5076f6479396a250_v3, -1 },
+    { "scalars", "__geas_ash_6Values_7scalars_ea37b8ae2217b8a8_v3", 4, __geas_ash_6Values_7scalars_ea37b8ae2217b8a8_v3, -1 },
+    { "shapes", "__geas_ash_6Values_6shapes_c99ed8be3812f8ec_v3", 1, __geas_ash_6Values_6shapes_c99ed8be3812f8ec_v3, -1 },
+    { "nested", "__geas_ash_6Values_6nested_c4bfec2bbb5a3ff3_v3", 1, __geas_ash_6Values_6nested_c4bfec2bbb5a3ff3_v3, -1 },
+    { "lists", "__geas_ash_6Values_5lists_508db3df2a0e7d18_v3", 1, __geas_ash_6Values_5lists_508db3df2a0e7d18_v3, -1 },
+    { "silent", "__geas_ash_6Values_6silent_38a3aab7fdf5db00_v3", 1, __geas_ash_6Values_6silent_38a3aab7fdf5db00_v3, -1 },
+    { "abstract_one", "__geas_ash_6Values_12abstract_one_a7c9229487606e8b_v3", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k6_Values_atoms[] = {

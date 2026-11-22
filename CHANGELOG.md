@@ -4,6 +4,98 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v1.0.0] the kept word
+
+Geas is stable. The language the spec and the grammar describe, the C surface
+of `geas.h` and `geas_abi.h`, and the formats a host or a database holds on to,
+the mangled names, the shape and course hashes, the wire codec, the park row,
+and the recorded shape, are the ones every 1.x release keeps, as the Stability
+section of `docs/abi.md` sets out, so a module, a host, and a parked row built
+against 1.0.0 go on working under every later 1.x compiler and runtime. This is
+the language and the runtime that promise is made about: every path a body
+takes ends in a value or in a status the host can read, every value the runtime
+keeps has a type and a size it can vouch for, and every number a reader would
+want to recompute is written down.
+
+- freeze the surface named in the Stability section of `docs/abi.md`, the
+  limits `GEAS_VALUE_MAX_DEPTH`, `GEAS_VALUE_MAX_NODES`, and
+  `GEAS_SLOT_MIN_NODES_MAX` with their values, so it grows only by new
+  descriptor tails, new enum values at the end, and new calls beside the old
+- require every path through a pledge, clause, or remedy that returns a value
+  to end in a `return`, so no body falls off its closing brace
+- stop a body on integer overflow, on a division or remainder by zero, and on
+  the least `Int` over `-1`, with the status an out of range index reports,
+  leaving the host, its other calls, and every other instance as they were,
+  while `Float` follows IEEE 754 and takes no `%`
+- refuse a type name nothing declares, a zero `within` or `term`, an empty
+  subcontract, and an empty `select`
+- spell the one `Unit` value `Unit` and compare it like any value, write the
+  least `Int`, `Duration`, and size right after a unary minus, hold `version`
+  to 1 through 4294967295, and read a `Float` literal by its value, so
+  `1_000.5` reaches the module C as `1000.5` and one past the largest double
+  fails to lex
+- leave pledge values to a later version, refusing a pledge type and a bare
+  `instance.pledge` wherever either appears while `GEAS_TY_PLEDGE_REF` keeps
+  its number
+- seed `latch NAME as fulfilled` only on an item that carries no value
+- resolve `[abi: "c", symbol: "..."]` at every sign, resume, and claim, after a
+  host binding and a compiled body, with the symbol kept off the `geas_`,
+  `__geas_`, and `GEAS_` prefixes
+- hash the members of every subcontract, its transactional flag, and the
+  written requirements into the shape hash, and lead every segment of a mangled
+  name with its length
+- take the course hash from the lowered course and the types of its slots, by
+  value and by position, so a renamed binding, a reordered record literal, or a
+  respelled literal leaves it alone and every change in what the course does
+  moves it
+- give every course slot its type, start it at the smallest value of that type,
+  hold it to that type at resume, claim, and amend, and refuse a slot type
+  whose smallest value nests past 256 levels or holds more than 4096 values
+- grow the instance, module, descriptor, binding, and iname tables as they
+  fill, and add `geas_contract_free`, which hands back an ended instance before
+  shutdown once nothing runs on it
+- stamp every park row with a `gen` drawn at each write, so a claim takes
+  exactly the row it read, and bring an older `geas_park` table forward with
+  checked `ALTER TABLE` statements several processes can race on
+- hold every value to `GEAS_VALUE_MAX_NODES`, answering `GEAS_ERR_OOM` at a
+  boundary, a deep copy, a list push, a map set, the wire encoder, and a park,
+  and hold the wire decoder to a budget its own buffer sets
+- keep a negative timestamp as the clock reading it is, run every wait of the
+  runtime's own on the monotonic clock, and write flow blob version 5 while
+  reading 2 through 5
+- let a remedy finish its work under a cancel, `geas_cancel_requested`
+  answering 0 on the pass's own thread, and leave a retryable outcome unlatched
+  under a request, so a cancel never makes final an outcome the pledge meant
+  to try again
+- run a ref `write_back` callback after the default write backs, with no
+  runtime lock held and on a copy of the value, so it may call into the
+  runtime, its own instance included
+- let a host call wait out another thread's event delivery, fulfill, signal,
+  park, break, release, autopark, free, and tick alike, on a condition with
+  the instance lock given up, and then run against the instance as it
+  stands, while the same calls from inside the hook or from a body stay
+  `GEAS_ERR_STATE`; publish a fulfillment's outcome after its own events were
+  delivered, so a sync fulfill returns with its events already seen, and
+  list every reason `GEAS_ERR_STATE` is answered beside the status table
+- shut down in one order every time, the cancel flag, the ticker, the pool,
+  then the instances, descriptors, and modules, refusing with one line on
+  stderr when called from a body, a hook, a write back, a together body, the
+  ticker, or a thread holding an instance lock
+- load the runtime into the Python binding with `RTLD_LOCAL`, so its exports
+  and its SQLite stay out of the process's global scope
+- compile every module, every course, and every golden the codegen suite pins
+  under `-Wall -Wextra` with no warning
+- hold `docs/abi.md`, the spec, and the grammar to the headers call by call,
+  and write the wire codec, the park row, the flow blob, the shape hash, and
+  the course hash down closely enough to recompute each from the text, with
+  worked examples a build reproduces
+- rebuild every module and record every shape again for a contract with a
+  course, a subcontract, or a requirements block, since its shape hash or
+  course hash differs under 1.0.0, so a row parked for such a contract by
+  v0.9.3 or earlier answers `GEAS_ERR_VERSION` here and finishes under the
+  release that wrote it, and a shape file of format 1 or 2 is refused until
+  `geas record` writes it again
+
 ## [v0.9.3] the checked boundary
 
 Geas now holds every value that crosses into its code, or into the runtime's

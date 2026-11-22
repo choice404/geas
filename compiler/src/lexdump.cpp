@@ -3,9 +3,8 @@
 
 #include <limits>
 
-#include "duration.hpp"
 #include "escape.hpp"
-#include "size.hpp"
+#include "magnitude.hpp"
 #include "utf8.hpp"
 
 namespace geas {
@@ -52,16 +51,19 @@ std::string renderChar(std::string_view text, const Token& token) {
     return "'" + canonicalScalar(charLiteralScalar(text, token.lo + 1), '\'') + "'";
 }
 
+// The magnitude a numeric literal spells, 0 for one that overflows
+std::string magnitudeText(std::string_view text, const Token& token) {
+    return std::to_string(literalMagnitude(text, token).value_or(0));
+}
+
 // The literal payload part of the kind, or the fixed name for everything else
 std::string renderKind(std::string_view text, const Token& token) {
     switch (token.kind) {
         case TokenKind::Ident: return "Ident(\"" + std::string{spanText(text, token)} + "\")";
-        case TokenKind::Int: return "Int(" + std::to_string(intValue(text, token.lo, token.hi)) + ")";
-        case TokenKind::Size:
-            return "Size(" + std::to_string(parseSize(spanText(text, token)).value_or(0)) + ")";
+        case TokenKind::Int: return "Int(" + magnitudeText(text, token) + ")";
+        case TokenKind::Size: return "Size(" + magnitudeText(text, token) + ")";
         case TokenKind::Float: return "Float(\"" + std::string{spanText(text, token)} + "\")";
-        case TokenKind::Duration:
-            return "Duration(" + std::to_string(parseDuration(spanText(text, token)).value_or(0)) + ")";
+        case TokenKind::Duration: return "Duration(" + magnitudeText(text, token) + ")";
         case TokenKind::String: return "Str(\"" + stringLiteralBody(text, token) + "\")";
         case TokenKind::Char: return "Char(" + renderChar(text, token) + ")";
         case TokenKind::KwTrue:
@@ -144,9 +146,10 @@ std::int64_t charLiteralScalar(std::string_view text, std::int64_t bodyStart) {
     return decodeUTF8(text, bodyStart).scalar;
 }
 
-std::int64_t intValue(std::string_view text, std::int64_t lo, std::int64_t hi) {
+std::optional<std::uint64_t> intMagnitude(std::string_view text, std::int64_t lo, std::int64_t hi) {
     const IntPrefix prefix = intPrefix(text, lo);
-    std::int64_t value = 0;
+    const auto base = static_cast<std::uint64_t>(prefix.base);
+    std::uint64_t value = 0;
     for (std::int64_t cursor = prefix.digitsStart; cursor < hi; ++cursor) {
         const int byte = byteAt(text, cursor);
         if (byte == '_') {
@@ -156,12 +159,21 @@ std::int64_t intValue(std::string_view text, std::int64_t lo, std::int64_t hi) {
         if (digit < 0 || digit >= prefix.base) {
             break;
         }
-        if (value > (maxInt - digit) / prefix.base) {
-            return 0;
+        const auto digitValue = static_cast<std::uint64_t>(digit);
+        if (value > (leastIntMagnitude - digitValue) / base) {
+            return std::nullopt;
         }
-        value = value * prefix.base + digit;
+        value = value * base + digitValue;
     }
     return value;
+}
+
+std::int64_t intValue(std::string_view text, std::int64_t lo, std::int64_t hi) {
+    const std::optional<std::uint64_t> magnitude = intMagnitude(text, lo, hi);
+    if (!magnitude || *magnitude > static_cast<std::uint64_t>(maxInt)) {
+        return 0;
+    }
+    return static_cast<std::int64_t>(*magnitude);
 }
 
 std::string renderToken(std::string_view text, const Token& token) {

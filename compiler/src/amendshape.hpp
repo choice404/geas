@@ -4,7 +4,7 @@
 //
 // The file is plain text, one record a line, every line ending in a newline:
 //
-//   geas shape 2
+//   geas shape 3
 //   contract NAME
 //   version N
 //   hash 0x<16 hex digits>          the shape hash
@@ -25,7 +25,9 @@
 // with its layout, the definition the shape string spells for it, see
 // layout.hpp. The type records have to spell the layout segments the shape
 // line ends in, which the hash covers. The first line names the format
-// version, and a reader refuses a version it does not know
+// version, and a reader refuses a version it does not know, the earlier
+// formats 1 and 2 included, since the hashes they recorded are not the ones
+// a module built now carries
 #pragma once
 
 #include <cstdint>

@@ -1,0 +1,4 @@
+3:25: error: the version attribute must be an integer from 1 to 4294967295
+9:25: error: the version attribute must be an integer from 1 to 4294967295
+15:28: error: the version attribute must be an integer from 1 to 4294967295
+21:26: error: the version attribute must be an integer from 1 to 4294967295

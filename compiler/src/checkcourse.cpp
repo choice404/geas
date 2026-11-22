@@ -67,6 +67,9 @@ TyId Checker::checkSelect(const Expr& expr, const SelectExpr& select, TyId want)
     if (!isInCourse_) {
         emitAt(expr, "'select' appears outside a course");
     }
+    if (select.arms.empty()) {
+        emitAt(expr, "a select needs at least one arm");
+    }
     TyId first;
     for (const SelectArm& arm : select.arms) {
         const TyId armWant = want.isSet() ? want : first;

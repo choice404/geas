@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/course/src/slot_wide_ok.geas: 133:5: error: codegen: not yet supported: a type on the gRPC surface outside the bridged set: Result<R0, Int>
+      signal split(v: Result<R0, Int>)
+      ^~~~~~~~~~~~

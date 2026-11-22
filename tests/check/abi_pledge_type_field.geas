@@ -1,5 +1,5 @@
-// A record field of pledge type: a record is plain data copyable across the
-// ABI, so a pledge value cannot hide inside one.
+// A record field of pledge type: pledge values are not part of this
+// version of the language, so the type is refused here as everywhere.
 
 record Hook {
     step: pledge(Int, String) -> Result<Unit, String>

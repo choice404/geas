@@ -23,7 +23,7 @@ export interface SessionStream {
 // PaymentServiceShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const PaymentServiceShapeHash: bigint = 0xc4261f5e32ecf727n;
+export const PaymentServiceShapeHash: bigint = 0x7cfb9eb304e41193n;
 
 export interface PaymentServiceSignRequest {
   currency?: string;  // the vow; unset takes the declared default

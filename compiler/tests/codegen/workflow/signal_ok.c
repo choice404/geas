@@ -2,8 +2,8 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k4_Shop_pledges[] = {
-    { "ship", "__geas_ash_Shop_ship_0e2ba22315b89a85_v1", 0, NULL, -1 },
-    { "thank", "__geas_ash_Shop_thank_0e2ba22315b89a85_v1", 0, NULL, 0 },
+    { "ship", "__geas_ash_4Shop_4ship_0e2ba22315b89a85_v1", 0, NULL, -1 },
+    { "thank", "__geas_ash_4Shop_5thank_0e2ba22315b89a85_v1", 0, NULL, 0 },
     { "delivered", NULL, 2, NULL, -1 },
     { "cancelled", NULL, 0, NULL, -1 },
     { "rated", NULL, 1, NULL, 0 },
@@ -74,7 +74,7 @@ static const GeasItemTypes k4_Shop_item_types[] = {
 };
 
 static const GeasContractDesc k4_Shop = {
-    "Shop", 0xf2fced6766ada630ULL,
+    "Shop", 0x18d8d5324cf3ac1fULL,
     1, 5, k4_Shop_pledges,
     0, NULL,
     1, k4_Shop_subs, 3,
@@ -91,7 +91,7 @@ static const GeasContractDesc k4_Shop = {
     .remedy_types = NULL,
 };
 
-static GeasStatus __geas_ash_Host_run_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_4Host_3run_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -121,6 +121,7 @@ static GeasStatus __geas_ash_Host_run_0e2ba22315b89a85_v1(void* ctx, const GeasV
     GeasStatus t11 = geas_signal((GeasContract*)t3.as.box, "delivered", t10, 2);
     if (t11 != GEAS_OK) return t11;
     GeasValue t12 = {0};
+    (void)t12;
     GeasValue t13 = {0};
     t13.ty = GEAS_TY_INT;
     t13.as.i = 5;
@@ -128,16 +129,18 @@ static GeasStatus __geas_ash_Host_run_0e2ba22315b89a85_v1(void* ctx, const GeasV
     GeasStatus t15 = geas_signal((GeasContract*)t3.as.box, "rated", t14, 1);
     if (t15 != GEAS_OK) return t15;
     GeasValue t16 = {0};
+    (void)t16;
     GeasStatus t17 = geas_signal((GeasContract*)t3.as.box, "cancelled", NULL, 0);
     if (t17 != GEAS_OK) return t17;
     GeasValue t18 = {0};
     GeasValue t19 = t18;
+    (void)t19;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
 static const GeasPledgeDesc k4_Host_pledges[] = {
-    { "run", "__geas_ash_Host_run_0e2ba22315b89a85_v1", 0, __geas_ash_Host_run_0e2ba22315b89a85_v1, -1 },
+    { "run", "__geas_ash_4Host_3run_0e2ba22315b89a85_v1", 0, __geas_ash_4Host_3run_0e2ba22315b89a85_v1, -1 },
 };
 
 static const GeasReqAtom k4_Host_atoms[] = {

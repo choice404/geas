@@ -43,3 +43,45 @@ contract AmendCourseNone [version: 2] {
         restart course
     }
 }
+
+record Tally {
+    count: Int
+    extra: Int
+}
+
+// The course text of version 1 over a Tally with a field more, so the
+// frame cannot carry
+contract AmendCourseRetyped [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    clause tally() -> Tally {
+        return Tally { count: 1, extra: 2 }
+    }
+    course {
+        let total = tally()
+        step(total.count)?
+    }
+    amends 1 {
+    }
+}
+
+// One literal of the course changes, so the frame cannot carry
+contract AmendCourseLiteral [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        step(2)?
+    }
+    amends 1 {
+    }
+}
+
+// Only the comments change, so the frame carries and a restart is refused
+contract AmendCourseComment [version: 2] {
+    pledge step(n: Int) -> Result<Int, String>
+    course {
+        // The one step
+        step(1)?
+    }
+    amends 1 {
+        restart course
+    }
+}

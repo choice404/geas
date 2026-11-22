@@ -12,7 +12,7 @@ static GeasStatus geas_clause9_OrderSaga_released(GeasContract* cc, const GeasVa
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_OrderSaga_reserve_164137f834809cbf_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_9OrderSaga_7reserve_164137f834809cbf_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -52,7 +52,7 @@ static GeasStatus __geas_ash_OrderSaga_reserve_164137f834809cbf_v1(void* ctx, co
     GeasValue t7 = *t6;
     GeasValue t8 = {0};
     t8.ty = GEAS_TY_INT;
-    t8.as.i = args[1].as.i + t7.as.i;
+    if (__builtin_add_overflow(args[1].as.i, t7.as.i, &t8.as.i)) return GEAS_ERR_TYPE;
     GeasValue t9 = t8;
     GeasValue t10 = {0};
     t10.ty = GEAS_TY_INT;
@@ -82,29 +82,30 @@ static GeasStatus __geas_ash_OrderSaga_reserve_164137f834809cbf_v1(void* ctx, co
     t16.as.s.len = 2;
     GeasValue t17 = {0};
     t17.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t16, &args[0], &t17) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasStatus t18 = geas_string_concat(cc, &t16, &args[0], &t17);
+    if (t18 != GEAS_OK) return t18;
     t15[0] = t17;
     t15[1] = args[0];
     t15[2] = t9;
-    GeasValue t18 = {0};
-    t18.ty = GEAS_TY_RECORD;
-    t18.as.list.data = t15;
-    t18.as.list.len = 3;
-    t18.as.list.cap = 3;
-    GeasValue* t19 = geas_box(cc);
-    if (!t19) return GEAS_ERR_OOM;
-    *t19 = t18;
-    GeasValue t20 = {0};
-    t20.ty = GEAS_TY_RESULT;
-    t20.tag = 0;
-    t20.as.box = t19;
-    *out = t20;
+    GeasValue t19 = {0};
+    t19.ty = GEAS_TY_RECORD;
+    t19.as.list.data = t15;
+    t19.as.list.len = 3;
+    t19.as.list.cap = 3;
+    GeasValue* t20 = geas_box(cc);
+    if (!t20) return GEAS_ERR_OOM;
+    *t20 = t19;
+    GeasValue t21 = {0};
+    t21.ty = GEAS_TY_RESULT;
+    t21.tag = 0;
+    t21.as.box = t20;
+    *out = t21;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_OrderSaga_release_193ad2efdb97ef80_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_9OrderSaga_7release_193ad2efdb97ef80_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -119,48 +120,49 @@ static GeasStatus __geas_ash_OrderSaga_release_193ad2efdb97ef80_v1(void* ctx, co
     GeasValue t2 = ((const GeasValue*)args[0].as.list.data)[1];
     GeasValue t3 = {0};
     t3.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t1, &t2, &t3) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t4 = {0};
-    t4.ty = GEAS_TY_BOOL;
-    t4.as.b = !geas_string_eq(&t0, &t3);
+    GeasStatus t4 = geas_string_concat(cc, &t1, &t2, &t3);
+    if (t4 != GEAS_OK) return t4;
     GeasValue t5 = {0};
     t5.ty = GEAS_TY_BOOL;
-    t5.as.b = t4.as.b;
-    if (!t5.as.b) {
-        GeasValue t6 = ((const GeasValue*)args[0].as.list.data)[2];
-        const GeasValue* t7 = geas_vow_ref(cc, "grace");
-        if (!t7) return GEAS_ERR_NAME;
-        GeasValue t8 = *t7;
-        GeasValue t9 = {0};
-        t9.ty = GEAS_TY_BOOL;
-        t9.as.b = (t6.as.i < t8.as.i);
-        t5.as.b = t9.as.b;
-    }
-    if (t5.as.b) {
+    t5.as.b = !geas_string_eq(&t0, &t3);
+    GeasValue t6 = {0};
+    t6.ty = GEAS_TY_BOOL;
+    t6.as.b = t5.as.b;
+    if (!t6.as.b) {
+        GeasValue t7 = ((const GeasValue*)args[0].as.list.data)[2];
+        const GeasValue* t8 = geas_vow_ref(cc, "grace");
+        if (!t8) return GEAS_ERR_NAME;
+        GeasValue t9 = *t8;
         GeasValue t10 = {0};
-        t10.ty = GEAS_TY_SUM;
-        t10.tag = 1;
-        GeasValue* t11 = geas_box(cc);
-        if (!t11) return GEAS_ERR_OOM;
-        *t11 = t10;
-        GeasValue t12 = {0};
-        t12.ty = GEAS_TY_RESULT;
-        t12.tag = 1;
-        t12.as.box = t11;
-        *out = t12;
+        t10.ty = GEAS_TY_BOOL;
+        t10.as.b = (t7.as.i < t9.as.i);
+        t6.as.b = t10.as.b;
+    }
+    if (t6.as.b) {
+        GeasValue t11 = {0};
+        t11.ty = GEAS_TY_SUM;
+        t11.tag = 1;
+        GeasValue* t12 = geas_box(cc);
+        if (!t12) return GEAS_ERR_OOM;
+        *t12 = t11;
+        GeasValue t13 = {0};
+        t13.ty = GEAS_TY_RESULT;
+        t13.tag = 1;
+        t13.as.box = t12;
+        *out = t13;
         return GEAS_OK;
     }
-    GeasValue t13 = {0};
-    GeasStatus t14 = geas_clause9_OrderSaga_released(cc, NULL, &t13);
-    if (t14 != GEAS_OK) return t14;
-    GeasValue* t15 = geas_box(cc);
-    if (!t15) return GEAS_ERR_OOM;
-    *t15 = t13;
-    GeasValue t16 = {0};
-    t16.ty = GEAS_TY_RESULT;
-    t16.tag = 0;
-    t16.as.box = t15;
-    *out = t16;
+    GeasValue t14 = {0};
+    GeasStatus t15 = geas_clause9_OrderSaga_released(cc, NULL, &t14);
+    if (t15 != GEAS_OK) return t15;
+    GeasValue* t16 = geas_box(cc);
+    if (!t16) return GEAS_ERR_OOM;
+    *t16 = t14;
+    GeasValue t17 = {0};
+    t17.ty = GEAS_TY_RESULT;
+    t17.tag = 0;
+    t17.as.box = t16;
+    *out = t17;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
@@ -172,10 +174,10 @@ static const GeasVowDesc k9_OrderSaga_vows[] = {
 };
 
 static const GeasPledgeDesc k9_OrderSaga_pledges[] = {
-    { "authorize", "__geas_ash_OrderSaga_authorize_3d078794604bf824_v1", 1, NULL, 0 },
-    { "capture", "__geas_ash_OrderSaga_capture_5f7fe51731b3dd09_v1", 1, NULL, 0 },
-    { "reserve", "__geas_ash_OrderSaga_reserve_164137f834809cbf_v1", 2, __geas_ash_OrderSaga_reserve_164137f834809cbf_v1, -1 },
-    { "ship", "__geas_ash_OrderSaga_ship_ad537d643b4ebed9_v1", 1, NULL, -1 },
+    { "authorize", "__geas_ash_9OrderSaga_9authorize_3d078794604bf824_v1", 1, NULL, 0 },
+    { "capture", "__geas_ash_9OrderSaga_7capture_5f7fe51731b3dd09_v1", 1, NULL, 0 },
+    { "reserve", "__geas_ash_9OrderSaga_7reserve_164137f834809cbf_v1", 2, __geas_ash_9OrderSaga_7reserve_164137f834809cbf_v1, -1 },
+    { "ship", "__geas_ash_9OrderSaga_4ship_ad537d643b4ebed9_v1", 1, NULL, -1 },
     { "delivered", NULL, 1, NULL, -1 },
 };
 
@@ -255,8 +257,8 @@ static const GeasTermDesc k9_OrderSaga_terms[] = {
 };
 
 static const GeasRemedyDesc k9_OrderSaga_remedies[] = {
-    { "refund", "__geas_ash_OrderSaga_refund_2a5cbc30109a1eac_v1", 1, 1, NULL, { .retry_count = 2, .retry_every_ms = 60000 } },
-    { "release", "__geas_ash_OrderSaga_release_193ad2efdb97ef80_v1", 2, 1, __geas_ash_OrderSaga_release_193ad2efdb97ef80_v1, { 0 } },
+    { "refund", "__geas_ash_9OrderSaga_6refund_2a5cbc30109a1eac_v1", 1, 1, NULL, { .retry_count = 2, .retry_every_ms = 60000 } },
+    { "release", "__geas_ash_9OrderSaga_7release_193ad2efdb97ef80_v1", 2, 1, __geas_ash_9OrderSaga_7release_193ad2efdb97ef80_v1, { 0 } },
 };
 
 static const uint32_t k9_OrderSaga_type_kids_1[] = { 2 };
@@ -336,7 +338,7 @@ static const GeasItemTypes k9_OrderSaga_remedy_types[] = {
 };
 
 static const GeasContractDesc k9_OrderSaga = {
-    "OrderSaga", 0xeef34448ebb6d73cULL,
+    "OrderSaga", 0x4636836322acf73dULL,
     1, 5, k9_OrderSaga_pledges,
     2, k9_OrderSaga_vows,
     1, k9_OrderSaga_subs, 4,

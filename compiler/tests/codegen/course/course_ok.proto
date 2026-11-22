@@ -12,7 +12,7 @@ package geas.course_ok;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/course_okpb";
 
-// contract Flow, version 1, shape 0xb421a32f1492afa4.
+// contract Flow, version 1, shape 0x8fe20527ac68b37e.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {

@@ -1,0 +1,18 @@
+// The foreign binding: a pledge with no body, one inside a subcontract, and
+// a remedy with no body each name a function the host exports, through
+// abi: "c" and symbol: "NAME" together. A pledge with a body and an
+// abstract pledge with no symbol stand beside them
+PayError is either Declined or Upstream(code: Int)
+
+contract Gateway {
+    pledge charge(amount: Int) -> Result<Int, PayError> [abi: "c", symbol: "gateway_charge"]
+    pledge audit() -> Unit
+    pledge quote(amount: Int) -> Option<Int> {
+        return Some(amount + 1)
+    }
+    subcontract Shipping {
+        pledge ship() -> Result<Unit, PayError> [symbol: "gateway_ship", abi: "c"]
+        signal delivered()
+    }
+    remedy refund for charge(receipt: Int) -> Unit [abi: "c", symbol: "gateway_refund"]
+}

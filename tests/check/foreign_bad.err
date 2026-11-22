@@ -1,0 +1,9 @@
+6:33: error: abi 'rust' is not a calling convention geas binds; the one there is, abi: "c", binds a function the host exports
+7:48: error: symbol 'not-a-name' is not a C identifier, so no host function can export it
+8:5: error: pledge 'lonely' names a symbol with no abi; write abi: "c" beside it
+9:5: error: pledge 'headless' names an abi with no symbol; write symbol: "NAME" beside it
+10:5: error: pledge 'bodied' has a body, so it binds no foreign symbol; abi and symbol belong on a declaration with no body
+13:26: error: attribute 'abi' does not target signal
+13:39: error: attribute 'symbol' does not target signal
+14:50: error: attribute 'symbol' expects String, found Int
+16:5: error: remedy 'undo' has a body, so it binds no foreign symbol; abi and symbol belong on a declaration with no body

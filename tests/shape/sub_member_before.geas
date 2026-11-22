@@ -1,0 +1,10 @@
+// The membership pair for a subcontract: the pledge settle sits outside
+// Payment here and inside it in sub_member_after.geas. The pledge and
+// signal segments are the same in both, so only the sub segment tells them
+// apart and the shape hash moves with it
+contract C {
+    subcontract Payment {
+        pledge charge(amount: Int) -> Result<Unit, Int>
+    }
+    pledge settle() -> Result<Unit, Int>
+}

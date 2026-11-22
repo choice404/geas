@@ -1,9 +1,9 @@
-geas shape 2
+geas shape 3
 contract HostLedger
 version 2
-hash 0x81f2e35fc39d5117
+hash 0xcec2ba68ef8be341
 course 0x0000000000000000
-shape contract HostLedger;vow account:S;vow limit:I;vow ratio:F;pledge capture:(I)->R(I,S);pledge log:()->V;pledge reserve:()->R(I,S);signal approved:(S)->V;remedy refund:capture:(I)->V;
+shape contract HostLedger;vow account:S;vow limit:I;vow ratio:F;pledge capture:(I)->R(I,S);pledge log:()->V;pledge reserve:()->R(I,S);signal approved:(S)->V;remedy refund:capture:(I)->V;sub Payment:capture;sub #1:log;
 vow account S
 vow limit I
 vow ratio F

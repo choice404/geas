@@ -1,1 +1,4 @@
-latch notify as fulfilled seeds no Ok value, but remedy 'recall' for 'notify' takes one; latch 'notify' as pending, or let the remedy take no parameter
+latch notify as fulfilled seeds no value, but pledge 'notify' yields a value of type 'String' that whatever reads it later needs; latch 'notify' as pending
+latch count as fulfilled seeds no value, but pledge 'count' yields a value of type 'Int'
+latch lookup as fulfilled seeds no value, but pledge 'lookup' yields a value of type 'String'
+latch arrived as fulfilled seeds no value, but signal 'arrived' carries a payload of type 'Tuple<Int, String>'

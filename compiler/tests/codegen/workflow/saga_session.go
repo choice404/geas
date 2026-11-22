@@ -18,7 +18,7 @@ import (
 // OrderSagaShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const OrderSagaShapeHash uint64 = 0xeef34448ebb6d73c
+const OrderSagaShapeHash uint64 = 0x4636836322acf73d
 
 // OrderSagaSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

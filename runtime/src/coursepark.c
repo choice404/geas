@@ -54,6 +54,9 @@ GeasStatus geas_contract_set_autopark(GeasContract* c, const char* dsn, const ch
         }
     }
     geas_rt_lock(c);
+    /* A host thread waits out a delivery that would refuse the first row,
+     * so the row is written at this call's own release */
+    geas_rt_await_delivery(c, GEAS_AWAIT_PARK);
     free(c->autopark_dsn);
     free(c->autopark_key);
     c->autopark_dsn = d;
@@ -115,7 +118,7 @@ GeasStatus geas_course_checkpoint(void* ctx, GeasCourseFrame* f) {
     geas_rt_course_publish_step(k);
     if (k->held != GEAS_OK) return k->held;
     if (!c->autopark_dsn) return GEAS_OK;
-    if (geas_rt_course_settle(c) && geas_rt_course_cut(c)) {
+    if (geas_rt_settle_delivery(c) && geas_rt_course_cut(c)) {
         k->refused = 1;
         return GEAS_ERR_STATE;
     }

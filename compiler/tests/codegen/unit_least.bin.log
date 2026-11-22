@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/unit_least.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Unit equality, which always holds, alone and inside a composite, the
+  ^

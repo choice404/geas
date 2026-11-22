@@ -1,0 +1,13 @@
+// The magnitude of the least Int with no unary minus to fold into: a
+// binary minus, and a minus a postfix suffix binds under
+contract Least {
+    clause less(x: Int) -> Int {
+        return x -9223372036854775808
+    }
+    clause later(x: Duration) -> Duration {
+        return x - 9223372036854775808ms
+    }
+    clause method() -> Int {
+        return -9223372036854775808.abs()
+    }
+}

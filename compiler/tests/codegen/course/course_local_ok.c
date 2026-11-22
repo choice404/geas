@@ -2,7 +2,7 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k5_Child_pledges[] = {
-    { "run", "__geas_ash_Child_run_0e2ba22315b89a85_v1", 0, NULL, -1 },
+    { "run", "__geas_ash_5Child_3run_0e2ba22315b89a85_v1", 0, NULL, -1 },
 };
 
 static const GeasReqAtom k5_Child_atoms[] = {
@@ -205,6 +205,19 @@ label_2:
     return GEAS_COURSE_DONE;
 }
 
+static const uint32_t k4_Flow_type_kids_0[] = { 1 };
+static const uint32_t k4_Flow_type_kids_1[] = { 2 };
+static const uint32_t k4_Flow_type_kids_2[] = { 3, 3 };
+
+static const GeasTypeNode k4_Flow_types[] = {
+    { GEAS_TY_LIST, 1, k4_Flow_type_kids_0, NULL, 0, NULL },
+    { GEAS_TY_OPTION, 1, k4_Flow_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_TUPLE, 2, k4_Flow_type_kids_2, NULL, 0, NULL },
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k4_Flow_course_slot_types[] = { 0, 0, 3, 1, 2, 2 };
+
 static const GeasContractDesc k4_Flow = {
     "Flow", 0x64f7f76a4aa4e250ULL,
     1, 0, NULL,
@@ -215,8 +228,11 @@ static const GeasContractDesc k4_Flow = {
     NULL, NULL, NULL,
     0, NULL,
     NULL,
-    .course_fn = k4_Flow_course, .course_nslots = 6, .course_hash = 0xa55b81c00ab2d8b7ULL,
-    .ntypes = 0,
+    .course_fn = k4_Flow_course, .course_nslots = 6, .course_hash = 0xb2956ec2c440befaULL,
+    .ntypes = 4, .types = k4_Flow_types,
+    .item_types = NULL, .vow_types = NULL,
+    .remedy_types = NULL,
+    .course_slot_types = k4_Flow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

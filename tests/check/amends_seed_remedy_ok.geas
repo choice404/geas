@@ -1,16 +1,19 @@
-// An item version 2 adds may be seeded fulfilled when no remedy for it
-// takes its Ok value, and a remedy that takes one is fine for an item that
-// starts pending
+// An item version 2 adds may be seeded fulfilled when it carries no value,
+// a pledge whose Ok side is Unit or a signal with no payload, a remedy with
+// no parameter beside it, and an item that carries one, read by a remedy
+// too, starts pending
 contract AmendSeedRemedy [version: 2] {
     pledge ship() -> Result<Int, String>
-    pledge notify() -> Result<String, String>
+    pledge notify() -> Result<Unit, String>
     pledge audit() -> Result<Int, String>
+    signal ready()
 
     remedy recall for notify() -> Unit
     remedy undo for audit(entry: Int) -> Unit
 
     amends 1 {
         latch notify as fulfilled
+        latch ready as fulfilled
         latch audit as pending
     }
 }

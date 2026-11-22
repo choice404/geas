@@ -5,7 +5,6 @@ import contextlib
 import gc
 import io
 import threading
-import time
 
 from geas import (GEAS_ERR_STATE, GEAS_EVENT_CANCELLED, GEAS_EVENT_LATCH_FULFILLED,
                   GEAS_EVENT_RECLAIMED, GEAS_EVENT_STATE_CHANGED, GEAS_SIGNED,
@@ -52,17 +51,10 @@ def main():
         assert len(events) == 1 and events[0].new_state == GEAS_SIGNED
         assert instance.fulfill_sync("charge", "card", 25.0) == Ok(True)
 
-        # An accepted park is also a delivery boundary for preceding worker events
-        deadline = time.monotonic() + 10
-        while True:
-            try:
-                instance.park(":memory:", "events")
-                break
-            except GeasError as error:
-                assert error.status == GEAS_ERR_STATE
-                assert time.monotonic() < deadline
-                time.sleep(0.001)
+        # The sync call returns once the worker delivered its events, so they
+        # are all here already and a park right after needs no second try
         assert callback_threads == body_threads
+        instance.park(":memory:", "events")
         assert [event.kind for event in events[:3]] == [
             GEAS_EVENT_STATE_CHANGED, GEAS_EVENT_LATCH_FULFILLED, GEAS_EVENT_STATE_CHANGED]
         assert events[1].item == "charge"

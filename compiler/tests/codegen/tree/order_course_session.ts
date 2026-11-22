@@ -23,7 +23,7 @@ export interface SessionStream {
 // OrderCourseShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const OrderCourseShapeHash: bigint = 0x4861f0a9753d79d4n;
+export const OrderCourseShapeHash: bigint = 0xa5fa4f6bf483ba55n;
 
 export interface OrderCourseSignRequest {
   card?: string;  // the vow; unset takes the declared default

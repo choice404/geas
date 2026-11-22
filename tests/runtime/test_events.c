@@ -111,6 +111,9 @@ static const GeasContractDesc saga = {
 /* ---- observation and exact expectations ---- */
 
 #define MAX_EVENTS 4096
+
+/* How long a check gives a call that should be waiting to return instead */
+#define HOLD_US 50000
 static pthread_mutex_t log_mu = PTHREAD_MUTEX_INITIALIZER;
 static GeasEvent event_log[MAX_EVENTS];
 static pthread_t event_threads[MAX_EVENTS];
@@ -121,8 +124,8 @@ static atomic_int g_hold_hook;
 static atomic_int g_hook_started;
 static pthread_mutex_t host_mu = PTHREAD_MUTEX_INITIALIZER;
 
-/* The gate inspects the internal reservation only to wait for worker delivery
- * A future may complete before its callback acquires a host mutex */
+/* The gate inspects the internal reservation only to wait for a delivery
+ * that ran on a thread the test did not wait for, a signal's or a break's */
 static void await_delivery(GeasContract* instance) {
     if (!instance) return;
     while (__atomic_load_n(&instance->event_owner, __ATOMIC_ACQUIRE)) sched_yield();
@@ -514,13 +517,16 @@ static void nested_calls(GeasRuntime* runtime) {
     atomic_store(&g_hook_started, 0);
     GeasFuture* future = geas_pledge_fulfill(instance, "nested", NULL, 0, NULL, 0);
     while (!atomic_load(&g_hook_started)) sched_yield();
-    GeasValue result;
-    CHECK(geas_future_wait(future, &result) == GEAS_OK, "outer completes before nested delivery");
-    CHECK(geas_future_release(future) == GEAS_OK, "outer receipt releases");
+    int ready = 1;
+    CHECK(geas_future_poll(future, &ready) == GEAS_OK && !ready,
+          "the outer outcome is published after its events are delivered");
     CHECK(geas_contract_state(instance) == GEAS_FULFILLED, "outer lock is released during nested hook");
     CHECK(geas_contract_state(nested_instance) == GEAS_PARTIAL, "nested read completes during hook");
     atomic_store(&g_hold_hook, 0);
     pthread_mutex_unlock(&host_mu);
+    GeasValue result;
+    CHECK(geas_future_wait(future, &result) == GEAS_OK, "outer completes after the delivery");
+    CHECK(geas_future_release(future) == GEAS_OK, "outer receipt releases");
     await_delivery(instance);
     await_delivery(nested_instance);
     const Expected inner_events[] = {
@@ -576,7 +582,8 @@ static void remedy_reservation(GeasRuntime* runtime) {
     CHECK(geas_contract_state(instance) == GEAS_REMEDYING, "retry reads Remedying");
     CHECK(geas_instance_park(instance, ":memory:", "pass") == GEAS_OK,
           "another thread parks while the remedy owner keeps delivery");
-    CHECK(geas_contract_break(instance) == GEAS_ERR_STATE, "pass reservation refuses cancel");
+    CHECK(run(instance, "charge", NULL, 0, NULL) == GEAS_ERR_STATE,
+          "a fulfill meeting another thread's pass answers from Remedying at once");
     CHECK(geas_runtime_set_event_hook(runtime, NULL, NULL) == GEAS_OK, "hook clears during retry");
     atomic_store(&g_can_wake, 1);
     GeasValue result;
@@ -629,16 +636,22 @@ static void pledge_reservation(GeasRuntime* runtime) {
     CHECK(pthread_create(&sender, NULL, deliver_signal, instance) == 0, "signal thread starts");
     while (!atomic_load(&g_hook_started)) sched_yield();
     atomic_store(&g_can_wake, 1);
-    GeasValue result;
-    CHECK(geas_future_wait(future, &result) == GEAS_ERR_STATE, "retry refuses during another delivery");
-    CHECK(geas_future_release(future) == GEAS_OK, "retry receipt releases");
+    /* Polled, never waited, while this thread holds the mutex the hook
+     * takes: the wait would be this thread's own lock order to keep */
+    usleep(HOLD_US);
+    int ready = 1;
+    CHECK(geas_future_poll(future, &ready) == GEAS_OK && !ready,
+          "the retry waits out another thread's delivery");
     CHECK(atomic_load(&g_ship_attempts) == 1, "no attempt runs during another delivery");
     atomic_store(&g_hold_hook, 0);
     pthread_mutex_unlock(&host_mu);
+    GeasValue result;
+    CHECK(geas_future_wait(future, &result) == GEAS_OK, "and then makes its attempt");
+    CHECK(geas_future_release(future) == GEAS_OK, "retry receipt releases");
+    CHECK(atomic_load(&g_ship_attempts) == 2, "the second attempt ran after the delivery");
     pthread_join(sender, NULL);
     g_sleep_hook = NULL;
     atomic_store(&g_ship_mode, SHIP_OK);
-    fulfill(instance, "ship");
     const Expected expected[] = {
         STATE(UNSIGNED, SIGNED), EVENT(LATCH_FULFILLED, "delivered", SIGNED),
         EVENT(SIGNAL_DELIVERED, "delivered", SIGNED), EVENT(LATCH_FULFILLED, "ship", SIGNED),
@@ -716,6 +729,16 @@ static void replace_hook(GeasRuntime* runtime) {
     CHECK(geas_runtime_set_event_hook(runtime, observe, &event_count) == GEAS_OK, "hook restored");
 }
 
+static atomic_int g_charge_status = -100;
+
+static void* charge_instance(void* pointer) {
+    atomic_store(&g_charge_status, (int)run(pointer, "charge", NULL, 0, NULL));
+    return NULL;
+}
+
+/* A hook held on a host mutex. This thread holds it and calls only what
+ * never waits on a delivery, the reads, the poll, and registration; the
+ * mutation runs on a thread of its own and waits the delivery out */
 static void host_mutex(GeasRuntime* runtime) {
     GeasContract* instance = sign_saga(runtime);
     pthread_mutex_lock(&host_mu);
@@ -723,16 +746,23 @@ static void host_mutex(GeasRuntime* runtime) {
     atomic_store(&g_hook_started, 0);
     GeasFuture* future = geas_pledge_fulfill(instance, "reserve", NULL, 0, NULL, 0);
     while (!atomic_load(&g_hook_started)) sched_yield();
-    GeasValue value;
-    CHECK(geas_future_wait(future, &value) == GEAS_OK, "wait returns while hook waits on host mutex");
-    CHECK(geas_future_release(future) == GEAS_OK, "receipt releases while hook waits");
+    int ready = 1;
+    CHECK(geas_future_poll(future, &ready) == GEAS_OK && !ready,
+          "the outcome waits for its own delivery");
     CHECK(geas_contract_state(instance) == GEAS_PARTIAL, "read does not wait for callback");
-    CHECK(run(instance, "charge", NULL, 0, NULL) == GEAS_ERR_STATE, "mutation refuses without waiting");
-    CHECK(geas_contract_break(instance) == GEAS_ERR_STATE, "cancel refuses without waiting");
-    CHECK(!geas_cancel_requested(instance), "refused cancel leaves request clear");
+    atomic_store(&g_charge_status, -100);
+    pthread_t charger;
+    CHECK(pthread_create(&charger, NULL, charge_instance, instance) == 0, "mutation thread starts");
+    usleep(HOLD_US);
+    CHECK(atomic_load(&g_charge_status) == -100, "a host mutation waits for the callback");
     CHECK(geas_runtime_set_event_hook(runtime, NULL, NULL) == GEAS_OK, "clear never waits on callback");
     atomic_store(&g_hold_hook, 0);
     pthread_mutex_unlock(&host_mu);
+    GeasValue value;
+    CHECK(geas_future_wait(future, &value) == GEAS_OK, "wait returns once the hook let go");
+    CHECK(geas_future_release(future) == GEAS_OK, "receipt releases");
+    pthread_join(charger, NULL);
+    CHECK(atomic_load(&g_charge_status) == GEAS_OK, "and the mutation then lands");
     await_delivery(instance);
     const Expected expected[] = {
         STATE(UNSIGNED, SIGNED), EVENT(LATCH_FULFILLED, "reserve", SIGNED), STATE(SIGNED, PARTIAL)
@@ -749,13 +779,14 @@ static void cancel_handoff(GeasRuntime* runtime) {
     atomic_store(&g_hook_started, 0);
     GeasFuture* future = geas_pledge_fulfill(instance, "reserve", NULL, 0, NULL, 0);
     while (!atomic_load(&g_hook_started)) sched_yield();
-    GeasValue result;
-    CHECK(geas_future_wait(future, &result) == GEAS_OK, "handoff outcome delivered");
-    CHECK(geas_future_release(future) == GEAS_OK, "handoff receipt releases");
     /* Publish the flag at the handoff between cancel's check and its lock */
     geas_rt_request_cancel(instance);
     atomic_store(&g_hold_hook, 0);
     pthread_mutex_unlock(&host_mu);
+    GeasValue result;
+    CHECK(geas_future_wait(future, &result) == GEAS_ERR_STATE,
+          "the break the delivery carries forfeits the unwaited receipt");
+    CHECK(geas_future_release(future) == GEAS_OK, "handoff receipt releases");
     await_delivery(instance);
     const Expected expected[] = {
         STATE(UNSIGNED, SIGNED), EVENT(LATCH_FULFILLED, "reserve", SIGNED), STATE(SIGNED, PARTIAL),

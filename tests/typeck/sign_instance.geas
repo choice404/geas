@@ -1,7 +1,7 @@
 // The contract operations: sign with named vow overrides, a defaulted vow
 // left to its default, pledge fulfillment on the instance including a pledge
-// inside a named subcontract, the first class pledge value bound and called
-// later, break, and a clause called by bare name inside its own contract.
+// inside a named subcontract, break, and a clause called by bare name inside
+// its own contract.
 
 contract Store {
     vow region: String
@@ -28,9 +28,6 @@ contract Main {
         let store = Store.sign(region: "eu-west", retries: 5)
         let missing = store.get("absent")
         let saved = store.put("name", "geas")
-        let getter = store.get
-        let later = getter("cached")
-        let annotated: pledge(String) -> Option<String> = store.get
         store.break()
         return Ok(0)
     }

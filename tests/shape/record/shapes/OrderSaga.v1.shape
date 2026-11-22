@@ -1,9 +1,9 @@
-geas shape 2
+geas shape 3
 contract OrderSaga
 version 1
-hash 0x1bd2c3deca505383
-course 0xcc55743f19982d6e
-shape contract OrderSaga;vow order:NOrder;vow store_url:S;pledge authorize:(NCard,F)->R(NAuthId,NPayError);pledge capture:(NAuthId)->R(NReceipt,NPayError);pledge reserve:(L(NItem))->R(NReservation,NStockError);pledge dispatch:(NReservation)->R(NTracking,NShipError);remedy refund:capture:(NReceipt)->R(V,NPayError);remedy release:reserve:(NReservation)->V;terms pledge authorize:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout+Gateway;terms pledge capture:after=authorize,within=60000;terms pledge reserve:within=300000;terms pledge dispatch:after=Payment+reserve,within=172800000;terms remedy refund:retry=10/every=60000/backoff=2/cap=3600000;course;term 604800000;type AuthId{token:S};type Card{number:S,expiry:S};type Item{sku:S,quantity:I};type Order{card:NCard,total:F,items:L(NItem)};type PayError=Declined(reason:S)|Timeout|Gateway(code:I);type Receipt{id:S};type Reservation{id:S};type ShipError=NoCarrier|Refused(reason:S);type StockError=OutOfStock(sku:S)|Unavailable;type Tracking{carrier:S,code:S};
+hash 0x61acf913ee02d183
+course 0x9d2abda3b17680d8
+shape contract OrderSaga;vow order:NOrder;vow store_url:S;pledge authorize:(NCard,F)->R(NAuthId,NPayError);pledge capture:(NAuthId)->R(NReceipt,NPayError);pledge reserve:(L(NItem))->R(NReservation,NStockError);pledge dispatch:(NReservation)->R(NTracking,NShipError);remedy refund:capture:(NReceipt)->R(V,NPayError);remedy release:reserve:(NReservation)->V;terms pledge authorize:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout+Gateway;terms pledge capture:after=authorize,within=60000;terms pledge reserve:within=300000;terms pledge dispatch:after=Payment+reserve,within=172800000;terms remedy refund:retry=10/every=60000/backoff=2/cap=3600000;course;term 604800000;sub Payment:authorize,capture;requirements fulfill=((Payment&reserve)&dispatch),partial=(Payment|reserve),break=((!Payment|!reserve)|!dispatch);type AuthId{token:S};type Card{number:S,expiry:S};type Item{sku:S,quantity:I};type Order{card:NCard,total:F,items:L(NItem)};type PayError=Declined(reason:S)|Timeout|Gateway(code:I);type Receipt{id:S};type Reservation{id:S};type ShipError=NoCarrier|Refused(reason:S);type StockError=OutOfStock(sku:S)|Unavailable;type Tracking{carrier:S,code:S};
 vow order NOrder
 vow store_url S
 pledge authorize (NCard,F)->R(NAuthId,NPayError) NAuthId

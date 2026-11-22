@@ -58,7 +58,7 @@ step_2:
 }
 
 static const GeasPledgeDesc k15_AmendCourseSame_pledges[] = {
-    { "step", "__geas_ash_AmendCourseSame_step_a821ae9487abd245_v2", 1, NULL, -1 },
+    { "step", "__geas_ash_15AmendCourseSame_4step_a821ae9487abd245_v2", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k15_AmendCourseSame_atoms[] = {
@@ -85,7 +85,7 @@ static const int32_t k15_AmendCourseSame_amend1_item_map[] = {
 static const GeasAmendDesc k15_AmendCourseSame_amends[] = {
     {
         .from_version = 1, .restart_course = 0,
-        .from_shape_hash = 0x004553e609273dfcULL, .from_course_hash = 0x1a60b41adb8571b2ULL,
+        .from_shape_hash = 0x004553e609273dfcULL, .from_course_hash = 0xbefec715ddb663f2ULL,
         .nold_vows = 0, .old_vows = NULL,
         .nold_items = 1, .old_items = k15_AmendCourseSame_amend1_old_items,
         .nold_subs = 0, .old_subs = NULL,
@@ -111,6 +111,8 @@ static const GeasItemTypes k15_AmendCourseSame_item_types[] = {
     { 1, k15_AmendCourseSame_item_params_0, 1 },
 };
 
+static const uint32_t k15_AmendCourseSame_course_slot_types[] = { 1, 0, 0, 1 };
+
 static const GeasContractDesc k15_AmendCourseSame = {
     "AmendCourseSame", 0x004553e609273dfcULL,
     2, 1, k15_AmendCourseSame_pledges,
@@ -121,11 +123,12 @@ static const GeasContractDesc k15_AmendCourseSame = {
     k15_AmendCourseSame_rf, NULL, k15_AmendCourseSame_rb,
     0, NULL,
     NULL,
-    .course_fn = k15_AmendCourseSame_course, .course_nslots = 4, .course_hash = 0x1a60b41adb8571b2ULL,
+    .course_fn = k15_AmendCourseSame_course, .course_nslots = 4, .course_hash = 0xbefec715ddb663f2ULL,
     .namends = 1, .amends = k15_AmendCourseSame_amends,
     .ntypes = 3, .types = k15_AmendCourseSame_types,
     .item_types = k15_AmendCourseSame_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .course_slot_types = k15_AmendCourseSame_course_slot_types,
 };
 
 static uint32_t k18_AmendCourseChanged_course(void* ctx, GeasCourseFrame* f) {
@@ -165,7 +168,7 @@ step_1:
         t6.as.i = 1;
         GeasValue t7 = {0};
         t7.ty = GEAS_TY_INT;
-        t7.as.i = f->slots[1].as.i + t6.as.i;
+        if (__builtin_add_overflow(f->slots[1].as.i, t6.as.i, &t7.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         f->slots[2] = t7;
     }
     f->step = 2;
@@ -191,7 +194,7 @@ step_2:
 }
 
 static const GeasPledgeDesc k18_AmendCourseChanged_pledges[] = {
-    { "step", "__geas_ash_AmendCourseChanged_step_a821ae9487abd245_v2", 1, NULL, -1 },
+    { "step", "__geas_ash_18AmendCourseChanged_4step_a821ae9487abd245_v2", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k18_AmendCourseChanged_atoms[] = {
@@ -218,7 +221,7 @@ static const int32_t k18_AmendCourseChanged_amend1_item_map[] = {
 static const GeasAmendDesc k18_AmendCourseChanged_amends[] = {
     {
         .from_version = 1, .restart_course = 1,
-        .from_shape_hash = 0x6e0f39046f55a074ULL, .from_course_hash = 0x8aa5e5adeedf07a8ULL,
+        .from_shape_hash = 0x6e0f39046f55a074ULL, .from_course_hash = 0xaeda96d9c6bc5f82ULL,
         .nold_vows = 0, .old_vows = NULL,
         .nold_items = 1, .old_items = k18_AmendCourseChanged_amend1_old_items,
         .nold_subs = 0, .old_subs = NULL,
@@ -244,6 +247,8 @@ static const GeasItemTypes k18_AmendCourseChanged_item_types[] = {
     { 1, k18_AmendCourseChanged_item_params_0, 1 },
 };
 
+static const uint32_t k18_AmendCourseChanged_course_slot_types[] = { 1, 0, 0, 1 };
+
 static const GeasContractDesc k18_AmendCourseChanged = {
     "AmendCourseChanged", 0x6e0f39046f55a074ULL,
     2, 1, k18_AmendCourseChanged_pledges,
@@ -254,11 +259,12 @@ static const GeasContractDesc k18_AmendCourseChanged = {
     k18_AmendCourseChanged_rf, NULL, k18_AmendCourseChanged_rb,
     0, NULL,
     NULL,
-    .course_fn = k18_AmendCourseChanged_course, .course_nslots = 4, .course_hash = 0xbb47fe53e04e128cULL,
+    .course_fn = k18_AmendCourseChanged_course, .course_nslots = 4, .course_hash = 0x565bac0c27547d4dULL,
     .namends = 1, .amends = k18_AmendCourseChanged_amends,
     .ntypes = 3, .types = k18_AmendCourseChanged_types,
     .item_types = k18_AmendCourseChanged_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .course_slot_types = k18_AmendCourseChanged_course_slot_types,
 };
 
 static uint32_t k16_AmendCourseAdded_course(void* ctx, GeasCourseFrame* f) {
@@ -295,7 +301,7 @@ step_1:
 }
 
 static const GeasPledgeDesc k16_AmendCourseAdded_pledges[] = {
-    { "step", "__geas_ash_AmendCourseAdded_step_a821ae9487abd245_v2", 1, NULL, -1 },
+    { "step", "__geas_ash_16AmendCourseAdded_4step_a821ae9487abd245_v2", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k16_AmendCourseAdded_atoms[] = {
@@ -348,6 +354,8 @@ static const GeasItemTypes k16_AmendCourseAdded_item_types[] = {
     { 1, k16_AmendCourseAdded_item_params_0, 1 },
 };
 
+static const uint32_t k16_AmendCourseAdded_course_slot_types[] = { 1 };
+
 static const GeasContractDesc k16_AmendCourseAdded = {
     "AmendCourseAdded", 0x90d20124bcab7beaULL,
     2, 1, k16_AmendCourseAdded_pledges,
@@ -358,15 +366,16 @@ static const GeasContractDesc k16_AmendCourseAdded = {
     k16_AmendCourseAdded_rf, NULL, k16_AmendCourseAdded_rb,
     0, NULL,
     NULL,
-    .course_fn = k16_AmendCourseAdded_course, .course_nslots = 1, .course_hash = 0x8aa5e5adeedf07a8ULL,
+    .course_fn = k16_AmendCourseAdded_course, .course_nslots = 1, .course_hash = 0xaeda96d9c6bc5f82ULL,
     .namends = 1, .amends = k16_AmendCourseAdded_amends,
     .ntypes = 3, .types = k16_AmendCourseAdded_types,
     .item_types = k16_AmendCourseAdded_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .course_slot_types = k16_AmendCourseAdded_course_slot_types,
 };
 
 static const GeasPledgeDesc k18_AmendCourseDropped_pledges[] = {
-    { "step", "__geas_ash_AmendCourseDropped_step_a821ae9487abd245_v2", 1, NULL, -1 },
+    { "step", "__geas_ash_18AmendCourseDropped_4step_a821ae9487abd245_v2", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k18_AmendCourseDropped_atoms[] = {
@@ -393,7 +402,7 @@ static const int32_t k18_AmendCourseDropped_amend1_item_map[] = {
 static const GeasAmendDesc k18_AmendCourseDropped_amends[] = {
     {
         .from_version = 1, .restart_course = 0,
-        .from_shape_hash = 0x89d504a618a07b8aULL, .from_course_hash = 0x8aa5e5adeedf07a8ULL,
+        .from_shape_hash = 0x89d504a618a07b8aULL, .from_course_hash = 0xaeda96d9c6bc5f82ULL,
         .nold_vows = 0, .old_vows = NULL,
         .nold_items = 1, .old_items = k18_AmendCourseDropped_amend1_old_items,
         .nold_subs = 0, .old_subs = NULL,
@@ -436,7 +445,7 @@ static const GeasContractDesc k18_AmendCourseDropped = {
 };
 
 static const GeasPledgeDesc k15_AmendCourseNone_pledges[] = {
-    { "step", "__geas_ash_AmendCourseNone_step_a821ae9487abd245_v2", 1, NULL, -1 },
+    { "step", "__geas_ash_15AmendCourseNone_4step_a821ae9487abd245_v2", 1, NULL, -1 },
 };
 
 static const GeasReqAtom k15_AmendCourseNone_atoms[] = {
@@ -505,6 +514,365 @@ static const GeasContractDesc k15_AmendCourseNone = {
     .remedy_types = NULL,
 };
 
+static GeasStatus geas_clause18_AmendCourseRetyped_tally(GeasContract* cc, const GeasValue* args, GeasValue* out);
+
+static GeasStatus geas_clause18_AmendCourseRetyped_tally(GeasContract* cc, const GeasValue* args, GeasValue* out) {
+    (void)cc;
+    (void)args;
+    GeasValue* t0 = (GeasValue*)geas_bytes(cc, 2 * sizeof(GeasValue));
+    if (!t0) return GEAS_ERR_OOM;
+    GeasValue t1 = {0};
+    t1.ty = GEAS_TY_INT;
+    t1.as.i = 1;
+    t0[0] = t1;
+    GeasValue t2 = {0};
+    t2.ty = GEAS_TY_INT;
+    t2.as.i = 2;
+    t0[1] = t2;
+    GeasValue t3 = {0};
+    t3.ty = GEAS_TY_RECORD;
+    t3.as.list.data = t0;
+    t3.as.list.len = 2;
+    t3.as.list.cap = 2;
+    *out = t3;
+    return GEAS_OK;
+    out->ty = GEAS_TY_UNIT;
+    return GEAS_OK;
+}
+
+static uint32_t k18_AmendCourseRetyped_course(void* ctx, GeasCourseFrame* f) {
+    GeasContract* cc = (GeasContract*)ctx;
+    (void)cc;
+    switch (f->step) {
+        case 0: break;
+        case 1: goto step_1;
+        default: f->status = GEAS_ERR_STATE; return GEAS_COURSE_STOPPED;
+    }
+    {
+        GeasValue t0 = {0};
+        GeasStatus t1 = geas_clause18_AmendCourseRetyped_tally(cc, NULL, &t0);
+        if (t1 != GEAS_OK) { f->status = t1; return GEAS_COURSE_STOPPED; }
+        GeasValue t2 = {0};
+        GeasStatus t3 = geas_value_deep_copy(cc, &t0, &t2);
+        if (t3 != GEAS_OK) { f->status = t3; return GEAS_COURSE_STOPPED; }
+        f->slots[0] = t2;
+    }
+    {
+        GeasValue t4 = ((const GeasValue*)f->slots[0].as.list.data)[0];
+        f->slots[1] = t4;
+    }
+    f->step = 1;
+    {
+        GeasStatus t5 = geas_course_checkpoint(ctx, f);
+        if (t5 != GEAS_OK) { f->status = t5; return GEAS_COURSE_STOPPED; }
+    }
+step_1:
+    {
+        /* call step */
+        GeasValue t6[1] = { f->slots[1] };
+        GeasValue t7 = {0};
+        GeasStatus t8 = geas_course_call(ctx, f, 0, t6, 1, &t7);
+        if (t8 != GEAS_OK) { f->status = t8; return GEAS_COURSE_STOPPED; }
+        f->slots[2] = t7;
+    }
+    {
+        if (f->slots[2].tag == 1) return GEAS_COURSE_DONE;
+        GeasValue t9 = *(const GeasValue*)f->slots[2].as.box;
+        (void)t9;
+    }
+    return GEAS_COURSE_DONE;
+}
+
+static const GeasPledgeDesc k18_AmendCourseRetyped_pledges[] = {
+    { "step", "__geas_ash_18AmendCourseRetyped_4step_a821ae9487abd245_v2", 1, NULL, -1 },
+};
+
+static const GeasReqAtom k18_AmendCourseRetyped_atoms[] = {
+    { "step", GEAS_ATOM_FULFILLED, -1, 0 },
+    { "step", GEAS_ATOM_BROKEN, -1, 0 },
+};
+
+static const GeasReqOp k18_AmendCourseRetyped_rf[] = {
+    { GEAS_REQ_ATOM, 0 },
+};
+
+static const GeasReqOp k18_AmendCourseRetyped_rb[] = {
+    { GEAS_REQ_ATOM, 1 },
+};
+
+static const char* const k18_AmendCourseRetyped_amend1_old_items[] = {
+    "step",
+};
+
+static const int32_t k18_AmendCourseRetyped_amend1_item_map[] = {
+    0,
+};
+
+static const GeasAmendDesc k18_AmendCourseRetyped_amends[] = {
+    {
+        .from_version = 1, .restart_course = 1,
+        .from_shape_hash = 0x30c0220593fe83b7ULL, .from_course_hash = 0x914ee58fef1adb1eULL,
+        .nold_vows = 0, .old_vows = NULL,
+        .nold_items = 1, .old_items = k18_AmendCourseRetyped_amend1_old_items,
+        .nold_subs = 0, .old_subs = NULL,
+        .nold_remedies = 0, .old_remedies = NULL,
+        .vow_map = NULL, .item_map = k18_AmendCourseRetyped_amend1_item_map,
+        .sub_map = NULL, .remedy_map = NULL,
+        .nlatches = 0, .latches = NULL,
+        .vows_fn = NULL,
+    },
+};
+
+static const uint32_t k18_AmendCourseRetyped_type_kids_1[] = { 0, 2 };
+static const uint32_t k18_AmendCourseRetyped_type_kids_3[] = { 0, 0 };
+
+static const GeasTypeNode k18_AmendCourseRetyped_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k18_AmendCourseRetyped_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 2, k18_AmendCourseRetyped_type_kids_3, "Tally", 0, NULL },
+};
+
+static const uint32_t k18_AmendCourseRetyped_item_params_0[] = { 0 };
+
+static const GeasItemTypes k18_AmendCourseRetyped_item_types[] = {
+    { 1, k18_AmendCourseRetyped_item_params_0, 1 },
+};
+
+static const uint32_t k18_AmendCourseRetyped_course_slot_types[] = { 3, 0, 1 };
+
+static const GeasContractDesc k18_AmendCourseRetyped = {
+    "AmendCourseRetyped", 0x30c0220593fe83b7ULL,
+    2, 1, k18_AmendCourseRetyped_pledges,
+    0, NULL,
+    0, NULL, 2,
+    k18_AmendCourseRetyped_atoms, 0,
+    1, 0, 1,
+    k18_AmendCourseRetyped_rf, NULL, k18_AmendCourseRetyped_rb,
+    0, NULL,
+    NULL,
+    .course_fn = k18_AmendCourseRetyped_course, .course_nslots = 3, .course_hash = 0x1d119ba6df1a34e5ULL,
+    .namends = 1, .amends = k18_AmendCourseRetyped_amends,
+    .ntypes = 4, .types = k18_AmendCourseRetyped_types,
+    .item_types = k18_AmendCourseRetyped_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
+    .course_slot_types = k18_AmendCourseRetyped_course_slot_types,
+};
+
+static uint32_t k18_AmendCourseLiteral_course(void* ctx, GeasCourseFrame* f) {
+    GeasContract* cc = (GeasContract*)ctx;
+    (void)cc;
+    switch (f->step) {
+        case 0: break;
+        case 1: goto step_1;
+        default: f->status = GEAS_ERR_STATE; return GEAS_COURSE_STOPPED;
+    }
+    f->step = 1;
+    {
+        GeasStatus t0 = geas_course_checkpoint(ctx, f);
+        if (t0 != GEAS_OK) { f->status = t0; return GEAS_COURSE_STOPPED; }
+    }
+step_1:
+    {
+        /* call step */
+        GeasValue t1 = {0};
+        t1.ty = GEAS_TY_INT;
+        t1.as.i = 2;
+        GeasValue t2[1] = { t1 };
+        GeasValue t3 = {0};
+        GeasStatus t4 = geas_course_call(ctx, f, 0, t2, 1, &t3);
+        if (t4 != GEAS_OK) { f->status = t4; return GEAS_COURSE_STOPPED; }
+        f->slots[0] = t3;
+    }
+    {
+        if (f->slots[0].tag == 1) return GEAS_COURSE_DONE;
+        GeasValue t5 = *(const GeasValue*)f->slots[0].as.box;
+        (void)t5;
+    }
+    return GEAS_COURSE_DONE;
+}
+
+static const GeasPledgeDesc k18_AmendCourseLiteral_pledges[] = {
+    { "step", "__geas_ash_18AmendCourseLiteral_4step_a821ae9487abd245_v2", 1, NULL, -1 },
+};
+
+static const GeasReqAtom k18_AmendCourseLiteral_atoms[] = {
+    { "step", GEAS_ATOM_FULFILLED, -1, 0 },
+    { "step", GEAS_ATOM_BROKEN, -1, 0 },
+};
+
+static const GeasReqOp k18_AmendCourseLiteral_rf[] = {
+    { GEAS_REQ_ATOM, 0 },
+};
+
+static const GeasReqOp k18_AmendCourseLiteral_rb[] = {
+    { GEAS_REQ_ATOM, 1 },
+};
+
+static const char* const k18_AmendCourseLiteral_amend1_old_items[] = {
+    "step",
+};
+
+static const int32_t k18_AmendCourseLiteral_amend1_item_map[] = {
+    0,
+};
+
+static const GeasAmendDesc k18_AmendCourseLiteral_amends[] = {
+    {
+        .from_version = 1, .restart_course = 1,
+        .from_shape_hash = 0xbd9d3c638ac3a5a7ULL, .from_course_hash = 0xaeda96d9c6bc5f82ULL,
+        .nold_vows = 0, .old_vows = NULL,
+        .nold_items = 1, .old_items = k18_AmendCourseLiteral_amend1_old_items,
+        .nold_subs = 0, .old_subs = NULL,
+        .nold_remedies = 0, .old_remedies = NULL,
+        .vow_map = NULL, .item_map = k18_AmendCourseLiteral_amend1_item_map,
+        .sub_map = NULL, .remedy_map = NULL,
+        .nlatches = 0, .latches = NULL,
+        .vows_fn = NULL,
+    },
+};
+
+static const uint32_t k18_AmendCourseLiteral_type_kids_1[] = { 0, 2 };
+
+static const GeasTypeNode k18_AmendCourseLiteral_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k18_AmendCourseLiteral_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k18_AmendCourseLiteral_item_params_0[] = { 0 };
+
+static const GeasItemTypes k18_AmendCourseLiteral_item_types[] = {
+    { 1, k18_AmendCourseLiteral_item_params_0, 1 },
+};
+
+static const uint32_t k18_AmendCourseLiteral_course_slot_types[] = { 1 };
+
+static const GeasContractDesc k18_AmendCourseLiteral = {
+    "AmendCourseLiteral", 0xbd9d3c638ac3a5a7ULL,
+    2, 1, k18_AmendCourseLiteral_pledges,
+    0, NULL,
+    0, NULL, 2,
+    k18_AmendCourseLiteral_atoms, 0,
+    1, 0, 1,
+    k18_AmendCourseLiteral_rf, NULL, k18_AmendCourseLiteral_rb,
+    0, NULL,
+    NULL,
+    .course_fn = k18_AmendCourseLiteral_course, .course_nslots = 1, .course_hash = 0xde56ce9901451d01ULL,
+    .namends = 1, .amends = k18_AmendCourseLiteral_amends,
+    .ntypes = 3, .types = k18_AmendCourseLiteral_types,
+    .item_types = k18_AmendCourseLiteral_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
+    .course_slot_types = k18_AmendCourseLiteral_course_slot_types,
+};
+
+static uint32_t k18_AmendCourseComment_course(void* ctx, GeasCourseFrame* f) {
+    GeasContract* cc = (GeasContract*)ctx;
+    (void)cc;
+    switch (f->step) {
+        case 0: break;
+        case 1: goto step_1;
+        default: f->status = GEAS_ERR_STATE; return GEAS_COURSE_STOPPED;
+    }
+    f->step = 1;
+    {
+        GeasStatus t0 = geas_course_checkpoint(ctx, f);
+        if (t0 != GEAS_OK) { f->status = t0; return GEAS_COURSE_STOPPED; }
+    }
+step_1:
+    {
+        /* call step */
+        GeasValue t1 = {0};
+        t1.ty = GEAS_TY_INT;
+        t1.as.i = 1;
+        GeasValue t2[1] = { t1 };
+        GeasValue t3 = {0};
+        GeasStatus t4 = geas_course_call(ctx, f, 0, t2, 1, &t3);
+        if (t4 != GEAS_OK) { f->status = t4; return GEAS_COURSE_STOPPED; }
+        f->slots[0] = t3;
+    }
+    {
+        if (f->slots[0].tag == 1) return GEAS_COURSE_DONE;
+        GeasValue t5 = *(const GeasValue*)f->slots[0].as.box;
+        (void)t5;
+    }
+    return GEAS_COURSE_DONE;
+}
+
+static const GeasPledgeDesc k18_AmendCourseComment_pledges[] = {
+    { "step", "__geas_ash_18AmendCourseComment_4step_a821ae9487abd245_v2", 1, NULL, -1 },
+};
+
+static const GeasReqAtom k18_AmendCourseComment_atoms[] = {
+    { "step", GEAS_ATOM_FULFILLED, -1, 0 },
+    { "step", GEAS_ATOM_BROKEN, -1, 0 },
+};
+
+static const GeasReqOp k18_AmendCourseComment_rf[] = {
+    { GEAS_REQ_ATOM, 0 },
+};
+
+static const GeasReqOp k18_AmendCourseComment_rb[] = {
+    { GEAS_REQ_ATOM, 1 },
+};
+
+static const char* const k18_AmendCourseComment_amend1_old_items[] = {
+    "step",
+};
+
+static const int32_t k18_AmendCourseComment_amend1_item_map[] = {
+    0,
+};
+
+static const GeasAmendDesc k18_AmendCourseComment_amends[] = {
+    {
+        .from_version = 1, .restart_course = 0,
+        .from_shape_hash = 0x9bc9227ad7cc7895ULL, .from_course_hash = 0xaeda96d9c6bc5f82ULL,
+        .nold_vows = 0, .old_vows = NULL,
+        .nold_items = 1, .old_items = k18_AmendCourseComment_amend1_old_items,
+        .nold_subs = 0, .old_subs = NULL,
+        .nold_remedies = 0, .old_remedies = NULL,
+        .vow_map = NULL, .item_map = k18_AmendCourseComment_amend1_item_map,
+        .sub_map = NULL, .remedy_map = NULL,
+        .nlatches = 0, .latches = NULL,
+        .vows_fn = NULL,
+    },
+};
+
+static const uint32_t k18_AmendCourseComment_type_kids_1[] = { 0, 2 };
+
+static const GeasTypeNode k18_AmendCourseComment_types[] = {
+    { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RESULT, 2, k18_AmendCourseComment_type_kids_1, NULL, 0, NULL },
+    { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+};
+
+static const uint32_t k18_AmendCourseComment_item_params_0[] = { 0 };
+
+static const GeasItemTypes k18_AmendCourseComment_item_types[] = {
+    { 1, k18_AmendCourseComment_item_params_0, 1 },
+};
+
+static const uint32_t k18_AmendCourseComment_course_slot_types[] = { 1 };
+
+static const GeasContractDesc k18_AmendCourseComment = {
+    "AmendCourseComment", 0x9bc9227ad7cc7895ULL,
+    2, 1, k18_AmendCourseComment_pledges,
+    0, NULL,
+    0, NULL, 2,
+    k18_AmendCourseComment_atoms, 0,
+    1, 0, 1,
+    k18_AmendCourseComment_rf, NULL, k18_AmendCourseComment_rb,
+    0, NULL,
+    NULL,
+    .course_fn = k18_AmendCourseComment_course, .course_nslots = 1, .course_hash = 0xaeda96d9c6bc5f82ULL,
+    .namends = 1, .amends = k18_AmendCourseComment_amends,
+    .ntypes = 3, .types = k18_AmendCourseComment_types,
+    .item_types = k18_AmendCourseComment_item_types, .vow_types = NULL,
+    .remedy_types = NULL,
+    .course_slot_types = k18_AmendCourseComment_course_slot_types,
+};
+
 GeasStatus geas_module_register(GeasRuntime* rt) {
     (void)rt;
     GeasStatus st = GEAS_OK;
@@ -517,6 +885,12 @@ GeasStatus geas_module_register(GeasRuntime* rt) {
     st = geas_register_contract(rt, &k18_AmendCourseDropped);
     if (st != GEAS_OK) return st;
     st = geas_register_contract(rt, &k15_AmendCourseNone);
+    if (st != GEAS_OK) return st;
+    st = geas_register_contract(rt, &k18_AmendCourseRetyped);
+    if (st != GEAS_OK) return st;
+    st = geas_register_contract(rt, &k18_AmendCourseLiteral);
+    if (st != GEAS_OK) return st;
+    st = geas_register_contract(rt, &k18_AmendCourseComment);
     if (st != GEAS_OK) return st;
     return st;
 }

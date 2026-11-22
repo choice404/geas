@@ -13,8 +13,12 @@
  * tags that never cross, GEAS_TY_INSTANCE and GEAS_TY_PLEDGE_REF, are refused by
  * the encoder with GEAS_ERR_TYPE and read as malformed by the decoder. A
  * malformed payload reports GEAS_ERR_TYPE, the shape mismatch status the ABI
- * already has; an oversized one reports GEAS_ERR_OOM, the refusal the codec pins
- * at its payload cap. */
+ * already has, and an allocation the value cannot get reports GEAS_ERR_OOM.
+ *
+ * The value codec is the park row's own format and part of the stable ABI.
+ * The frame calls are not: nothing in the runtime, the compiler, or the bridge
+ * speaks these frames, and only they hold the 64 MiB payload cap below, the
+ * value codec takes a buffer of any length. */
 
 #ifndef GEAS_WIRE_H
 #define GEAS_WIRE_H
@@ -30,8 +34,8 @@ extern "C" {
 #define GEAS_WIRE_MAGIC        "ASHW"
 #define GEAS_WIRE_HEADER_LEN   20
 
-/* A payload longer than 64 MiB is refused; a peer that ignores the cap
- * cannot be resynchronized. */
+/* A frame payload longer than 64 MiB is refused by the frame calls; a peer
+ * that ignores the cap cannot be resynchronized. */
 #define GEAS_WIRE_MAX_PAYLOAD  (64u * 1024u * 1024u)
 
 /* The decoder refuses a value nested deeper than this, so a hostile payload
@@ -85,8 +89,12 @@ GeasStatus geas_wire_frame_read(const uint8_t in[GEAS_WIRE_HEADER_LEN],
  * least that, the bytes are written to buf and the call returns GEAS_OK,
  * otherwise nothing is written and the call returns GEAS_ERR_OOM, so a NULL
  * buf with cap 0 sizes the buffer. A value carrying GEAS_TY_INSTANCE or
- * GEAS_TY_PLEDGE_REF anywhere, a tag no value of its type can carry, or
- * nesting past GEAS_WIRE_MAX_DEPTH is GEAS_ERR_TYPE, with *need unset. */
+ * GEAS_TY_PLEDGE_REF anywhere, a tag no value of its type can carry, a
+ * length with no data behind it, a List or a Map longer than its capacity,
+ * or nesting past GEAS_WIRE_MAX_DEPTH is GEAS_ERR_TYPE, with *need unset. A
+ * value of more than GEAS_VALUE_MAX_NODES nodes, counted as the tree it
+ * unfolds to, is GEAS_ERR_OOM with *need set to 0, a size no encoded value
+ * has, so a sizing call tells it from a buffer too small. */
 GeasStatus geas_wire_encode_value(const GeasValue* v, uint8_t* buf, size_t cap,
                                 size_t* need);
 

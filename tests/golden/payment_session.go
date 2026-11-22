@@ -18,7 +18,7 @@ import (
 // PaymentServiceShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const PaymentServiceShapeHash uint64 = 0xc4261f5e32ecf727
+const PaymentServiceShapeHash uint64 = 0x7cfb9eb304e41193
 
 // PaymentServiceSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

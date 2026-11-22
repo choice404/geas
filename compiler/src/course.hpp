@@ -138,10 +138,10 @@ std::expected<void, std::string> lowerCourses(CheckedProgram& checked);
  */
 std::string dumpCourses(const CheckedProgram& checked);
 
-// courseHash is FNV-1a 64 of "steps=N\nslots=M\n" followed by the course
-// block's token spellings, including braces, joined by single ASCII spaces
-// N excludes entry step 0, M counts all slots, comments and token spacing
-// are omitted, and spelling inside string and character tokens is preserved
+// courseHash is FNV-1a 64 of the canonical text of the lowered course, see
+// CourseDumpMode in coursedumper.hpp, then the layout segments of every
+// declared record and sum a slot type reaches, then the schema segments of
+// the contract, see shape.hpp. Comments and spacing never reach it
 // Steps are numbered in lexical preorder, before their operands and arms
 // Execution follows instructions and can visit those numbers in another order
 // A step result holds the raw operation value; Select holds the chosen arm

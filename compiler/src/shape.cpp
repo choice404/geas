@@ -92,6 +92,37 @@ std::string termsSegment(std::string_view kind, std::string_view name,
     return out;
 }
 
+// The name a subcontract goes by in the shape string, its ordinal for an
+// anonymous one, the only stable name it has
+std::string subName(const SubcontractDecl& sub, std::size_t ordinal) {
+    return sub.name ? *sub.name : "#" + std::to_string(ordinal);
+}
+
+// One requirements line in its canonical spelling: an atom by its name, a
+// negation as ! before its operand, and every conjunction and disjunction
+// inside its own parentheses, (a&b) and (a|b), so the spelling has one parse
+std::string requirementSpelling(const Ast& ast, ReqId id) {
+    const ReqNode& node = ast.req(id);
+    if (const auto* atom = std::get_if<ReqAtom>(&node.kind)) {
+        return atom->name;
+    }
+    if (const auto* negation = std::get_if<ReqNot>(&node.kind)) {
+        return "!" + requirementSpelling(ast, negation->operand);
+    }
+    if (const auto* conjunction = std::get_if<ReqAnd>(&node.kind)) {
+        return "(" + requirementSpelling(ast, conjunction->lhs) + "&" +
+               requirementSpelling(ast, conjunction->rhs) + ")";
+    }
+    const auto& disjunction = std::get<ReqOr>(node.kind);
+    return "(" + requirementSpelling(ast, disjunction.lhs) + "|" +
+           requirementSpelling(ast, disjunction.rhs) + ")";
+}
+
+// A line the block did not write is spelled -, the constant false it runs as
+std::string lineSpelling(const Ast& ast, const std::optional<ReqId>& line) {
+    return line ? requirementSpelling(ast, *line) : std::string{"-"};
+}
+
 template <typename Map, typename Key>
 CallableSig sigOr(const Map& map, const Key* key) {
     const auto found = map.find(key);
@@ -118,6 +149,8 @@ private:
     std::string classicSegments(const ContractShape& shape) const;
     std::string workflowSegments(const ContractShape& shape) const;
     std::string termSegments(const ContractShape& shape) const;
+    std::string subSegments(const ContractShape& shape) const;
+    std::string requirementsSegment(const ContractShape& shape) const;
 
     const Ast& ast_;
     const Sigs& sigs_;
@@ -250,16 +283,7 @@ std::string ShapeBuilder::classicSegments(const ContractShape& shape) const {
         out.append("pledge " + pledge.decl->name + ":" + pledge.signature + ";");
     }
     for (const SchemaDecl* schema : shape.schemas) {
-        out.append("schema " + schema->name + ":");
-        const RecordSig* row = sigs_.record(schema->name);
-        const std::size_t count = row == nullptr ? 0 : row->fields.size();
-        for (std::size_t i = 0; i < count; ++i) {
-            if (i > 0) {
-                out.push_back(',');
-            }
-            out.append(row->fields[i].name + ":" + std::string{types_.canon(row->fields[i].type)});
-        }
-        out.push_back(';');
+        out.append(schemaSegment(sigs_, types_, *schema));
     }
     return out;
 }
@@ -272,9 +296,8 @@ std::string ShapeBuilder::termSegments(const ContractShape& shape) const {
         out.append(termsSegment("pledge", pledge.decl->name, pledge.decl->terms));
     }
     for (std::size_t i = 0; i < shape.subs.size(); ++i) {
-        const SubcontractDecl* sub = shape.subs[i];
-        const std::string name = sub->name ? *sub->name : "#" + std::to_string(i);
-        out.append(termsSegment("subcontract", name, sub->terms));
+        const SubcontractDecl& sub = *shape.subs[i];
+        out.append(termsSegment("subcontract", subName(sub, i), sub.terms));
     }
     for (const SignalShape& signal : shape.signals) {
         out.append(termsSegment("signal", signal.decl->name, signal.decl->terms));
@@ -307,10 +330,55 @@ std::string ShapeBuilder::workflowSegments(const ContractShape& shape) const {
     return out;
 }
 
-// The layout segments go last, so a contract that reaches no declared
-// record or sum keeps the string it had before layouts were spelled
+// One segment per subcontract in declaration order: its name, the
+// transactional flag when it carries one, then its members in descriptor
+// order, its pledges then its signals. sub S:a,b; is a plain subcontract and
+// sub S:transactional:a,b; a transactional one, two colons against one
+std::string ShapeBuilder::subSegments(const ContractShape& shape) const {
+    std::string out;
+    for (std::size_t i = 0; i < shape.subs.size(); ++i) {
+        const SubcontractDecl& sub = *shape.subs[i];
+        const int ordinal = static_cast<int>(i);
+        std::vector<std::string> members;
+        for (const PledgeShape& pledge : shape.pledges) {
+            if (pledge.subOrdinal == ordinal) {
+                members.push_back(pledge.decl->name);
+            }
+        }
+        for (const SignalShape& signal : shape.signals) {
+            if (signal.subOrdinal == ordinal) {
+                members.push_back(signal.decl->name);
+            }
+        }
+        out.append("sub " + subName(sub, i) + (sub.isTransactional ? ":transactional:" : ":"));
+        for (std::size_t m = 0; m < members.size(); ++m) {
+            out.append(m > 0 ? "," + members[m] : members[m]);
+        }
+        out.push_back(';');
+    }
+    return out;
+}
+
+// The requirements block the source wrote, its three lines in canonical
+// spelling. A contract that wrote no block runs the default policy, which
+// the members and the subcontracts already in the string decide, so it
+// carries no segment; a written block always does, even one that spells the
+// default, since the descriptor marks the block written either way
+std::string ShapeBuilder::requirementsSegment(const ContractShape& shape) const {
+    if (shape.requirements == nullptr) {
+        return "";
+    }
+    const RequirementsDecl& block = *shape.requirements;
+    return "requirements fulfill=" + lineSpelling(ast_, block.fulfill) +
+           ",partial=" + lineSpelling(ast_, block.partial) +
+           ",break=" + lineSpelling(ast_, block.breakLine) + ";";
+}
+
+// The layout segments go last, so the recorded type records can be read off
+// the tail of the string
 std::string ShapeBuilder::shapeString(const ContractShape& shape) const {
-    return classicSegments(shape) + workflowSegments(shape) + layoutSegments(shape.layouts);
+    return classicSegments(shape) + workflowSegments(shape) + subSegments(shape) +
+           requirementsSegment(shape) + layoutSegments(shape.layouts);
 }
 
 ContractShape ShapeBuilder::build(const ContractDecl& contract) {
@@ -335,6 +403,20 @@ ContractShape ShapeBuilder::build(const ContractDecl& contract) {
 }
 
 }  // namespace
+
+std::string schemaSegment(const Sigs& sigs, const TypeArena& types, const SchemaDecl& schema) {
+    std::string out = "schema " + schema.name + ":";
+    const RecordSig* row = sigs.record(schema.name);
+    const std::size_t count = row == nullptr ? 0 : row->fields.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        if (i > 0) {
+            out.push_back(',');
+        }
+        out.append(row->fields[i].name + ":" + std::string{types.canon(row->fields[i].type)});
+    }
+    out.push_back(';');
+    return out;
+}
 
 std::int64_t contractVersion(const Ast& ast, const ContractDecl& contract) {
     for (const Attr& attr : contract.attrs) {

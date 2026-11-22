@@ -65,8 +65,7 @@ contract Main {
         let card = Card { number: "4111 1111", expiry: "12/30" }
         let verdict = payment.validate_card(card)
         let receipt = payment.charge(card, 25.0)?
-        let checker = payment.validate_amount
-        let again = checker(receipt.total)
+        let again = payment.validate_amount(receipt.total)
         let code = match verdict {
             Ok(good) -> {
                 let base = receipt.id

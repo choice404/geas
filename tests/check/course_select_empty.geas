@@ -1,0 +1,7 @@
+// A select takes the first of its arms to finish, so one with no arms is refused
+contract Flow {
+    signal approved()
+    course {
+        select {}
+    }
+}

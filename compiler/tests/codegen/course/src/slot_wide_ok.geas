@@ -1,0 +1,139 @@
+// Course slots over a type whose smallest value would be exponential, held
+// where the runtime starts them small: behind an Option, which starts at
+// None, in a List, which starts empty, and in a Result whose Err arm nests
+// less, which starts at that arm. R0 doubles at each of its 30 levels
+
+record R0 {
+    a: R1
+    b: R1
+}
+record R1 {
+    a: R2
+    b: R2
+}
+record R2 {
+    a: R3
+    b: R3
+}
+record R3 {
+    a: R4
+    b: R4
+}
+record R4 {
+    a: R5
+    b: R5
+}
+record R5 {
+    a: R6
+    b: R6
+}
+record R6 {
+    a: R7
+    b: R7
+}
+record R7 {
+    a: R8
+    b: R8
+}
+record R8 {
+    a: R9
+    b: R9
+}
+record R9 {
+    a: R10
+    b: R10
+}
+record R10 {
+    a: R11
+    b: R11
+}
+record R11 {
+    a: R12
+    b: R12
+}
+record R12 {
+    a: R13
+    b: R13
+}
+record R13 {
+    a: R14
+    b: R14
+}
+record R14 {
+    a: R15
+    b: R15
+}
+record R15 {
+    a: R16
+    b: R16
+}
+record R16 {
+    a: R17
+    b: R17
+}
+record R17 {
+    a: R18
+    b: R18
+}
+record R18 {
+    a: R19
+    b: R19
+}
+record R19 {
+    a: R20
+    b: R20
+}
+record R20 {
+    a: R21
+    b: R21
+}
+record R21 {
+    a: R22
+    b: R22
+}
+record R22 {
+    a: R23
+    b: R23
+}
+record R23 {
+    a: R24
+    b: R24
+}
+record R24 {
+    a: R25
+    b: R25
+}
+record R25 {
+    a: R26
+    b: R26
+}
+record R26 {
+    a: R27
+    b: R27
+}
+record R27 {
+    a: R28
+    b: R28
+}
+record R28 {
+    a: R29
+    b: R29
+}
+record R29 {
+    a: R30
+    b: R30
+}
+record R30 {
+    z: Int
+}
+
+contract Holder {
+    signal maybe(v: Option<R0>)
+    signal many(v: List<R0>)
+    signal split(v: Result<R0, Int>)
+    course {
+        let m = await maybe
+        let l = await many
+        let e = await split
+    }
+}

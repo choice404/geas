@@ -210,8 +210,8 @@ bool Parser::enterNesting() {
     return false;
 }
 
-void Parser::leaveNesting() {
-    --nestingDepth_;
+void Parser::leaveNesting(int levels) {
+    nestingDepth_ -= levels;
 }
 
 bool Parser::isHalted() const {

@@ -121,6 +121,10 @@ private:
     bool hasSchema(const ContractDecl& contract) const;
     void checkSubcontract(const ContractDecl& contract, const SubcontractDecl& sub);
 
+    // The return rule, checkreturn.cpp
+    void checkEveryPathReturns(std::string_view name, TyId ret, BlockId body, std::int64_t lo,
+                               std::int64_t hi);
+
     // Statements and blocks, checkstmt.cpp
     void checkBlock(BlockId id);
     TyId blockValue(BlockId id, TyId want);
@@ -128,6 +132,7 @@ private:
     void checkCondition(ExprId id, std::string_view what);
     void checkLet(const LetStmt& let);
     void checkAssign(const AssignStmt& assign);
+    void checkAssignOrder(const AssignStmt& assign);
     void checkIndexAssign(const AssignStmt& assign, const Expr& target, const IndexExpr& index);
     void checkAssignedValue(ExprId value, TyId target);
     void checkAssignable(ExprId id);
@@ -283,6 +288,9 @@ private:
 
     // Attributes, remedies, and amends, checkworkflow.cpp
     void checkDeclaredAttrs(const ContractDecl& contract);
+    void checkForeignBinding(const std::vector<Attr>& attrs, bool hasBody, const std::string& label,
+                             std::int64_t lo, std::int64_t hi);
+    void checkForeignValue(const Attr& attr);
     void checkSubAttrs(const ContractDecl& contract, const SubcontractDecl& sub);
     void checkAttrList(const ContractDecl& contract, const std::vector<Attr>& attrs,
                       AttrTarget target, const std::string& label);
@@ -312,6 +320,7 @@ private:
     std::unordered_set<std::string> unsetAmendVows(const ContractDecl& contract,
                                                    const AmendPlan& plan) const;
     void checkAmendVowRead(const Expr& expr, const std::string& name);
+    TyId seededValueType(const MemberEntry& entry);
     void checkFulfilledSeed(const ContractDecl& contract, const AmendsDecl& amends,
                             const AmendLatch& latch);
     bool isPriorBase(ExprId base) const;

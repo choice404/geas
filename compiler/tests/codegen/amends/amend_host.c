@@ -10,10 +10,10 @@ static const GeasVowDesc k10_HostLedger_vows[] = {
 };
 
 static const GeasPledgeDesc k10_HostLedger_pledges[] = {
-    { "capture", "__geas_ash_HostLedger_capture_a821ae9487abd245_v3", 1, NULL, 0 },
-    { "log", "__geas_ash_HostLedger_log_0e2ba22315b89a85_v3", 0, NULL, 1 },
-    { "reserve", "__geas_ash_HostLedger_reserve_db846a825aeadfc2_v3", 0, NULL, -1 },
-    { "ship", "__geas_ash_HostLedger_ship_0e2ba22315b89a85_v3", 0, NULL, -1 },
+    { "capture", "__geas_ash_10HostLedger_7capture_a821ae9487abd245_v3", 1, NULL, 0 },
+    { "log", "__geas_ash_10HostLedger_3log_0e2ba22315b89a85_v3", 0, NULL, 1 },
+    { "reserve", "__geas_ash_10HostLedger_7reserve_db846a825aeadfc2_v3", 0, NULL, -1 },
+    { "ship", "__geas_ash_10HostLedger_4ship_0e2ba22315b89a85_v3", 0, NULL, -1 },
     { "approved", NULL, 1, NULL, -1 },
     { "cancelled", NULL, 0, NULL, -1 },
 };
@@ -82,8 +82,8 @@ static const uint8_t k10_HostLedger_kinds[] = {
 };
 
 static const GeasRemedyDesc k10_HostLedger_remedies[] = {
-    { "refund", "__geas_ash_HostLedger_refund_38a3aab7fdf5db00_v3", 0, 1, NULL, { 0 } },
-    { "free", "__geas_ash_HostLedger_free_38a3aab7fdf5db00_v3", 2, 1, NULL, { 0 } },
+    { "refund", "__geas_ash_10HostLedger_6refund_38a3aab7fdf5db00_v3", 0, 1, NULL, { 0 } },
+    { "free", "__geas_ash_10HostLedger_4free_38a3aab7fdf5db00_v3", 2, 1, NULL, { 0 } },
 };
 
 static GeasStatus k10_HostLedger_amend1_vows(void* ctx, const GeasValue* prior_vows, size_t nprior,
@@ -99,22 +99,24 @@ static GeasStatus k10_HostLedger_amend1_vows(void* ctx, const GeasValue* prior_v
     t1.as.s.len = 1;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t0, &t1, &t2) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t3 = prior_vows[0];
-    GeasValue t4 = {0};
-    t4.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t2, &t3, &t4) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasStatus t5 = geas_value_deep_copy(cc, &t4, &vows[3]);
-    if (t5 != GEAS_OK) return t5;
-    GeasValue t6 = prior_vows[1];
-    GeasValue t7 = {0};
-    t7.ty = GEAS_TY_INT;
-    t7.as.i = 2;
-    GeasValue t8 = {0};
-    t8.ty = GEAS_TY_INT;
-    t8.as.i = t6.as.i * t7.as.i;
-    GeasStatus t9 = geas_value_deep_copy(cc, &t8, &vows[1]);
-    if (t9 != GEAS_OK) return t9;
+    GeasStatus t3 = geas_string_concat(cc, &t0, &t1, &t2);
+    if (t3 != GEAS_OK) return t3;
+    GeasValue t4 = prior_vows[0];
+    GeasValue t5 = {0};
+    t5.ty = GEAS_TY_STRING;
+    GeasStatus t6 = geas_string_concat(cc, &t2, &t4, &t5);
+    if (t6 != GEAS_OK) return t6;
+    GeasStatus t7 = geas_value_deep_copy(cc, &t5, &vows[3]);
+    if (t7 != GEAS_OK) return t7;
+    GeasValue t8 = prior_vows[1];
+    GeasValue t9 = {0};
+    t9.ty = GEAS_TY_INT;
+    t9.as.i = 2;
+    GeasValue t10 = {0};
+    t10.ty = GEAS_TY_INT;
+    if (__builtin_mul_overflow(t8.as.i, t9.as.i, &t10.as.i)) return GEAS_ERR_TYPE;
+    GeasStatus t11 = geas_value_deep_copy(cc, &t10, &vows[1]);
+    if (t11 != GEAS_OK) return t11;
     return GEAS_OK;
 }
 
@@ -242,7 +244,7 @@ static const GeasAmendLatch k10_HostLedger_amend2_latches[] = {
 static const GeasAmendDesc k10_HostLedger_amends[] = {
     {
         .from_version = 1, .restart_course = 0,
-        .from_shape_hash = 0xdd2e9230b30211a3ULL, .from_course_hash = 0x0000000000000000ULL,
+        .from_shape_hash = 0x97ecb39c00c54f42ULL, .from_course_hash = 0x0000000000000000ULL,
         .nold_vows = 3, .old_vows = k10_HostLedger_amend1_old_vows,
         .nold_items = 5, .old_items = k10_HostLedger_amend1_old_items,
         .nold_subs = 2, .old_subs = k10_HostLedger_amend1_old_subs,
@@ -254,7 +256,7 @@ static const GeasAmendDesc k10_HostLedger_amends[] = {
     },
     {
         .from_version = 2, .restart_course = 0,
-        .from_shape_hash = 0x81f2e35fc39d5117ULL, .from_course_hash = 0x0000000000000000ULL,
+        .from_shape_hash = 0xcec2ba68ef8be341ULL, .from_course_hash = 0x0000000000000000ULL,
         .nold_vows = 3, .old_vows = k10_HostLedger_amend2_old_vows,
         .nold_items = 4, .old_items = k10_HostLedger_amend2_old_items,
         .nold_subs = 2, .old_subs = k10_HostLedger_amend2_old_subs,
@@ -300,7 +302,7 @@ static const GeasItemTypes k10_HostLedger_remedy_types[] = {
 };
 
 static const GeasContractDesc k10_HostLedger = {
-    "HostLedger", 0x13be9294c2315afaULL,
+    "HostLedger", 0xa6f37a3513f67d66ULL,
     3, 6, k10_HostLedger_pledges,
     5, k10_HostLedger_vows,
     2, k10_HostLedger_subs, 12,

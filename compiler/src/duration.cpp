@@ -4,24 +4,26 @@
 #include <array>
 #include <limits>
 
+#include "magnitude.hpp"
+
 namespace geas {
 
 namespace {
 
-constexpr std::int64_t decimalBase = 10;
-constexpr std::int64_t maxInt = std::numeric_limits<std::int64_t>::max();
+constexpr std::uint64_t decimalBase = 10;
+constexpr std::uint64_t maxInt = std::numeric_limits<std::int64_t>::max();
 
 // A unit's spelling and how many milliseconds it is worth, largest first so
 // the index doubles as the descending order rank
 struct DurationUnit {
     std::string_view spelling;
-    std::int64_t milliseconds;
+    std::uint64_t milliseconds;
 };
 
-constexpr std::int64_t millisecondsPerSecond = 1000;
-constexpr std::int64_t millisecondsPerMinute = 60 * millisecondsPerSecond;
-constexpr std::int64_t millisecondsPerHour = 60 * millisecondsPerMinute;
-constexpr std::int64_t millisecondsPerDay = 24 * millisecondsPerHour;
+constexpr std::uint64_t millisecondsPerSecond = 1000;
+constexpr std::uint64_t millisecondsPerMinute = 60 * millisecondsPerSecond;
+constexpr std::uint64_t millisecondsPerHour = 60 * millisecondsPerMinute;
+constexpr std::uint64_t millisecondsPerDay = 24 * millisecondsPerHour;
 
 constexpr std::array durationUnits{
     DurationUnit{"d", millisecondsPerDay},
@@ -44,25 +46,25 @@ bool isLetter(char c) {
 // One part read off the front of the literal: its number, its unit rank, and
 // how many bytes it took
 struct DurationPart {
-    std::int64_t amount;
+    std::uint64_t amount;
     std::size_t unitRank;
     std::size_t length;
 };
 
 // Reads the decimal run at the front, underscores allowed after the first
-// digit, refusing a value that cannot fit in 64 bits
+// digit, refusing a value past the magnitude of the least Int
 std::expected<DurationPart, DurationError> readAmount(std::string_view text) {
     if (text.empty() || !isDigit(text.front())) {
         return std::unexpected(DurationError::StrayCharacter);
     }
-    std::int64_t amount = 0;
+    std::uint64_t amount = 0;
     std::size_t length = 0;
     for (; length < text.size() && (isDigit(text[length]) || text[length] == '_'); ++length) {
         if (text[length] == '_') {
             continue;
         }
-        const std::int64_t digit = text[length] - '0';
-        if (amount > (maxInt - digit) / decimalBase) {
+        const auto digit = static_cast<std::uint64_t>(text[length] - '0');
+        if (amount > (leastIntMagnitude - digit) / decimalBase) {
             return std::unexpected(DurationError::Overflow);
         }
         amount = amount * decimalBase + digit;
@@ -114,14 +116,15 @@ std::expected<void, DurationError> checkOrder(std::size_t previousRank, std::siz
     return {};
 }
 
-// The milliseconds a part is worth added onto total, refusing overflow
-std::expected<std::int64_t, DurationError> addPart(std::int64_t total, const DurationPart& part) {
-    const std::int64_t factor = durationUnits[part.unitRank].milliseconds;
-    if (part.amount > maxInt / factor) {
+// The milliseconds a part is worth added onto total, refusing a total past
+// the magnitude of the least Int
+std::expected<std::uint64_t, DurationError> addPart(std::uint64_t total, const DurationPart& part) {
+    const std::uint64_t factor = durationUnits[part.unitRank].milliseconds;
+    if (part.amount > leastIntMagnitude / factor) {
         return std::unexpected(DurationError::Overflow);
     }
-    const std::int64_t worth = part.amount * factor;
-    if (total > maxInt - worth) {
+    const std::uint64_t worth = part.amount * factor;
+    if (total > leastIntMagnitude - worth) {
         return std::unexpected(DurationError::Overflow);
     }
     return total + worth;
@@ -134,7 +137,18 @@ bool isDurationUnitLead(int c) {
 }
 
 std::expected<std::int64_t, DurationError> parseDuration(std::string_view literal) {
-    std::int64_t total = 0;
+    const auto magnitude = parseDurationMagnitude(literal);
+    if (!magnitude) {
+        return std::unexpected(magnitude.error());
+    }
+    if (*magnitude > maxInt) {
+        return std::unexpected(DurationError::Overflow);
+    }
+    return static_cast<std::int64_t>(*magnitude);
+}
+
+std::expected<std::uint64_t, DurationError> parseDurationMagnitude(std::string_view literal) {
+    std::uint64_t total = 0;
     std::size_t previousRank = noUnitYet;
     std::string_view rest = literal;
     while (!rest.empty()) {

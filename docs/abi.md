@@ -1,6 +1,6 @@
 # The Geas ABI
 
-This is the normative ABI for Geas. It covers everything that crosses the boundary between a compiled module, the intermediary runtime, and a foreign host: the value representation, the thunk frame every pledge is called through, the descriptor tables a module publishes, the registrar protocol, the symbol mangling, the shape hash, and who owns what. The single header `runtime/include/geas/geas_abi.h` is the source of truth for every layout named here; a change to the wire lands in that header first and this document moves with it.
+This is the normative ABI for Geas. It covers everything that crosses the boundary between a compiled module, the intermediary runtime, and a foreign host: the value representation, the thunk frame every pledge is called through, the descriptor tables a module publishes, the registrar protocol, the symbol mangling, the shape hash, and who owns what. Two headers are the source of truth for every layout and every call named here: `runtime/include/geas/geas_abi.h` holds the value representation, the status and state enums, and every descriptor table a module emits, and `runtime/include/geas/geas.h` includes it and adds the host API with the structs that only a host fills or reads, `GeasRuntimeConfig`, `GeasEvent`, `GeasAttrInfo`, `GeasCourseInfo`, `GeasInameEntry`, and `GeasStoreTerm`. A change to the wire lands in those headers first and this document moves with them. What the two headers promise from 1.0.0 on is the subject of [Stability](#stability), the last section.
 
 The Python package in `interop/python/geas/` implements this ABI through
 `ctypes`, with the host surface exported from `geas`.
@@ -76,9 +76,11 @@ A record rides the list arm too: `GEAS_TY_RECORD`, the data pointer an `GeasValu
 
 **The map representation.** A map, `GEAS_TY_MAP`, rides the list arm as well, and this layout is canonical: the data pointer holds interleaved key, value pairs in insertion order, the key of pair i at slot 2i and its value at slot 2i+1, `len` counts slots so it is always twice the pair count, `cap` is allocated slots, and `elem_ty` is the key's tag alone, one of the keyable scalars `Int`, `UInt`, `Bool`, `Byte`, `Char`, `String`. A map holds each key once. The value type rides no field of the map: the contract's type table names it, and the checked boundary holds every value in the map to it. Insertion order is normative: it is the order any serialization sees, the order equality compares, and updating an existing key replaces its value without moving its pair. Lookup and insert scan the keys linearly through `geas_value_eq`, O(n) in the pair count, the v1 tradeoff that keeps the representation one union arm deep.
 
-**The internal instance tag.** `GEAS_TY_INSTANCE`, the tag after `GEAS_TY_SUM`, is internal to compiled modules and never crosses the ABI. It is the signed instance handle a cross-contract `Contract.sign(...)` returns inside a pledge body: `as.box` holds the `GeasContract*`. The language already rejects a contract type at every boundary position, pledge parameters and returns, vows, record and variant fields, and provisional clause signatures, so no thunk frame, vow storage, or descriptor value ever carries this tag, and a foreign host never meets it. `GEAS_TY_PLEDGE_REF` is held to the same line: a pledge type is refused at every one of those positions too, so neither tag is a value a boundary carries, and the checked boundary, the registrar, and the wire codec all refuse both. Its helper arms are the reference-handle semantics the language pins: `geas_value_deep_copy` copies the handle, not the contract, the one deliberate exception to value semantics, and `geas_value_eq` is handle identity. The debug renderer spells it `<instance>`.
+**The internal instance tag.** `GEAS_TY_INSTANCE`, the tag after `GEAS_TY_SUM`, is internal to compiled modules and never crosses the ABI. It is the signed instance handle a cross-contract `Contract.sign(...)` returns inside a pledge body: `as.box` holds the `GeasContract*`. The language already rejects a contract type at every boundary position, pledge parameters and returns, vows, record and variant fields, and provisional clause signatures, so no thunk frame, vow storage, or descriptor value ever carries this tag, and a foreign host never meets it. `GEAS_TY_PLEDGE_REF`, the tag before `GEAS_TY_SUM`, keeps its number and carries nothing: pledge values are not part of this version of the language, the checker refuses a pledge type and a bare `instance.pledge_name` wherever either appears, and no compiled code builds a value with this tag. Neither tag is a value a boundary carries, and the checked boundary, the registrar, and the wire codec all refuse both. Its helper arms are the reference-handle semantics the language pins: `geas_value_deep_copy` copies the handle, not the contract, the one deliberate exception to value semantics, and `geas_value_eq` is handle identity. The debug renderer spells it `<instance>`.
 
-The runtime exposes deep value helpers to hosts and thunks alike: `geas_list_new`, `geas_list_push`, `geas_list_get`, `geas_list_set`, `geas_map_new`, `geas_map_set`, `geas_map_get`, `geas_tuple_new`, `geas_value_eq`, and `geas_value_deep_copy`, which recursively copies any supported value into instance owned memory, string bytes, list, map, tuple, record, and sum elements, and boxed payloads included. After a deep copy, nothing in the destination aliases memory the instance does not own. `geas_value_eq` is the structural equality the language's `==` lowers onto for the deep shapes: type tags first, the sum shaped `tag` next, then elements recursively. Two maps compare pair by pair in insertion order, keys and values both, so the same pairs written in another order read unequal, which keeps the answer deterministic and matches what serialization sees.
+The runtime exposes deep value helpers to hosts and thunks alike: `geas_list_new`, `geas_list_push`, `geas_list_get`, `geas_list_set`, `geas_map_new`, `geas_map_set`, `geas_map_get`, `geas_tuple_new`, `geas_value_eq`, and `geas_value_deep_copy`, which recursively copies any supported value into instance owned memory, string bytes, list, map, tuple, record, and sum elements, and boxed payloads included. After a deep copy, nothing in the destination aliases memory the instance does not own. `geas_value_eq` is the structural equality the language's `==` lowers onto for the deep shapes: type tags first, the sum shaped `tag` next, then elements recursively. Two maps compare pair by pair in insertion order, keys and values both, so the same pairs written in another order read unequal, which keeps the answer deterministic and matches what serialization sees. `geas_value_eq` follows a value down at most 4096 levels, `geas_value_deep_copy`'s own line, and a pair it would have to follow further, a cyclic value compared with itself among them, reads unequal; a NULL operand, a tag mismatch, `GEAS_TY_PLEDGE_REF`, and a tag past the enum read unequal too. `geas_value_deep_copy` refuses a value deeper than 4096 levels and one that claims a length with no data behind it or a list or a map longer than its capacity with `GEAS_ERR_TYPE`, and a value of more than `GEAS_VALUE_MAX_NODES` nodes, a value that shares its substructure many times over counted as the tree it unfolds to, and an element count no allocation could hold with `GEAS_ERR_OOM`. The two growing helpers stop at the same budget: `geas_list_push` answers `GEAS_ERR_OOM` once the list already holds `GEAS_VALUE_MAX_NODES - 1` elements, and `geas_map_set` once a new pair would take the map past it, the container counting as one node of its own, see The node budget.
+
+`geas_string_eq(a, b)` answers 1 when two string values hold the same bytes and 0 otherwise; compiled code lowers `==` on two `String` values onto it.
 
 The value and allocation helpers cross the boundary with these shapes, every allocating one hanging its memory off the instance it was handed:
 
@@ -138,7 +140,7 @@ GeasStatus geas_value_render(const GeasValue* v, char* buf, size_t cap,
 
 Bytes renders as `Bytes(00ff; 2 bytes)`, at most 32 bytes in lowercase hex, an ellipsis when more bytes follow, and the full byte count.
 
-The spelling: `Int`, `UInt`, and `Float` as C would print them, `Bool` as `true` or `false`, `Byte` as its decimal value, `Char` as `U+0041`, `Unit` as `()`, strings quoted with `"` and `\` escaped and control bytes as `\xNN`, lists as `[a, b]`, tuples as `(a, b)`, records as `{a, b}` with the fields in declaration order, a sum as `#tag` with its payload in parens when it carries one, and `None`, `Some(v)`, `Ok(v)`, `Err(v)` through their boxes. A map renders as `{k: v, ...}` with its pairs in insertion order, the only order a map has, and an empty map as `{}`. Nesting deeper than eight levels renders as `...`, so a cyclic or absurd value cannot run the renderer away. The size protocol is `geas_iname_dump`'s: `*need` receives the full size including the terminating NUL, a `cap` at least that writes the text and returns `GEAS_OK`, anything smaller writes nothing and returns `GEAS_ERR_OOM`, so a NULL `buf` with `cap` 0 sizes the buffer.
+The spelling: `Int`, `UInt`, and `Float` as C would print them, `Bool` as `true` or `false`, `Byte` as its decimal value, `Char` as `U+0041`, `Unit` as `()`, strings quoted with `"` and `\` escaped, the bytes below 0x20 and 0x7f as `\xNN`, and every other byte, invalid UTF-8 included, as it stands, lists as `[a, b]`, tuples as `(a, b)`, records as `{a, b}` with the fields in declaration order, a sum as `#tag` with its payload in parens when it carries one, and `None`, `Some(v)`, `Ok(v)`, `Err(v)` through their boxes. A map renders as `{k: v, ...}` with its pairs in insertion order, the only order a map has, and an empty map as `{}`. Nesting deeper than eight levels renders as `...`, so a cyclic or absurd value cannot run the renderer away; the depth is the one bound, a long list renders every element, so a host sizes the buffer first. A string or list arm that claims a length with no data behind it renders as `<?>`, an Option or Result with no box behind a payload arm as `?`, `GEAS_TY_PLEDGE_REF` as `<pledge>`, and a tag past the enum as `<?>`; `Float` prints through `%g`, so the text is for reading and not for parsing back. The size protocol is `geas_iname_dump`'s: `*need` receives the full size including the terminating NUL, a `cap` at least that writes the text and returns `GEAS_OK`, anything smaller writes nothing and returns `GEAS_ERR_OOM`, so a NULL `buf` with `cap` 0 sizes the buffer.
 
 ## The thunk frame
 
@@ -170,11 +172,25 @@ void      geas_runtime_shutdown(GeasRuntime* rt);
 GeasStatus geas_module_load(GeasRuntime* rt, const char* so_path);
 ```
 
-A NULL `cfg` means all defaults. `geas_module_load` hands `so_path` to dlopen as it stands, so a relative path resolves by the loader's rules from the process working directory; shutdown is described under Threading and frees everything the runtime tracked.
+A NULL `cfg` means all defaults. `geas_module_load` hands `so_path` to dlopen as it stands, so a relative path resolves by the loader's rules from the process working directory.
+
+**Shutdown.** `geas_runtime_shutdown` runs in a fixed order. It raises the shutdown flag every body reads through `geas_cancel_requested` and wakes every default retry wait, stops and joins the ticker, stops the pool's intake and joins every worker once the queue drains, and only then frees every instance with its futures, store connection, heap, course, and autopark copies, then the registered descriptors and the iname table, then closes the loaded modules in the order they loaded. Nothing else may be calling into the runtime by then, and shutdown is called from a plain host thread, since it joins threads that a body, a hook, or a lock holder would be waited on by. So a call from a pledge or remedy body, an event hook, a ref `write_back` callback, the body a `together` runs, the ticker thread, or any thread holding an instance lock is refused: the call writes one line to stderr, `[libgeasrt] geas_runtime_shutdown refused: ...`, and returns with nothing raised, stopped, or freed, the runtime running exactly as before, and the host calls it again from a thread of its own. The call returns `void`, so that line is the whole answer. A host sleep callback still waiting is the host's to wake, the runtime never interrupts it.
+
+**Freeing one instance.** A handle lives until shutdown unless the host gives it back sooner:
+
+```c
+GeasStatus geas_contract_free(GeasContract* c);
+```
+
+The instance must be over, ended by `geas_contract_break` or `geas_contract_release`, which are the two calls that reclaim its heap; an automatic break keeps the heap for the partial surface, so a host follows it with `geas_contract_break` before freeing. And nothing may still run on it: no body, retry wait, remedy pass, event delivery or queued event, course entry or join, ref `write_back` callback, `geas_course_info` or `geas_course_wait` reading its course, `geas_contract_break` or `geas_contract_release` call that has not returned yet, and no receipt still pending or held by the pool. Then the call answers `GEAS_OK`, takes the instance out of the runtime's table, and frees it with every receipt of it not yet released; from then on the handle and those receipts are gone, and any call on them is a use after free, the way `free(3)` leaves a pointer. It answers `GEAS_ERR_STATE` for a live instance, for work still in flight on it, which a later call finds drained, so a free that races a reader of the course or a write back simply waits for the next try, and when called from a body, a hook, or any thread holding an instance lock, and `GEAS_ERR_TYPE` for NULL. A runtime tick walking the instances at that moment holds it a little longer, and the last one to let it go frees it. Instances compiled code signs, resumes, or claims, inside a pledge or remedy body, a course, or a `together` body, are never freed this way: the frame keeps the handle until shutdown, and `geas_contract_free` answers `GEAS_ERR_STATE` for every one of them.
 
 `handshake_ms` is a reserved field: the config struct's layout is pinned, so the slot stays where it is and a host leaves it zero. `GEAS_ERR_NET` is a reserved status the same way, the numbers behind it fixed forever. The cross process story lives in [docs/bridge.md](bridge.md): the compiler emits the gRPC surface, a server holds the runtime through this ABI, and nothing about serving shows through these calls.
 
 **Loading the runtime.** Each compiled module names `libgeasrt.so.0` as a library dependency, so a host may link the runtime plainly or open it dynamically without `RTLD_GLOBAL` before calling `geas_module_load`. A host that already opened the runtime through `libgeasrt.so` with `RTLD_GLOBAL` keeps working, the symlink and SONAME identify the same library, so the module reuses that runtime without duplicate state.
+
+**Where a module finds the runtime.** `geas build` links every module and every standalone executable with `-lgeasrt` and a `DT_RUNPATH` that starts with `$ORIGIN`, so a `libgeasrt.so.0` sitting beside the module is found first. Built from a checkout the RUNPATH carries the checkout's runtime directory too: the absolute `$GEAS_ROOT/target/geas-out` when `GEAS_ROOT` is set, and the relative `target/geas-out` when `geas` runs from the checkout's root, which the loader then resolves against the working directory of the process that loads the module, so such a module is meant to run from that root, the way the repository's gates run. An installed `geas` with no checkout in sight links with `$ORIGIN` alone and nothing else, and the loader finds `libgeasrt.so.0` where `make install` put it, under the prefix's `lib`, through its ordinary search path. The runtime library itself carries no RUNPATH.
+
+**SQLite inside the runtime.** The store backend is SQLite 3.46.1, compiled from the vendored amalgamation into `libgeasrt.so.0` itself, threadsafe, with extension loading left out. Its `sqlite3_*` functions are exported from the runtime's dynamic symbol table along with the `geas_*` calls, and a host may call them. They are not part of the Geas ABI: their version follows the vendored SQLite and the promise in Stability does not cover them. A host that brings a SQLite of its own into the same process and loads the runtime into the global scope has two definitions of every `sqlite3_*` symbol, and the dynamic loader decides which one each reference binds to by load order; a host that wants the two kept apart opens the runtime with `RTLD_LOCAL`, the way the Python binding does, or links its own SQLite statically with its symbols hidden.
 
 ## Descriptor tables
 
@@ -251,8 +267,15 @@ typedef struct GeasContractDesc {
     const GeasItemTypes*  item_types;
     const uint32_t*       vow_types;
     const GeasItemTypes*  remedy_types;
+    /* the course slot types, see The course */
+    const uint32_t*       course_slot_types;
+    /* the foreign symbols, see Foreign symbols */
+    const char* const*    pledge_symbols;
+    const char* const*    remedy_symbols;
 } GeasContractDesc;
 ```
+
+That is the whole struct, and its order is final: every field above keeps its offset for the life of the 1.x ABI, and anything the descriptor gains later appends after `remedy_symbols`. The tails arrived in this order, each one closing on a size macro the registrar reads, see Descriptor size: the store surface through `sub_flags`, the workflow surface through `term_ms`, the declared attributes through `attrs`, the course through `course_hash`, the amends blocks through `amends`, the type table through `remedy_types`, and the course slot types and the foreign symbols through `remedy_symbols`.
 
 Pledges and vows appear in declaration order. A vow whose declaration carried an initializer has `has_default` set and the literal encoded in `default_value`; a string default points at bytes inside the module. Signing copies every vow value onto the instance, so nothing an instance reads aliases the descriptor after sign.
 
@@ -264,7 +287,7 @@ The schema surface and the subcontract flags append at the tail, so a zero-fille
 enum { GEAS_SUB_TRANSACTIONAL = 1 };
 ```
 
-`GEAS_SUB_TRANSACTIONAL` marks a subcontract whose pledges run as one all-or-nothing episode: the runtime opens a transaction on the first fulfillment of one of its pledges, commits the instant the subcontract completes, and rolls back on the first `Err` or at a break before the commit. The bits ride their own array so the subs table and every descriptor emitted before the store layer stay byte identical, and a NULL `sub_flags` reads as all zero, the loose grouping every earlier contract carried. Both tails are pure additions the shape hash already covers, never a change to an existing field. The workflow tail after them, the kinds, terms, remedies, and contract term, follows the same rule and has its own section, The workflow surface.
+`GEAS_SUB_TRANSACTIONAL` marks a subcontract whose pledges run as one all-or-nothing episode: the runtime opens a transaction on the first fulfillment of one of its pledges, commits the instant the subcontract completes, and rolls back on the first `Err` or at a break before the commit. The bits ride their own array so the subs table and every descriptor emitted before the store layer stay byte identical, and a NULL `sub_flags` reads as all zero, the loose grouping every earlier contract carried. Both tails are pure additions, never a change to an existing field, and the shape hash covers what they say: a schema through its `schema` segment and the transactional modifier through the `sub` segment of its subcontract, see The shape hash. The workflow tail after them, the kinds, terms, remedies, and contract term, follows the same rule and has its own section, The workflow surface.
 
 ## Declared attributes
 
@@ -349,7 +372,21 @@ A module exports exactly one undecorated symbol:
 GeasStatus geas_module_register(GeasRuntime* rt);
 ```
 
-`geas_module_load` dlopens the module, resolves the registrar, and calls it. The registrar hands each contract descriptor to `geas_register_contract` and stops at the first failure. Registering a contract name the runtime already holds is `GEAS_ERR_NAME`; a module that fails to register is closed and reported as `GEAS_ERR_LOAD` or the registrar's own status.
+`geas_module_load` dlopens the module with `RTLD_NOW | RTLD_LOCAL`, resolves the registrar, and calls it. The registrar hands each contract descriptor to `geas_register_contract` and stops at the first failure. A dlopen that fails and a module with no `geas_module_register` are `GEAS_ERR_LOAD`; a registrar that fails answers its own status, and the module is closed.
+
+**What the registrar checks.** Before anything registers, the runtime holds the descriptor to its structure, and the first check that fails is the status, `GEAS_ERR_TYPE` unless named otherwise:
+
+- a NULL runtime or descriptor, a size below `GEAS_CONTRACT_DESC_V1_SIZE`, or a NULL contract name;
+- a pledge, vow, remedy, or attribute table that is NULL while its count is not, and a NULL name in any of them; an atom table, a policy program, or an amends table that is NULL while counted; a schema table, a schema's table name, or a column name that is NULL;
+- an attribute row whose owner index is out of range for its owner kind, a pledge row named as a signal's owner or the other way round, a nonzero variant tag, or a value that is not an `Int`, a `Float`, a `Bool` of 0 or 1, or a `String` with bytes behind its length;
+- an amends table that does not hold up, see Amendment, with `GEAS_ERR_OOM` when the scratch the check needs cannot be had;
+- a type table that does not hold up, see The checked boundary;
+- course slot types without a course, a slot count, or a type table, or with a slot whose type has no value of at most 256 levels, see The course;
+- a foreign symbol on a signal, or on a pledge or remedy that carries a compiled body, see Foreign symbols.
+
+Then, under the runtime lock, a frozen runtime is `GEAS_ERR_STATE`, a contract name the runtime already holds is `GEAS_ERR_NAME`, a mangled name another entry already keys, in this contract or another, is `GEAS_ERR_NAME` with nothing of the contract registered, and a table that cannot grow is `GEAS_ERR_OOM`. The pledge kinds, the terms, and the remedy targets are checked at every sign, resume, and claim instead, see The workflow surface, and a pledge's `sub` index outside the subs table reads as loose.
+
+**Tables grow.** The runtime holds no table of fixed size: the instance table, the registered descriptors, the iname table, the bindings, and the loaded modules all double from sixteen entries as they fill, and futures, the pool queue, and an instance's pending events are lists. A runtime holds as many instances as memory does, and growth that fails is `GEAS_ERR_OOM`. The fixed numbers the runtime does keep are named where they apply: the pool size, at most 256 workers; the value depth of 256 at every boundary and 4096 for a deep copy; and the eight rounds a claim retries a rewritten row.
 
 The workflow prefix has size `GEAS_CONTRACT_DESC_V2_SIZE`, through `term_ms`.
 The sized registrar accepts that prefix with no attributes. It treats an
@@ -368,11 +405,25 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
 
 #define GEAS_CONTRACT_DESC_V1_SIZE \
     (offsetof(GeasContractDesc, sub_flags) + sizeof(const uint8_t*))
+#define GEAS_CONTRACT_DESC_V2_SIZE \
+    (offsetof(GeasContractDesc, term_ms) + sizeof(uint64_t))
+#define GEAS_CONTRACT_DESC_V3_SIZE \
+    (offsetof(GeasContractDesc, attrs) + sizeof(const GeasAttrDesc*))
+#define GEAS_CONTRACT_DESC_V4_SIZE \
+    (offsetof(GeasContractDesc, course_hash) + sizeof(uint64_t))
+#define GEAS_CONTRACT_DESC_V5_SIZE \
+    (offsetof(GeasContractDesc, amends) + sizeof(const GeasAmendDesc*))
+#define GEAS_CONTRACT_DESC_V6_SIZE \
+    (offsetof(GeasContractDesc, remedy_types) + sizeof(const GeasItemTypes*))
+#define GEAS_CONTRACT_DESC_V7_SIZE \
+    (offsetof(GeasContractDesc, remedy_symbols) + sizeof(const char* const*))
 #define geas_register_contract(rt, desc) \
     geas_register_contract_sized((rt), (desc), sizeof(GeasContractDesc))
 ```
 
-`geas_register_contract_sized` copies `desc_size` bytes of the top level struct, capped at the size this runtime knows, into a struct of its own and reads every field from that copy, so a field past the caller's size reads as zero and a field past the runtime's is ignored. A size below `GEAS_CONTRACT_DESC_V1_SIZE` is `GEAS_ERR_TYPE`. A size that reaches through `remedy_types` brings the type table with it and the registrar checks the table before anything registers, see The checked boundary; `GEAS_CONTRACT_DESC_V5_SIZE` and below carry none. The exported symbol `geas_register_contract` is what every module built before the workflow tail links against, and it reads exactly the V1 prefix, the fields through `sub_flags`, so such a module loads into this runtime with no byte past its descriptor touched and behaves as it always did. Code compiled against the current header gets the macro, which routes the same spelling through the sized form with the size the compiler knows, so the C a module is emitted as needs no change to pass its size, and a handwritten descriptor gets its whole struct read. There is no ABI version symbol and the module exports nothing new: the symbol a module binds to is the version. A host that reaches the registrar by symbol name, through `dlsym` or ctypes, gets the V1 reader and calls `geas_register_contract_sized` itself when it has a tail to pass.
+Each size names the end of one tail: V1 the store surface, V2 the workflow surface, V3 the declared attributes, V4 the course, V5 the amends blocks, V6 the type table, and V7 the course slot types and the foreign symbols, the whole struct as 1.0.0 ships it. On LP64 they are 144, 192, 208, 232, 248, 288, and 312 bytes, the last one `sizeof(GeasContractDesc)`.
+
+`geas_register_contract_sized` copies `desc_size` bytes of the top level struct, capped at the size this runtime knows, into a struct of its own and reads every field from that copy, so a field past the caller's size reads as zero and a field past the runtime's is ignored. A size below `GEAS_CONTRACT_DESC_V1_SIZE` is `GEAS_ERR_TYPE`. A size that reaches through `remedy_types` brings the type table with it and the registrar checks the table before anything registers, see The checked boundary; `GEAS_CONTRACT_DESC_V5_SIZE` and below carry none, and a size that ends before `remedy_symbols` carries no course slot types and no foreign symbols, which read as NULL. The exported symbol `geas_register_contract` is what every module built before the workflow tail links against, and it reads exactly the V1 prefix, the fields through `sub_flags`, so such a module loads into this runtime with no byte past its descriptor touched and behaves as it always did. Code compiled against the current header gets the macro, which routes the same spelling through the sized form with the size the compiler knows, so the C a module is emitted as needs no change to pass its size, and a handwritten descriptor gets its whole struct read. There is no ABI version symbol and the module exports nothing new: the symbol a module binds to is the version. A host that reaches the registrar by symbol name, through `dlsym` or ctypes, gets the V1 reader and calls `geas_register_contract_sized` itself when it has a tail to pass.
 
 ## The checked boundary
 
@@ -390,9 +441,9 @@ So a contract's code reads what it is handed as the type it declared, a field of
 | a vow an amends block computes | the vow's declared type at the new version | after the block ran, before the instance exists | `GEAS_ERR_TYPE`, no instance |
 | a remedy's argument | the remedy's declared parameter | before the body | the remedy fails with `GEAS_ERR_TYPE`, its body never run |
 | a remedy's answer | the remedy's declared return | after every attempt | that attempt's `GEAS_ERR_TYPE`, no Err payload kept |
-| a park row at resume, claim, and amend | the vows, every Ok value and Err payload, every signal payload, every failed remedy's Err, a together's outcomes against their pledges, and a course's slots to the structural facts | after the decode, before the instance is published | `GEAS_ERR_TYPE`, no instance, and a claim leaves the row in the store |
+| a park row at resume, claim, and amend | the vows, every Ok value and Err payload, every signal payload, every failed remedy's Err, a together's outcomes against their pledges, and every slot of a course frame against its slot type | after the decode, before the instance is published | `GEAS_ERR_TYPE`, no instance, and a claim leaves the row in the store |
 
-A signal delivered again after it latched still changes nothing and answers `GEAS_OK`, payload unread, since nothing of it is kept. A course's slots carry no declared type in the table, so a slot a park row brings back is held to the structural facts below.
+A signal delivered again after it latched still changes nothing and answers `GEAS_OK`, payload unread, since nothing of it is kept. A course slot is held to its entry in `course_slot_types`, see The course, and a slot whose entry is `GEAS_NO_TYPE`, or a frame whose descriptor carries no slot types, is held to the structural facts below. A descriptor with no type table at all holds a park row to the wire decoder's own checks alone, see The value wire codec.
 
 **What conforms.** The walk takes a value and a type and holds:
 
@@ -401,7 +452,7 @@ A signal delivered again after it latched still changes nothing and answers `GEA
 - A `Bool` is 0 or 1. A `Char` is a Unicode scalar value, at most U+10FFFF and outside the surrogate block U+D800 through U+DFFF. `Int`, `UInt`, `Float`, `Byte`, and `Unit` hold any bits their arm can.
 - A `String` is valid UTF-8: no overlong encoding, no encoded surrogate, nothing past U+10FFFF, no sequence the length cuts short, and an embedded zero is ordinary ASCII. A `String` or `Bytes` with a nonzero `len` has a non NULL `ptr`.
 - A `List` has `len` at most `cap`, data behind a nonzero `len`, an `elem_ty` that is the element type's tag, and every element carrying `elem_ty` and conforming to the element type.
-- A `Map` has an even slot count, data behind it, an `elem_ty` that is the key type's tag and one of the six keyable scalars, every key carrying it and conforming to the key type, every value conforming to the value type, and every key distinct by `geas_value_eq`.
+- A `Map` has an even slot count, `len` at most `cap`, data behind it, an `elem_ty` that is the key type's tag and one of the six keyable scalars, every key carrying it and conforming to the key type, every value conforming to the value type, and every key distinct by `geas_value_eq`.
 - A `Tuple` and a record have exactly as many slots as the type has, each conforming to its own slot's type, data behind a nonzero length.
 - A declared sum has a `tag` below its variant count and exactly the variant's field count, each field conforming. A bare variant carries `len` 0.
 - An `Option` has `tag` 0 with a NULL box, or `tag` 1 with a box holding a value of the inner type.
@@ -409,15 +460,19 @@ A signal delivered again after it latched still changes nothing and answers `GEA
 - A recursive type is held at every level the same way.
 - `GEAS_TY_PLEDGE_REF`, `GEAS_TY_INSTANCE`, and any tag past the enum never conform.
 
-A slot of the table that reads `GEAS_NO_TYPE` holds the value to the structural facts every value keeps whatever its type, the list above with every comparison against a declared type dropped: the scalar ranges, valid UTF-8, data behind a length, `len` within `cap`, a list's elements carrying its `elem_ty`, a map keyed by a keyable scalar with distinct keys, a tag only on a sum shaped value, None with no box. Everything that conforms in either mode is a value the wire codec encodes, so whatever a boundary accepts can always be parked and read back.
+A slot of the table that reads `GEAS_NO_TYPE` holds the value to the structural facts every value keeps whatever its type, the list above with every comparison against a declared type dropped: the scalar ranges, valid UTF-8, data behind a length, `len` within `cap` on a list and a map, a list's elements carrying its `elem_ty`, a map keyed by a keyable scalar with distinct keys, a tag only on a sum shaped value, None with no box. Everything that conforms in either mode is a value the wire codec encodes, so whatever a boundary accepts can always be parked and read back.
 
 **The depth limit.** A value nests at most `GEAS_VALUE_MAX_DEPTH` levels, 256, counted in values from the outermost down to the innermost, both included, so an Int is one level and a `List<Int>` holding one is two. A value of 256 levels conforms, parks, and resumes; one of 257 is `GEAS_ERR_TYPE` at every boundary, the walk stopping at the limit rather than following the value down, so a value nested ten thousand deep costs no more than one nested 257. The wire codec holds the same line through `GEAS_WIRE_MAX_DEPTH`, which is the same constant, so a value that crosses always encodes. Each level costs the walk and the codec a few hundred bytes of stack at most, well under a megabyte at the limit, on the caller's thread or a pool worker's. `geas_value_deep_copy` takes values deeper than this, to 4096 levels, since a copy on the instance's own heap crosses no boundary; the line every boundary holds is 256.
+
+**The node budget.** A value holds at most `GEAS_VALUE_MAX_NODES` nodes, 2^24, every value inside it counted once per path that reaches it, so a value that shares its substructure many times over counts as the tree it unfolds to, which is what it would cost to copy or encode. It is a line on resources and not on types, so a value past it is `GEAS_ERR_OOM` and not `GEAS_ERR_TYPE` wherever the runtime meets it: at every boundary in the table above, in `geas_value_deep_copy`, and in the wire encoder, which a park goes through, so a park of an instance holding such a value answers `GEAS_ERR_OOM` and writes nothing. The walk counts as it goes and stops at the budget, so a value of a billion shared nodes costs no more to refuse than one just past it. `geas_list_push` and `geas_map_set` hold the same line from the other side, `GEAS_ERR_OOM` for an element or a pair that would take the container past it, so a value a host or a body grows one element at a time never reaches a size a boundary would refuse.
 
 **The type table.** The table rides at the tail of the descriptor, after the amends blocks:
 
 ```c
 #define GEAS_NO_TYPE 0xFFFFFFFFu
 #define GEAS_VALUE_MAX_DEPTH 256u
+#define GEAS_VALUE_MAX_NODES (1ull << 24)
+#define GEAS_SLOT_MIN_NODES_MAX 4096u
 
 typedef struct GeasTypeVariant {
     const char*      name;
@@ -451,7 +506,7 @@ typedef struct GeasItemTypes {
 
 **A descriptor with no table.** `ntypes` 0 is a descriptor with no table, which is what a handwritten descriptor and a module built before the table carry, and so is a descriptor whose reported size ends before `remedy_types`, `GEAS_CONTRACT_DESC_V5_SIZE` and below. Such a contract behaves as it always did: the runtime checks the argument count and a vow's top tag, a compiled thunk checks each argument's tag, and nothing below a top tag is held to anything.
 
-**Pledge values.** A pledge type, `pledge(Int) -> Unit` in a clause parameter or a `let`, is a handle bound to the instance that made it, with no meaning outside the process and no lifetime of its own. The language refuses one at every position a value crosses, the same positions it refuses a contract type, so no table spells one and no host is ever handed one or asked for one; the registrar refuses a node that spells one, the walk refuses a value that carries one, and the wire codec refuses to encode one.
+**Pledge values.** Pledge values are not part of this version of the language: the checker refuses a pledge type, `pledge(Int) -> Unit`, and a bare `instance.pledge_name` with no call, wherever either appears, so no compiled code holds one, no table spells one, and no host is ever handed one or asked for one. The tag `GEAS_TY_PLEDGE_REF` keeps its number all the same, and the registrar refuses a node that spells it, the walk refuses a value that carries it, and the wire codec refuses to encode it.
 
 **None.** A None carries a NULL box and nothing else, so everything that conforms is something the wire codec parks. A value the runtime copies before it checks, an argument, a signal payload, a vow, has had any box behind a None dropped by the copy unread, so a host that left one there sees its call go through. A body's answer is not copied, it is checked where the body wrote it, so a None with a box behind it in an answer is `GEAS_ERR_TYPE`.
 
@@ -513,6 +568,21 @@ Bindings resolve at sign. Signing walks the contract's pledges and fixes the ins
 A park row carries neither callbacks nor user pointers. Resume resolves both from the new runtime's current bindings, so the host registers and binds there before resuming, with the same unbound checks as signing.
 
 A signed instance carries a hidden signature: the shape hash it was signed under and the Unix time the signing happened, readable through `geas_contract_hash` and `geas_contract_signed_at`. Thunks and hosts read vow values through `geas_vow_ref`, which returns a pointer the instance owns.
+
+## Foreign symbols
+
+So an abstract pledge or remedy can also name the C function that implements it, `[abi: "c", symbol: "charge_card"]` in the source, and then a host that exports a function under that name needs no bind call at all. The names ride the last tail of the descriptor:
+
+```c
+    const char* const*    pledge_symbols;   /* one per pledges table entry */
+    const char* const*    remedy_symbols;   /* one per remedy */
+```
+
+Each table holds one entry per row of its table, the symbol for an abstract entry the source bound to one and NULL for every other row, and a table is NULL when none of its rows names a symbol. The compiler refuses a symbol that is not a C identifier and one that starts with `geas_`, `__geas_`, or `GEAS_`, the prefixes the runtime's own calls and the code geas emits are named under, so a symbol can never answer with a runtime function. It checks nothing else: a symbol that names a libc function or anything else the process links resolves to that function, and choosing a name no library already exports is the host's part. The registrar refuses a symbol on a signal and on a row that carries a compiled body.
+
+At every sign, resume, and claim the runtime resolves each pledge and remedy in one order: a binding made through `geas_pledge_bind` or `geas_pledge_bind_user` first, then the compiled body, then `dlsym(RTLD_DEFAULT, symbol)`. Since a symbol only rides an entry with no body, that reads as a host binding beating the symbol, and the symbol answering when nothing is bound. The function has the `GeasPledgeFn` signature and runs in the same frame a bound function does. Nothing is cached, the lookup runs again at every sign, resume, and claim, and a symbol the process does not export leaves the entry unbound, so the sign, the resume, or the claim answers `GEAS_ERR_UNBOUND`, a claim leaving the row in the store.
+
+The lookup sees what the process exports into its global scope. A host executable exports its own functions by linking with `-rdynamic`, and a shared object exports its functions by being loaded with `RTLD_GLOBAL`. A module the runtime loads is opened `RTLD_LOCAL`, so a function defined in one `.geas.so` never answers a symbol named in another, and a host whose functions live in a library it opened locally binds them with `geas_pledge_bind` instead. The Python binding is that case: it opens `libgeasrt` with `RTLD_LOCAL` and its callbacks are ctypes trampolines no symbol names, so a Python host always binds.
 
 ## Futures
 
@@ -586,6 +656,8 @@ The protocol has exactly two moments, both on a thread the host is blocked in a 
 2. Write back, at delivery, inside the `geas_future_wait` that collects the outcome or before `geas_pledge_fulfill_sync` returns, on the waiting thread. Each slot's final value goes back to host memory: through `write_back` when the host supplied one, `user` passed through untouched, or by the default otherwise.
 
 The default write back writes scalars in place and writes a whole `GeasString` struct for String or Bytes. The bytes it points at are instance owned and die at break; a host that wants the shouted bytes to outlive the instance supplies a `write_back` that copies them out, which is also where a capacity declared in `cap` gets honored. Write back happens only when the fulfillment itself reported `GEAS_OK`; a thunk error leaves host memory untouched. Every slot's type is checked against its ref before anything is written, so a pledge that swapped a slot's type writes nothing and the wait reports `GEAS_ERR_TYPE`. On the way in a by reference slot is an argument like any other, its copy held to the parameter's declared type with the value slots, so a `Bool` byte of 2 or a `String` that is not UTF-8 behind a ref is `GEAS_ERR_TYPE` with no body run and nothing written back.
+
+A `write_back` callback runs after the default write backs of the same call, in ref order, with every runtime lock let go. The wait marks the future delivered and drops its own mutex, checks every slot's type, writes each ref that has no callback in place under the instance lock, sets aside a copy of each remaining slot's value, and only then lets the instance lock go and calls the callbacks, so on a host thread a callback holds no runtime lock at all. So a callback may call into the runtime freely, the same instance included: it can read the instance, fulfill, signal, park, or break it, and wait on other receipts. The value a callback is handed is a copy the runtime made for this call, the bytes of a `String` or `Bytes` included, so it stays valid until the callback returns whatever the callback does to the instance meanwhile, a break included, and is gone after it; a callback that keeps the bytes copies them into memory of its own. A copy the runtime cannot allocate is `GEAS_ERR_OOM` with nothing written. Until the last callback of the call returns the instance counts a write back as running, so `geas_contract_free` answers `GEAS_ERR_STATE` for it, and `geas_runtime_shutdown` called from a callback is refused, see Runtime lifecycle. A wait that finds the instance already reclaimed when it comes to write back writes nothing, calls no callback, and answers `GEAS_ERR_STATE`.
 
 ## Requirements and the contract state
 
@@ -726,6 +798,10 @@ GeasStatus geas_runtime_tick(GeasRuntime* rt);
 
 The defaults read `CLOCK_REALTIME`, wait pledge retry delays on a condition variable that cancellation wakes, and wait remedy retry delays through `nanosleep`; a NULL function restores its default. The clock answers "now" for every eligibility stamp and every deadline, and the sleep is what a retry delay waits through, so a host that swaps both drives the terms from its own scheduler and a test that swaps both makes time a variable. The functions are called from any thread, the clock with an instance lock possibly held, so they must be thread safe, and they must not call back into the runtime on the thread they were called on, apart from the lock free `geas_cancel_requested` poll. The signing second `geas_contract_signed_at` reports is the same clock's reading divided down, one clock for both stamps. A contract with no terms table and no contract term reads the clock once, at sign, and never again.
 
+The host clock may answer any `int64_t`, negative values included, since a test that starts its fake clock at zero and subtracts is as legitimate as wall time: every deadline and stamp is computed with saturating arithmetic, a park row carries a negative stamp as it is, and the one value the runtime keeps for itself is `INT64_MIN`, which a stamp spells as not yet eligible. The signing second is the clock's reading divided by 1000, truncated toward zero.
+
+The runtime's own timed waits never read the host clock, they run on `CLOCK_MONOTONIC`, so a wall clock stepped by NTP or an operator moves no wait: the default wait between a pledge's retries, the timeout of `geas_course_wait`, and the ticker's interval all count real elapsed time. `geas_future_wait` has no timeout and waits until the outcome exists. The deadlines the clock does drive, a `within`, a contract term, a course `sleep` or `select` timeout, are compared against the host clock at each tick.
+
 The runtime runs no timer unless a host asks for one. Deadlines are checked lazily: every entry point that reads or moves an instance runs the tick first, which is `geas_pledge_fulfill` and the worker that runs it, `geas_pledge_fulfill_sync`, `geas_signal`, `geas_contract_state`, every call of the partial surface, `geas_instance_park`, and `geas_future_wait`, the last only when the instance lock is free so a waiter never queues behind an instance. A host that wants a lapse to happen when the deadline passes and not when the next call arrives calls `geas_instance_tick` on one instance or `geas_runtime_tick` over every instance the runtime holds, from whatever timer it has.
 
 ```c
@@ -733,7 +809,7 @@ GeasStatus geas_runtime_start_ticker(GeasRuntime* rt, uint32_t interval_ms);
 GeasStatus geas_runtime_stop_ticker(GeasRuntime* rt);
 ```
 
-A host with no timer of its own starts the runtime's ticker, one runtime thread that calls `geas_runtime_tick` every `interval_ms` of real time, which is what lets a course's `sleep`, a `select` timeout, and a `within` fall due on time with nobody calling in. The interval is real time even when the clock is a host's own, so a ticker over a fake clock ticks as often as the interval says and applies whatever the fake clock reads. A second start while one runs is `GEAS_ERR_STATE`, an interval of 0 or a NULL runtime `GEAS_ERR_TYPE`. Stop joins the thread before it returns and is `GEAS_ERR_STATE` when no ticker runs, and shutdown stops a running ticker first.
+A host with no timer of its own starts the runtime's ticker, one runtime thread that calls `geas_runtime_tick` every `interval_ms` of real time, which is what lets a course's `sleep`, a `select` timeout, and a `within` fall due on time with nobody calling in. The interval is real time even when the clock is a host's own, so a ticker over a fake clock ticks as often as the interval says and applies whatever the fake clock reads. A second start while one runs is `GEAS_ERR_STATE`, an interval of 0 or a NULL runtime `GEAS_ERR_TYPE`. Stop joins the thread before it returns and is `GEAS_ERR_STATE` when no ticker runs, and shutdown stops a running ticker first. The ticker cannot stop itself: a stop called on the ticker's own thread, from a hook its tick delivered for instance, would join the thread it runs on, so it answers `GEAS_ERR_STATE` and the ticker runs on, and so does a stop from any thread holding an instance lock. A host stops the ticker from a thread of its own.
 
 A tick applies every deadline that has passed in deadline order, earliest first, a pledge before a subcontract before the contract term on a tie, and evaluates the policy after each one, so the contract moves exactly as it would have had each lapse been seen the instant it fell due. It stops the moment the contract leaves Signed, Partial, and Fulfilled, since a deadline that fell after a break is moot. If the tick decides a break, the remedies run inside it, on the calling thread, before it returns. A tick called from inside a pledge or remedy body on that body's own instance does nothing: a contract does not break underneath a body it is running.
 
@@ -753,9 +829,9 @@ The type lives in the checker and in the shape hash, where `Duration` spells `D`
 
 A fulfillment that arrives after the lapse is `GEAS_ERR_STATE` and its body does not run, the gate's tick lapsing the pledge first if nothing had yet. The deadline bounds when an attempt may start: a body that was started in time lands its outcome even if it returns after the deadline, since the work it did is real and a fulfilled latch is what lets a remedy undo it.
 
-**retry.** A fulfillment whose body fails is run again inside the same fulfill call, up to `retry_count` more times. A failure is a thunk status other than `GEAS_OK`, the lifecycle failure, which always earns a retry while any remain, or an Err whose payload is a `GEAS_TY_SUM` value with a variant tag listed in `retry_on`. With no `retry_on` a business Err is an outcome and is never retried, and an Err whose payload is not a declared sum never matches a list. Before retry number n, counting from 0, the worker waits `retry_every_ms * retry_backoff^n` milliseconds, held at `retry_cap_ms` when that is nonzero, through the runtime's sleep function. Only the last attempt's outcome is latched and delivered: a retried Err leaves no latch and no payload behind, and a fulfillment that used up its retries on a status delivers that status and latches nothing, as a status always has.
+**retry.** A fulfillment whose body fails is run again inside the same fulfill call, up to `retry_count` more times. A failure is a thunk status other than `GEAS_OK`, the lifecycle failure, which always earns a retry while any remain, or an Err whose payload is a `GEAS_TY_SUM` value with a variant tag listed in `retry_on`. With no `retry_on` a business Err is an outcome and is never retried, and an Err whose payload is not a declared sum never matches a list. Before retry number n, counting from 0, the worker waits `retry_every_ms * retry_backoff^n` milliseconds, held at `retry_cap_ms` when that is nonzero, through the runtime's sleep function. The delay is worked out by squaring over the bits of n, at most 32 steps whatever the retry count, so a pledge allowed a million retries computes its last delay as fast as its first; a backoff of 0, below 0, or NaN reads as 1.0, an `every` of 0 is no delay, a delay past the cap or past 9.0e18 ms is held there, and a delay is never longer than the time left before the pledge's own deadline. Only the last attempt's outcome is latched and delivered: a retried Err leaves no latch and no payload behind, and a fulfillment that used up its retries on a status delivers that status and latches nothing, as a status always has.
 
-The delay is waited on the thread running the fulfillment with the instance lock released, so state reads, signals, other pledges, a park attempt, and a break all proceed while a worker sleeps. The frame is the same frame for every attempt. When the worker takes the lock back it trusts nothing: if the contract broke or was reclaimed meanwhile, or the pledge's own `within` ran out, the fulfillment stops and reports `GEAS_ERR_STATE` with no further attempt. A delay is never waited past the pledge's deadline, the worker wakes at the deadline and lapses the pledge there. A fulfillment waiting out a delay can park. Its row records the attempts already completed and the absolute time the next attempt is due on the runtime clock. The original fulfillment keeps waiting and continues normally if the host carries on, with its frame and future unchanged. A second fulfillment of that pledge is refused while its original delay is active. On resume the pledge is pending, with the same retry budget already spent; the host passes its arguments again. A fulfillment before the saved due time reports `GEAS_ERR_STATE` without running a body or consuming an attempt. At or after that time it runs the next attempt, and the remaining retries keep their original backoff positions. A tick applies deadlines but does not supply arguments or start a pending pledge. One bound to know: a synchronous fulfillment nested inside another body on the same instance holds that instance's lock recursively, and its delay is waited with the outer hold still in place.
+The delay is waited on the thread running the fulfillment with the instance lock released, so state reads, signals, other pledges, a park attempt, and a break all proceed while a worker sleeps. The frame is the same frame for every attempt. When the worker takes the lock back it trusts nothing: if the contract broke or was reclaimed meanwhile, or the pledge's own `within` ran out, the fulfillment stops and reports `GEAS_ERR_STATE` with no further attempt. A delay is never waited past the pledge's deadline, the worker wakes at the deadline and lapses the pledge there. A fulfillment waiting out a delay can park. Its row records the attempts already completed and the absolute time the next attempt is due on the runtime clock. The original fulfillment keeps waiting and continues normally if the host carries on, with its frame and future unchanged. A second fulfillment of that pledge is refused while its original delay is active. On resume the pledge is pending, with the same retry budget already spent; the host passes its arguments again. A fulfillment before the saved due time reports `GEAS_ERR_STATE` without running a body or consuming an attempt. At or after that time it runs the next attempt, and the remaining retries keep their original backoff positions. A tick applies deadlines but does not supply arguments or start a pending pledge. One bound to know: a synchronous fulfillment nested inside another body on the same instance holds that instance's lock recursively, and its delay is waited with the outer hold still in place. A remedy's retry delay is waited through the runtime's sleep function, the host's when it set one, and no cancel request wakes it.
 
 **The contract term.** `term_ms` counts from sign. When it passes and the contract is Signed or Partial, the contract breaks down the same road a matched break line takes, remedies included, and `geas_contract_term_lapsed` reads 1. A contract that is Fulfilled when its term passes met its terms and is left alone.
 
@@ -824,15 +900,45 @@ GeasStatus  geas_partial_remedy_error(GeasContract* c, size_t i,
 
 A contract that carries a `course` block is engine driven. The compiler lowers the course to one C function, a state machine over a frame, and the runtime drives that function on its pool: the course starts when the contract signs, runs the contract's own pledges inline, suspends at every wait with its thread going back to the pool, and is entered again when a signal, a deadline, or a joined call says it can move. Nothing is replayed from the top, an entry jumps to the saved step with the saved slots. A host of such a contract binds the abstract bodies and delivers signals, and that is all; `geas_pledge_fulfill` and `geas_pledge_fulfill_sync` on one of its pledges answer `GEAS_ERR_STATE` and the body never runs.
 
-**The descriptor.** The course rides the descriptor's last tail, after `attrs`:
+**The descriptor.** The course rides its own tail, after `attrs`, and its slot types ride a later one, after the type table:
 
 ```c
-GeasCourseFn course_fn;      /* NULL for a host driven contract */
-uint32_t     course_nslots;  /* the slot count of the frame */
-uint64_t     course_hash;    /* the fingerprint a park row carries */
+GeasCourseFn    course_fn;          /* NULL for a host driven contract */
+uint32_t        course_nslots;      /* the slot count of the frame */
+uint64_t        course_hash;        /* the fingerprint a park row carries */
+/* ... the amends blocks and the type table ... */
+const uint32_t* course_slot_types;  /* one types table index per slot */
 ```
 
-A descriptor whose reported size ends before `course_hash` carries no course, so every module built before the course loads unchanged and reads as host driven. `course_hash` is FNV-1a 64 over the lowered course's step count, its slot count, and the tokens of its source, so a comment or a blank line leaves it alone and any change the frame could feel moves it.
+A descriptor whose reported size ends before `course_hash` carries no course, so every module built before the course loads unchanged and reads as host driven.
+
+**The course hash.** `course_hash` is FNV-1a 64, the shape hash's offset basis and prime, over three pieces run together. First the lowered course in its canonical text, the same slots, steps, and statements the debug command `geas dump-course` prints under a course's `hash:` and `entry:` lines, indented eight spaces at the outer level and four more a level, each line ending in a newline, and spelled canonically where the debug text is spelled for reading: the slot list, each slot spelled by its canonical type code and its kind with no name, `Slot(0): R(NBox,I) (temporary),`; the steps, each pledge or signal spelled by its name rather than its table index; and the statements, every expression carrying its type code, `Int(1):I`, and every string literal spelled with its byte length, `Str(5:hello)`. Then the layout segment of every declared record and sum a slot's type reaches, in name order, spelled as the shape string spells them. Then the `schema` segment of every schema the contract declares, in declaration order. A few more things are spelled by what they mean rather than by how the source wrote them: a binding a `match` or `select` pattern makes is spelled by its position among the arm's bindings, `Bind(0)`, a record literal lists its fields in the order the record declares them, a `Float` literal is spelled by its value as the shortest scientific decimal that reads back as the same double, `Float(1.0005e+03)`, an `Int` by its value whatever its radix or separators, a `Duration` in milliseconds, a `Char` by its scalar value, a generic constructor without the type the source spelled, `MapNew()` and `New(...)`, since the slot's type code already carries it, and a variant's payload without its labels, which the checker already holds to the field at each position. So the hash leaves out what the frame cannot feel, comments, whitespace, the name a `let` or a pattern binds, the order a record literal writes its fields in, the spelling of a literal, `1_000` against `1000` or `0x3e8`, `1m` against `60s`, `1.0e3` against `1000.0`, `'\u{41}'` against `'A'`, a clause's body, the terms, the requirements, and the version, and it moves with everything a resumed frame would read differently: a step added, removed, or reordered, a literal's value, a slot's type or the layout behind it, an operation or the operand it takes, a vow or a clause the course names, and the shape of a pattern. For `record Box { n: Int }` and a contract whose course is `let v = a(1)?` over `pledge a(x: Int) -> Result<Box, Int>`, the text is
+
+```text
+        slots: [
+            Slot(0): R(NBox,I) (temporary),
+            Slot(1): NBox (local),
+        ],
+        steps: [
+            Step 1 call {
+                pledge: a,
+                arguments: [Int(1):I],
+                result: Slot(0),
+                question: true,
+            },
+        ],
+        statements: [
+            Resume 1,
+            Store Slot(1) = Question(Slot(0):R(NBox,I)):NBox,
+            Return,
+        ],
+```
+
+followed by `type Box{n:I};`, and the hash is `0x42ad333066cef768`.
+
+**Slot types.** `course_slot_types` holds one index into the contract's types table per slot, `GEAS_NO_TYPE` for a slot the table has no spelling for, and is NULL when the contract has no course or no type table. The registrar refuses a table with no course, no slot count, or no type table behind it, and a slot whose type the frame could not start at, see Slot limits below. With the table every slot starts at the smallest value of its type before the first entry: 0 for `Int`, `UInt`, `Byte`, `Duration`, and `Time`, +0.0, false, U+0000, Unit, an empty `String` or `Bytes`, an empty `List` or `Map` carrying its element or key tag, `None`, a tuple or record whose every field is at its own smallest value, the variant of a sum whose payload nests least, the first on a tie, and the arm of a `Result` that nests least, `Ok` on a tie, with no box when that arm is `Unit`. A slot with no type, and every slot of a descriptor with no slot types, starts as a zeroed Unit. Every slot a resume, a claim, or an amend brings back from a park row is held to its slot type all the way down before the instance is published, see The checked boundary.
+
+**Slot limits.** A slot starts at the smallest value of its type every time an instance signs, so that value has to exist and has to be cheap to build. The rule follows two numbers for every type. The height is the fewest levels any finite value of the type nests: 1 for a scalar, a `List`, a `Map`, and an `Option`, whose smallest values are empty or `None`; one more than the deepest kid for a `Tuple` and a record; one more than the lower of its two arms for a `Result`, `Ok` on a tie; and one more than the variant whose deepest field nests least for a sum, a variant with no field counting 0, the first such variant on a tie. The node count of the smallest value is 1 for a scalar, a `List`, a `Map`, and an `Option`, and 1 plus the counts of the kids it carries otherwise, every kid of a `Tuple` or a record, every field of the variant the height chose for a sum, and the arm it chose for a `Result`, a `Unit` arm counting 1. A slot's type has to have a finite value at all, a record that holds itself with no `Option` or `List` between has none, its smallest value has to nest no deeper than `GEAS_VALUE_MAX_DEPTH`, 256 levels, and it has to hold no more than `GEAS_SLOT_MIN_NODES_MAX`, 4096 nodes, a line a record holding the next record twice crosses in a dozen levels. `geas build` refuses a course that holds a value of such a type with a message that says so and says to hold it behind an `Option` or a `List`, whose smallest value is one node however large the type inside, and the registrar counts the same way and refuses such a slot with `GEAS_ERR_TYPE`, so a handwritten descriptor cannot get one past it either.
 
 **The frame.**
 
@@ -840,7 +946,7 @@ A descriptor whose reported size ends before `course_hash` carries no course, so
 typedef struct GeasCourseFrame {
     uint32_t   step;         /* resume point, 0 on the first entry */
     uint32_t   nslots;
-    GeasValue* slots;        /* instance owned, zero filled at sign */
+    GeasValue* slots;        /* instance owned, each at its type's smallest value */
     int64_t    wait_due_ms;  /* the pending wait's deadline, 0 when none */
     uint32_t   wait_step;    /* the step that owns wait_due_ms */
     uint32_t   status;       /* the GeasStatus that stopped the course */
@@ -911,8 +1017,26 @@ int64_t    geas_course_now(void* ctx);
 GeasStatus geas_course_checkpoint(void* ctx, GeasCourseFrame* f);
 ```
 
+A select names its arms, and a together its calls, through two small structs, 16 and 24 bytes on LP64:
+
+```c
+typedef struct GeasCourseArm {
+    uint32_t is_timeout;   /* 1 for a timeout arm, 0 for an await arm */
+    uint32_t signal;       /* an await arm's signal, by pledges table index */
+    int64_t  timeout_ms;   /* a timeout arm's duration from the select's first poll */
+} GeasCourseArm;
+
+typedef struct GeasCourseCall {
+    uint32_t         pledge;   /* the pledge, by pledges table index */
+    const GeasValue* args;     /* copied on the poll that starts the call */
+    size_t           nargs;
+} GeasCourseCall;
+```
+
+A call's arguments are copied onto the instance on the poll that starts it, so the array needs to live only through that poll, and the emitter builds both arrays after the step's label from slots.
+
 - `geas_course_call` runs one of the contract's own pledges, by pledges table index, inline on the course's thread through the machinery a host fulfillment uses: the gate, the terms, the retries, the latch, the policy, the events, and the remedy pass a break makes due. `out` receives the pledge's value, an `Err` as readable as an `Ok`; any other status is the fulfillment's, and the course stops on it. A signal index is `GEAS_ERR_TYPE`, an index past the table `GEAS_ERR_NAME`, a count mismatch `GEAS_ERR_TYPE`.
-- `geas_course_await` waits for a signal by its pledges table index. With `has_within` 0 it is ready once the signal is delivered and `out` is the raw payload; with `has_within` 1 it is ready once the signal is delivered or `within_ms` has passed, and `out` is an `Option`, tag 1 `Some` with the payload boxed on the instance, tag 0 `None`. A signal delivered before the await ran answers at once. A signal whose own `within` lapsed yields `None` at once with `has_within` 1, and is `GEAS_ERR_STATE` with `has_within` 0.
+- `geas_course_await` waits for a signal by its pledges table index. With `has_within` 0 it is ready once the signal is delivered and `out` is the raw payload; with `has_within` 1 it is ready once the signal is delivered or `within_ms` has passed, and `out` is an `Option`, tag 1 `Some` with the payload boxed on the instance, tag 0 `None`. A signal delivered before the await ran answers at once. A signal whose own `within` lapsed yields `None` at once with `has_within` 1, and is `GEAS_ERR_STATE` with `has_within` 0. A signal an amends block seeded fulfilled latched with no payload behind it: one with no parameters answers Unit, `Some(Unit)` with `has_within` 1, and one with parameters answers `GEAS_ERR_TYPE`, which halts the course. The compiler refuses that seed, so only a handwritten amends table meets it, and `select` answers the same way for an await arm on such a signal.
 - `geas_course_sleep` is ready once `duration_ms` has passed since the step's first poll.
 - `geas_course_select` is ready once any arm is, `*chosen` the first ready arm in arm order, so the emitter lays the arms out in source order. `payload` is the raw payload for an await arm and `Unit` for a timeout arm. A select whose every arm awaits a lapsed signal is `GEAS_ERR_STATE`.
 - `geas_course_together` is one step of concurrent calls. Its first poll copies every call's arguments onto the instance, starts each call on the pool, and answers `*ready` `GEAS_COURSE_WAIT`. Once every call has an outcome the course is entered again at the same step, and that poll is ready with `outs[i]` the i-th call's value. A call whose status was not `GEAS_OK` makes the poll answer the first such status in call order, and the outcomes the other calls latched stand. A call whose `after` is not met is `GEAS_ERR_STATE` without running. Each poll at the step names the same pledges in the same order. An empty or NULL `calls`, a NULL `outs`, a signal index, or a count mismatch is `GEAS_ERR_TYPE`.
@@ -925,7 +1049,7 @@ A wait's deadline is fixed on the first poll of its step: the runtime stores it 
 
 `DONE` finishes the course and `STOPPED` halts it on the frame's status. The course is cancelled instead when the contract reaches Remedying or Broken, when a break is requested, or when an operation was refused for one of those reasons: a waiting course is dropped the moment the state moves, and a running one is cut off at its next operation. None of these ends sets the contract's state, the requirements decide it from the latches. A course whose own step answered `Err` and broke the contract gets that `Err` back, returns `DONE` at its `?`, and reads FINISHED while the contract reads Remedying and then Broken.
 
-**Locks and threads.** `course_fn` runs with the instance lock held by the pool worker. A host break waits on that lock, so it waits for the step the course is inside to return and latch, the same wait a break makes for a running host fulfillment, and the course is then cancelled at its next operation. The events a run records wait on the instance unreserved until the run lets the instance go, at its end or at a retry delay inside a call, and are delivered there, so a break or a signal from another thread while the course runs waits on the lock instead of finding the instance reserved for the whole run; a host mutation that lands while that delivery is under way answers `GEAS_ERR_STATE` like on any reserved instance, see Events, and `geas_course_wait` returning means the delivery has ended.
+**Locks and threads.** `course_fn` runs with the instance lock held by the pool worker. A host break waits on that lock, so it waits for the step the course is inside to return and latch, the same wait a break makes for a running host fulfillment, and the course is then cancelled at its next operation. The events a run records wait on the instance unreserved until the run lets the instance go, at its end or at a retry delay inside a call, and are delivered there, so a break or a signal from another thread while the course runs waits on the lock instead of finding the instance reserved for the whole run; a host mutation that lands while that delivery is under way waits it out as on any reserved instance, see Events, and `geas_course_wait` returning means the delivery has ended.
 
 A delivery never stops a course. Another thread's delivery holds the instance reserved while its hook runs, a signal's caller, the ticker, or a worker, and the course meets it only where the run let the lock go. Wherever it does, at an entry, at an operation, at a call's gate or the end of its retry delay, at a checkpoint, and before an armed autopark writes a landing, the course waits for the delivery to end and goes on with the instance as it stands then, never answering `GEAS_ERR_STATE` for it: an entry defers to the redrive that ends the delivery, and a running course waits on a condition with the instance lock held exactly once, which the wait gives up whole, so the delivering thread takes the lock back to finish. A together call waits the same way before it starts, when its body returns, and after a retry delay. The waiting thread holds no reservation of its own, so the hook that delivers reads the instance freely, every read surface and `geas_course_info` included, while its mutations are refused as on any reserved instance. A break that lands during the wait is the cut, and the course ends CANCELLED at its next operation. A hook must not wait for the course, nor for work on the pool, since the waiting course keeps its worker.
 
@@ -954,7 +1078,7 @@ GeasStatus geas_contract_set_autopark(GeasContract* c, const char* dsn, const ch
 
 NONE is a contract with no course. RUNNING covers a course scheduled on the pool, running, or delivering the events of its last entry. `step` is the step the frame stands at, published at every checkpoint, so it reads the running step while the course runs and the step it rests or ended at afterwards. WAITING is suspended at a wait. FINISHED returned `DONE`, HALTED stopped on the status in `status`, and CANCELLED was cut off by a break or the contract breaking. The runtime fills only the fields that fit the caller's `size` and leaves `size` as it was; a size too small to hold `state` is `GEAS_ERR_TYPE`.
 
-`geas_course_info` reads a published copy without waiting on the instance lock, running the tick first when the lock is free, so a host can poll it while a step runs. `geas_course_wait` blocks until the course is not RUNNING and answers `GEAS_OK` with `out` filled. `timeout_ms` is real time and a negative value waits forever; when it runs out the call answers `GEAS_OK` as well, with `out` read as it stands, `state` RUNNING and `step` the step the course runs, so the caller tells a timeout from a settled course by `state` alone. A caller holding an instance lock or delivering events, the course function, a body, or a hook, gets `GEAS_ERR_STATE` without waiting, with `out` read as it stands. A host thread that waits with no timeout must not hold a lock a hook takes, since the wait returns only after the run's events were delivered.
+`geas_course_info` reads a published copy without waiting on the instance lock, running the tick first when the lock is free, so a host can poll it while a step runs. Both calls count themselves as readers of the course while they read, and `geas_contract_free` answers `GEAS_ERR_STATE` until the last reader is out, so a free racing a poll never pulls the course out from under it. `geas_course_wait` blocks until the course is not RUNNING and answers `GEAS_OK` with `out` filled. `timeout_ms` is real time and a negative value waits forever; when it runs out the call answers `GEAS_OK` as well, with `out` read as it stands, `state` RUNNING and `step` the step the course runs, so the caller tells a timeout from a settled course by `state` alone. A caller holding an instance lock or delivering events, the course function, a body, or a hook, gets `GEAS_ERR_STATE` without waiting, with `out` read as it stands, and so does a body a `together` runs, which holds no lock while it runs but belongs to the very step the wait would be waiting out. A host thread that waits with no timeout must not hold a lock a hook takes, since the wait returns only after the run's events were delivered.
 
 `geas_contract_set_autopark` names the store and key an instance parks itself into from now on; the runtime keeps copies of both and a NULL `dsn` clears them. The row is the one `geas_instance_park` writes, under its rules, and it is written at every course checkpoint, whenever the course waits or ends, and at the next release of the instance lock after every latch, lapse, contract state change, saved retry, and remedy start or end, and before every remedy body; it works on a host driven instance too. A moment the park rules refuse, a body running or a receipt not waited, defers the write to the next such point. A failed write is reported on stderr, and on a course instance the next operation answers it and the course halts, while a course about to wait halts instead. An instance ended by an explicit break writes nothing more, its last row stands. A NULL contract, or a `dsn` with a NULL key, is `GEAS_ERR_TYPE`.
 
@@ -1016,9 +1140,13 @@ The kind numbers and the prefix through `seq` are permanent. `size` is the produ
 
 The instance stays reserved until that queue drains. An observed remedy pass keeps its reservation across retry delays until the pass ends. Another thread can park during that wait or between remedies once the previous event batch has drained; the snapshot leaves the reservation and the live pass with their owner. State, partial results, attrs, vow reads, remedy reads, lapse reads, and signal payload reads are allowed, from the hook and from other threads, and they do not tick or run remedies during delivery. They see a consistent state at the delivery boundary. Several transitions may have completed since an event was recorded, so the event's state pair describes its transition and a state read describes the settled boundary. An explicit reclaim can therefore leave an earlier event's payload unavailable by delivery, following the ordinary payload lifetime rule.
 
-Fulfill, signal, and break against a reserved instance return `GEAS_ERR_STATE`. Park also refuses during callback delivery, including from the hook itself; its exception is a snapshot during a remedy wait or between remedies after delivery has ended. The future form of fulfill reports that status through wait as usual. The producing thread may finish its operation and nested calls before delivery begins. Other callers retry mutations once delivery has ended. A host driven pledge waking from a retry delay while another thread owns delivery reports `GEAS_ERR_STATE` before making another attempt, its outcome unlatched and its retry progress reset, so the host fulfills it again once the delivery ended, which its own hook is the one to tell it. A course's own call, and a together call, waits that delivery out and makes the attempt instead, see The course. A hook uses the read surface, returns normally, and does not shut down its runtime or wait for work it has prevented from proceeding.
+A host call waits out another thread's delivery. A host thread here is one outside every body, hook, delivery, ref write back callback, together body, and remedy pass, holding no instance lock. Its `geas_pledge_fulfill` and `geas_pledge_fulfill_sync`, `geas_signal`, `geas_instance_park` and `geas_instance_park_v`, `geas_contract_break`, `geas_contract_release`, `geas_contract_set_autopark`, `geas_contract_free`, and `geas_instance_tick` take the instance lock, wait on a condition with that lock given up until the delivery ends, and then run against the instance as it stands, so each answers what it would answer with no hook installed. The pool worker running a queued fulfillment waits the same way at its gate and when it wakes from a retry delay, so a host driven pledge whose retry delay ends inside another thread's delivery makes its next attempt once that delivery ended. A fulfill, a signal, or a tick that meets a remedy pass another thread owns does not wait for the pass: the contract is Remedying and the call answers as it does on any Remedying contract. A break, a release, and a free wait for the pass to end, the way break waits for a pass anyway, and a park waits only while the delivery refuses it, so a snapshot during a remedy wait or between remedies goes ahead. A waiter that wakes to an instance a break or a release reclaimed meanwhile answers `GEAS_ERR_STATE`, as every call on a reclaimed instance does. `geas_contract_request_cancel` never waits, and neither does any read.
 
-This reservation refuses host work instead of waiting on a callback. A hook may take a host mutex while another host thread holding that mutex reads the instance or attempts a mutation: the read completes and the mutation is refused, so neither needs to wait for the hook. A future's completion is published before its final event batch is delivered for the same reason. Retry delays and the intervals between remedies can deliver earlier batches while that future is still pending, and a hook must not wait for the operation whose continuation it holds. Wait and poll describe the fulfillment, and neither is a fence for event delivery. Runtime shutdown joins the producing workers and is the final delivery fence. Hooks can provide their own notification when a host needs to follow their progress.
+The calls made from inside the delivery stay refused. Fulfill, signal, park, break, and release from a hook on the instance it delivers return `GEAS_ERR_STATE` at once, nothing latched and nothing published, and so do the same calls from a body, a write back callback, or a together body on an instance another thread is delivering, since the delivering thread may be waiting on them; the rules a body already keeps for its own instance stand as they are. The future form of fulfill reports that status through wait as usual. A break whose request was published just before the delivery took its reservation is carried out by the delivery once its callbacks returned, and a break caller waiting meanwhile returns once it has, with that break's status. When a remedy pass is under way on another thread at that moment, the delivery hands the break to that pass along with the reservation and every event queued in the meantime, and the pass delivers those events at its own outermost release of the instance lock and carries out the break when it ends, so the heap is reclaimed exactly once, by the pass. The producing thread may finish its operation and nested calls before delivery begins. `geas_runtime_tick` and the ticker pass over an instance another thread is delivering and the next tick reaches it, since a hook may stop the ticker, which joins it, and the ticker must never be waiting on that hook. A course's own call, and a together call, waits that delivery out whole, a remedy pass's reservation included, see The course. A hook uses the read surface, returns normally, and does not shut down its runtime or wait for work it has prevented from proceeding.
+
+**Host locks.** Waiting makes the host's own lock order part of the bargain: a host thread does not make a waiting call, and does not wait on a receipt, while it holds a lock its hook takes. The hook cannot return until it gets that lock and the call cannot return until the hook does, so the two wait on each other for good; that is the host's lock order to keep, the runtime does not detect it. Every read, `geas_future_poll`, `geas_course_info`, hook registration, and `geas_contract_request_cancel` never wait on a delivery, so a host may make those under such a lock, and a hook may take a host mutex while another thread holding it reads the instance. A hook that starts work on another instance and waits for it needs a pool worker while every worker may be waiting out a delivery, which is one more reason a hook keeps to the read surface.
+
+**The order a host sees.** A pool worker publishes a fulfillment's outcome after it delivered the events that fulfillment recorded. So when `geas_future_wait` or `geas_pledge_fulfill_sync` returns, every event the call's own fulfillment recorded has reached the hook, a single threaded host sees a call's events before the call returns, and its next call never meets that delivery. Events handed to a remedy pass another thread owns are delivered by that pass, at its own outermost release of the instance lock. A break that reclaims the instance between that delivery and the publication forfeits the receipt like any unwaited one, so a host that wants the value waits before it breaks. A hook that waits on the receipt whose events it is delivering is refused with `GEAS_ERR_STATE` instead of waiting on its own thread; a hook that waits on any other receipt whose fulfillment is waiting out this same delivery waits for good, which the hook rule above already forbids. Retry delays and the intervals between remedies can deliver earlier batches while a future is still pending. Wait and poll describe the fulfillment and the events it recorded on its own worker, not the deliveries of other threads, and runtime shutdown, which joins the producing workers, is the final delivery fence. Hooks can provide their own notification when a host needs to follow their progress.
 
 **Registration.** A NULL runtime is `GEAS_ERR_TYPE`. Otherwise setting, replacing, or clearing the hook returns `GEAS_OK` before or after freeze. A NULL `fn` clears it. The function and user pointer are captured together at each transition. Registration never waits for callbacks; events already captured keep their original pair after replacement or clear. The host keeps those function and user pointers alive until their delivery threads finish, including the pass owner for a park during a remedy wait, or simply until runtime shutdown. The `GeasEvent*` is borrowed only during the callback; its names and instance handle live until shutdown. A disabled event emission performs one atomic pointer check, with no queue allocation, clock read, or registration lock. An allocation failure increments a counter on that instance and leaves the host running. The next successfully delivered batch begins with one `GEAS_EVENT_LOST`, stored inside the instance so it needs no allocation. Its `item` is NULL, its `new_state` is the number dropped since the previous marker, saturating at `UINT32_MAX`, and its other fields and callback pair come from the first queued event of that batch. A batch with no queued entries leaves the counter for the next batch. A cleared hook does not count unobserved sites as losses.
 
@@ -1038,7 +1166,7 @@ Python exposes `rt.on_event(callback)`, or `rt.on_event(None)` to clear. The cal
 int geas_cancel_requested(void* ctx);
 ```
 
-A body passes the `ctx` it was handed. The call reads atomic flags and takes no instance lock: it answers 1 once a break, a cancel request, or a release is called on that instance, including a break or a release deferred from inside a body, or when runtime shutdown starts, and 0 otherwise. The request stays set for the rest of that instance's life. A fresh sign or resume starts with no request, cancellation is not part of the park row. In Python a bound callback receives the instance and calls `inst.cancel_requested()`.
+A body passes the `ctx` it was handed. The call reads atomic flags and takes no instance lock: it answers 1 once a break, a cancel request, or a release is called on that instance, including a break or a release deferred from inside a body, or when runtime shutdown starts, and 0 otherwise. The request stays set for the rest of that instance's life. A remedy is the exception: on the thread running an instance's remedy pass the call answers 0 for that instance whatever was requested, since the break that made the remedies due is the request, and a remedy that stopped for it would leave undone the very work the break asked for; only runtime shutdown reads 1 there. A child process a remedy runs through `Process.run` polls the same way, so a break never cuts a compensation short. A fresh sign or resume starts with no request, cancellation is not part of the park row. In Python a bound callback receives the instance and calls `inst.cancel_requested()`.
 
 A break called from inside a body on its own instance returns `GEAS_OK` immediately and leaves the break pending until the outermost fulfillment ends. Its outcome latches before the remedies run, and the heap remains available until then. A break while another thread runs the remedy pass waits for that pass. Cancellation does not skip remedies or shorten their retry terms.
 
@@ -1048,7 +1176,7 @@ GeasStatus geas_contract_request_cancel(GeasContract* c);
 
 So break is the request and the ending in one call, and `geas_contract_request_cancel` is the request on its own. It raises the same flag and returns at once, it waits on no lock, runs no remedy, and breaks nothing. Every body on the instance reads `geas_cancel_requested` as 1 from then on, a default retry wait wakes and its fulfillment answers `GEAS_ERR_STATE` without another attempt, and a course is cut at its next operation and ends `CANCELLED`, its contract left in whatever state the latches gave it. Now the instance stays live: a body that returns after the request latches its outcome as usual, and later fulfillments and signals are taken, their bodies reading the flag the same way. Nothing lowers the flag, it stays raised until the instance ends in a break or a release, so a host that asked once never has to ask again and a body never sees a request come and go. A second request is the same request and answers `GEAS_OK`, a request after a break or a release reclaimed the instance answers `GEAS_ERR_STATE`, and a NULL handle `GEAS_ERR_TYPE`. A host with calls in flight on several threads requests the cancel, waits for its own calls to come back, and then breaks or releases, so no thread is left waiting on another. In Python it is `inst.request_cancel()`, in dusk `contract_request_cancel(c)`.
 
-Cancellation wakes a pledge's default retry delay and the fulfillment answers `GEAS_ERR_STATE` without another attempt. With a host supplied sleep callback, the receipt is forfeited immediately, and the worker makes no further attempt when the callback returns. The runtime never interrupts that callback; a scheduler that wants its worker back promptly wakes its own wait, or polls cancellation through its user context. Shutdown publishes its flag before joining workers, so bodies and sleep callbacks can finish cooperatively.
+Under a request, an attempt's outcome is read for whether it would be retried. An outcome the pledge's `retry` would try again, a status other than `GEAS_OK` or an `Err` whose variant `on` lists, with retries still left, is not latched: the fulfillment answers `GEAS_ERR_STATE`, its value zeroed and the pledge still pending, since an outcome the pledge never meant to keep is not one a cancel should make final. An outcome no retry would follow, an `Ok`, an `Err` no `on` lists, or the last attempt's answer, latches as usual. A break, a release, or shutdown hands every attempt's outcome back as it is, a retryable `Err` latching. Cancellation wakes a pledge's default retry delay and the fulfillment answers `GEAS_ERR_STATE` without another attempt. With a host supplied sleep callback, the receipt is forfeited immediately, and the worker makes no further attempt when the callback returns. The runtime never interrupts that callback; a scheduler that wants its worker back promptly wakes its own wait, or polls cancellation through its user context. Shutdown publishes its flag before joining workers, so bodies and sleep callbacks can finish cooperatively.
 
 ## Handing an instance off
 
@@ -1067,39 +1195,197 @@ GeasStatus geas_instance_claim(GeasRuntime* rt, const char* dsn, const char* key
 
 An instance armed with autopark that has changes not yet written writes its last row first, so the row is never older than what this process finished. That row records an open episode as rolled back and a course the release cut as still running at its step with no status, so the claimer carries the course on from there. A write that fails is the call's status, and the instance goes on as it was, live and unreleased, for the host to retry or to break. An instance with no autopark writes nothing at release: the host parked it, and a latch that moved after that park is the host's to have parked again before releasing, the runtime cannot tell which row the host means to hand over.
 
-Called from inside a body on its own instance, or while another thread delivers the instance's events, the release is noted and answers `GEAS_OK` at once, and it happens when that body's fulfillment or that delivery ends, the same deferral break follows. The body's outcome latches first, and a fulfillment the release ended answers `GEAS_ERR_STATE` through its wait. A break called while a release is pending answers `GEAS_ERR_STATE`.
+Called from inside a body on its own instance, the release is noted and answers `GEAS_OK` at once, and it happens when that body's fulfillment ends, the same deferral break follows. Called from a host thread while another thread delivers the instance's events, it waits that delivery out first, see Events; from a hook on the instance it is delivering it is `GEAS_ERR_STATE`. The body's outcome latches first, and a fulfillment the release ended answers `GEAS_ERR_STATE` through its wait. A break called while a release is pending answers `GEAS_ERR_STATE`. A deferred release that then fails, its last autopark row refused say, goes back only to a release caller: a `geas_contract_release` still inside its call takes the status as its answer, and with none in its call the runtime writes the status to stderr under its `[libgeasrt]` prefix. No break, fulfillment, or other call is handed that status, no `RELEASED` is emitted for it, and the instance goes on live and unreleased.
 
-**Claim** resumes the row and takes it out of the store in the same move. The row is read and the instance built from it unpublished, exactly the way `geas_instance_resume` builds one, amends blocks and a course frame included, and a slot in the runtime's instance table is held for it. Then one `DELETE` that matches the row on every column it was built from takes it, as its own transaction. Only when that delete took the row does the instance publish, emit `RESUMED` (after `AMENDED` for an amended row), and start its course, so no tick, no ticker, and no course step reaches the instance before the row is gone. Two claimers of one key, in one process or in two, both read and both build, exactly one delete takes the row, and that claimer gets the instance while the other's built instance is discarded and its call answers `GEAS_ERR_NAME`, the row being gone. A row rewritten between the read and the delete, by an autopark still running in the releasing process for instance, is read and built again, and a key rewritten eight times in a row answers `GEAS_ERR_STATE`. A build that fails, `GEAS_ERR_VERSION`, `GEAS_ERR_TYPE`, `GEAS_ERR_UNBOUND`, an amends block's own status, or a full instance table, leaves the row where it was and answers that status, all or nothing. Every other status follows `geas_instance_resume`, and `geas_instance_resume` itself never deletes a row.
+**Claim** resumes the row and takes it out of the store in the same move. The row is read and the instance built from it unpublished, exactly the way `geas_instance_resume` builds one, amends blocks and a course frame included, and a slot in the runtime's instance table is held for it. Then one `DELETE` that matches the row on every column it was built from, its `gen` included, takes it, as its own transaction, and it took the row exactly when it reports one row deleted. Only when that delete took the row does the instance publish, emit `RESUMED` (after `AMENDED` for an amended row), and start its course, so no tick, no ticker, and no course step reaches the instance before the row is gone. Two claimers of one key, in one process or in two, both read and both build, exactly one delete takes the row, and that claimer gets the instance while the other's built instance is discarded and its call answers `GEAS_ERR_NAME`, the row being gone. A row rewritten between the read and the delete, by an autopark still running in the releasing process for instance, is read and built again, and a key rewritten eight times in a row answers `GEAS_ERR_STATE`. A build that fails, `GEAS_ERR_VERSION`, `GEAS_ERR_TYPE`, `GEAS_ERR_UNBOUND`, an amends block's own status, or `GEAS_ERR_OOM` when the instance table cannot grow, leaves the row where it was and answers that status, all or nothing. Every other status follows `geas_instance_resume`, and `geas_instance_resume` itself never deletes a row.
 
 The build happens before the delete, not inside one store transaction with it, because the contract a row holds can name the same store in its own `dsn` vow, and a build that opened that store while the claim held a write lock on it would wait on itself. The conditional delete gives the same answer the transaction would: the row a claimer took is the row it built.
 
 Put together, the order is park, release, claim, and the remedies run nowhere on the way. A host that releases without having parked, with no autopark armed, has let the obligation go with no row to take it up from, which is the host's call to make and not one the runtime second guesses. In Python the three are `inst.park(dsn, key)`, `inst.release()`, and `rt.claim(dsn, key, expected_hash=0)`, the event kind `GEAS_EVENT_RELEASED`; in dusk they are `contract_park`, `contract_release(c)`, and `contract_claim(rt, dsn, key, hash)`.
 
+## The store calls
+
+So the `Store` operations of `std.store` lower onto one family of runtime calls, and a host bound body may call them the same way compiled code does. Each takes the instance a body runs against and a schema of that instance's own contract, binds every value as a positional parameter so a string is a string and never SQL, and lands its answer in `out` as a `Result` owned by the instance, its `Ok` arm built by the call:
+
+```c
+typedef enum GeasStoreCmp {
+    GEAS_CMP_EQ = 0, GEAS_CMP_NE = 1, GEAS_CMP_LT = 2,
+    GEAS_CMP_LE = 3, GEAS_CMP_GT = 4, GEAS_CMP_GE = 5,
+} GeasStoreCmp;
+
+typedef struct GeasStoreTerm {
+    uint32_t col;              /* index into the schema's columns */
+    uint32_t cmp;              /* a GeasStoreCmp */
+    const GeasValue* value;    /* compared against the column, always bound */
+} GeasStoreTerm;
+
+typedef enum GeasStoreAgg {
+    GEAS_AGG_MIN = 0, GEAS_AGG_MAX = 1, GEAS_AGG_AVG = 2,
+} GeasStoreAgg;
+
+#define GEAS_STORE_NO_ORDER UINT32_MAX
+
+GeasStatus geas_store_find(GeasContract* c, const GeasSchemaDesc* schema,
+                           const GeasValue* key, GeasValue* out);
+GeasStatus geas_store_query_eq(GeasContract* c, const GeasSchemaDesc* schema,
+                               uint32_t col, const GeasValue* value, GeasValue* out);
+GeasStatus geas_store_query_where(GeasContract* c, const GeasSchemaDesc* schema,
+                                  const GeasStoreTerm* terms, uint32_t nterms,
+                                  GeasValue* out);
+GeasStatus geas_store_query_ordered(GeasContract* c, const GeasSchemaDesc* schema,
+                                    const GeasStoreTerm* terms, uint32_t nterms,
+                                    uint32_t order_col, uint32_t order_desc,
+                                    GeasValue* out);
+GeasStatus geas_store_query_page(GeasContract* c, const GeasSchemaDesc* schema,
+                                 const GeasStoreTerm* terms, uint32_t nterms,
+                                 uint32_t order_col, uint32_t order_desc,
+                                 const GeasValue* limit, GeasValue* out);
+GeasStatus geas_store_count_where(GeasContract* c, const GeasSchemaDesc* schema,
+                                  const GeasStoreTerm* terms, uint32_t nterms,
+                                  GeasValue* out);
+GeasStatus geas_store_sum_where(GeasContract* c, const GeasSchemaDesc* schema,
+                                uint32_t sum_col, const GeasStoreTerm* terms,
+                                uint32_t nterms, GeasValue* out);
+GeasStatus geas_store_select(GeasContract* c, const GeasSchemaDesc* schema,
+                             const GeasStoreTerm* terms,
+                             const uint32_t* group_lens, uint32_t ngroups,
+                             uint32_t order_col, uint32_t order_desc,
+                             const GeasValue* limit, GeasValue* out);
+GeasStatus geas_store_count_any(GeasContract* c, const GeasSchemaDesc* schema,
+                                const GeasStoreTerm* terms,
+                                const uint32_t* group_lens, uint32_t ngroups,
+                                GeasValue* out);
+GeasStatus geas_store_sum_any(GeasContract* c, const GeasSchemaDesc* schema,
+                              uint32_t sum_col, const GeasStoreTerm* terms,
+                              const uint32_t* group_lens, uint32_t ngroups,
+                              GeasValue* out);
+GeasStatus geas_store_agg_any(GeasContract* c, const GeasSchemaDesc* schema,
+                              uint32_t agg, uint32_t agg_col,
+                              const GeasStoreTerm* terms,
+                              const uint32_t* group_lens, uint32_t ngroups,
+                              GeasValue* out);
+GeasStatus geas_store_insert(GeasContract* c, const GeasSchemaDesc* schema,
+                             const GeasValue* row, GeasValue* out);
+GeasStatus geas_store_update(GeasContract* c, const GeasSchemaDesc* schema,
+                             const GeasValue* key, const GeasValue* row,
+                             GeasValue* out);
+GeasStatus geas_store_delete(GeasContract* c, const GeasSchemaDesc* schema,
+                             const GeasValue* key, GeasValue* out);
+```
+
+The answers: `find` lands `Ok(Some(row))` or `Ok(None)` by primary key, the first column; `query_eq`, `query_where`, `query_ordered`, `query_page`, and `select` land `Ok` of a list of rows; `count_where` and `count_any` land `Ok` of an `Int`; `sum_where` and `sum_any` land `Ok` of the summed column's own type, `Int` or `Float`, its zero when nothing matches; `agg_any` lands `Ok` of an `Option`, the column's type for `GEAS_AGG_MIN` and `GEAS_AGG_MAX` and `Float` for `GEAS_AGG_AVG`, `None` when nothing matches; and `insert`, `update`, and `delete` land `Ok(Unit)`. A row is a record whose fields are the schema's columns in order. The terms of a `_where` call are ANDed in order. The `_any` calls and `select` split the terms into `ngroups` groups, `group_lens[g]` terms each, AND the terms of a group, and OR the groups. `order_desc` is 0 for ascending and 1 for descending, `select` takes `GEAS_STORE_NO_ORDER` for the backend's own order, and a `limit` is a nonnegative `Int` bound after every term, given to `select` only beside an order.
+
+`schema` has to be a pointer into the instance's own descriptor, an entry of its `schemas` table, never a copy of one; any other pointer, and any schema on a contract that declares none, is `GEAS_ERR_TYPE` before anything runs, so a body cannot aim a write at a table its contract never vowed. A NULL argument is `GEAS_ERR_TYPE`, a store-backed instance whose connection a break or a release already closed is `GEAS_ERR_STORE`, a backend that cannot complete the operation is `GEAS_ERR_STORE`, and an allocation that fails is `GEAS_ERR_OOM`. The `Err` arm of every answer is the language's `StoreError` and no call here builds it; a failure is the status, never a value.
+
+## Program steps
+
+```c
+GeasStatus geas_process_run(void* ctx, const GeasValue* args, size_t nargs,
+                            GeasValue* out);
+```
+
+`geas_process_run` is the call `Process.run(command)` lowers onto, and it runs in the thunk frame of the body that calls it: `ctx` the instance, `args` one slot holding the `Command` record, `program`, `args`, `stdout_path`, and `stderr_path` in that order, and `out` a `Result` on the instance, `Ok(Unit)` for an exit of zero and `Err` of the `ExitError` sum otherwise, `Exited(code)` as variant 0, `Signaled(number)` as variant 1, and `SpawnFailed(reason)` as variant 2. A frame that is not one well formed `Command` is `GEAS_ERR_TYPE`. The child is launched with `posix_spawn`, and the wait polls `geas_cancel_requested` every 10 ms, sending SIGTERM and then SIGKILL 200 ms later when a cancel lands; the spec's Program steps section has the whole contract.
+
+## Calls outside the ABI
+
+`libgeasrt` exports two more families than the ones above, and neither one is part of the 1.x ABI, see Stability.
+
+The store driver in `geas_store.h`, `geas_store_open`, `geas_store_close`, `geas_store_exec`, `geas_store_exec_params`, `geas_store_query`, `geas_store_reconcile`, `geas_store_begin`, `geas_store_commit`, and `geas_store_rollback`, is the connection layer the runtime's own store calls and its park table sit on: one connection to one database, statements with positionally bound parameters, and rows handed back as `GeasValue`s allocated through a caller's allocator. No emitted module calls it, and a host that drives a contract never needs it, since a store-backed contract opens, reconciles, and closes its own connection. It is exported so the runtime's gates can test the driver on its own, and its shape is the seam a second backend will plug into, so it may change in a minor release.
+
+The frame calls in `geas_wire.h`, `geas_wire_frame_write` and `geas_wire_frame_read`, read and write a 20 byte frame header, the magic `ASHW`, a `u32` kind from 1 to 13, a `u64` request id, and a `u32` payload length of at most 64 MiB, all little endian. Nothing in the runtime, the compiler, or the bridge speaks those frames, the bridge rides gRPC, so they stay outside the ABI as well. The value codec in the same header, `geas_wire_encode_value` and `geas_wire_decode_value`, is the format the park row is written in, and that part is frozen, see the next section.
+
 ## The value wire codec
 
-`geas_wire_encode_value` and `geas_wire_decode_value` carry Bytes with the same framing as String: a little endian u32 type tag of 17, a u32 variant tag of zero, a u64 byte length, then exactly that many bytes. There is no terminator or UTF-8 check for Bytes. An empty buffer still carries the length field. Lists declare `GEAS_TY_BYTES` as their element tag, and nested record, sum, map value, tuple, Option, and Result positions use the same encoding recursively. Bytes is not a map key.
+```c
+GeasStatus geas_wire_encode_value(const GeasValue* v, uint8_t* buf, size_t cap,
+                                  size_t* need);
+GeasStatus geas_wire_decode_value(GeasContract* owner, const uint8_t* buf,
+                                  size_t len, GeasValue* out, size_t* consumed);
+```
 
-**Malformed bytes.** Nothing in an encoded value is trusted. Every length is checked against the bytes left before it is read, nesting stops at `GEAS_WIRE_MAX_DEPTH`, the boundary's own 256 levels, and a tag the codec does not carry, `GEAS_TY_PLEDGE_REF`, `GEAS_TY_INSTANCE`, or one past the enum, is malformed. The decoder answers malformed bytes with `GEAS_ERR_TYPE` and an oversized payload with `GEAS_ERR_OOM`, and hands back no value either way. Bytes that decode are a well formed value, and that is all the decoder vouches for: a stored `Int` edited into a `UInt` decodes fine, so a resume and a claim hold what the row brought back to the contract's type table, see The checked boundary, and refuse it there. The encoder holds the structural facts on its way out, a None with a box, a Bool past 1, or a tag past the enum is `GEAS_ERR_TYPE` with nothing written, and it writes an `Ok` or `Err` of Unit with no box as the box holding Unit, the one spelling the decoder hands back.
+So the value codec is the one serialization of a `GeasValue`, the bytes every value column of the park row is written in, and it is canonical: one value has one byte string, and encoding a decoded value reproduces its input exactly. `geas_wire_encode_value` follows the size protocol of `geas_iname_dump`, `*need` the exact encoded size, the bytes written only when `cap` holds them, `GEAS_ERR_OOM` and nothing written otherwise. `geas_wire_decode_value` builds the value through the allocation helpers on `owner`, so it is instance owned and dies at that instance's break, and reports through `*consumed`, when not NULL, the bytes the value took; bytes after a complete value are the caller's to read. On any error the decoder hands back a zeroed Unit and `*consumed` 0, and what it already copied onto `owner` stays there until the break.
 
-Every encoding that contains no Bytes stays byte identical. The value codec stays unchanged, so rows written before Bytes read by the same rules. Bytes in vows, Ok values, error payloads, and signal payloads round trips through the existing value codec, including the workflow blob a remedy reads after resume.
+**The layout.** Every integer is little endian at a fixed width and nothing is padded. Every value starts with an 8 byte head, `u32 ty` then `u32 tag`, its `GeasTypeTag` and its variant tag, and the body after it depends on the type:
+
+| type | tag | body after the head |
+|---|---|---|
+| `GEAS_TY_UNIT` | 0 | nothing |
+| `GEAS_TY_INT`, `GEAS_TY_UINT` | 0 | 8 bytes, the integer |
+| `GEAS_TY_FLOAT` | 0 | 8 bytes, the IEEE 754 bits as they stand |
+| `GEAS_TY_BOOL` | 0 | 1 byte, 0 or 1 |
+| `GEAS_TY_BYTE` | 0 | 1 byte |
+| `GEAS_TY_CHAR` | 0 | `u32`, a Unicode scalar value |
+| `GEAS_TY_STRING`, `GEAS_TY_BYTES` | 0 | `u64` length, then that many bytes, no terminator |
+| `GEAS_TY_LIST` | 0 | `u64` count, `u32` element tag, then each element |
+| `GEAS_TY_MAP` | 0 | `u64` slot count, twice the pair count, `u32` key tag, then key and value interleaved |
+| `GEAS_TY_TUPLE`, `GEAS_TY_RECORD` | 0 | `u64` count, then each field in order |
+| `GEAS_TY_SUM` | the variant | `u64` count, then each payload field in order |
+| `GEAS_TY_OPTION` | 0 for None, 1 for Some | nothing for None, the payload for Some |
+| `GEAS_TY_RESULT` | 0 for Ok, 1 for Err | the payload, always |
+
+The codec checks no UTF-8, a `String`'s bytes cross as they are, and the checked boundary is what holds a string to UTF-8 where one crosses into a body. An empty string or list still carries its length. A map key is a keyable scalar and the keys of one map are distinct. An `Ok` or `Err` of Unit is always written as a payload holding Unit, which is the one spelling the decoder hands back, a boxed Unit, so a value built with no box behind a Unit arm encodes to the same bytes.
+
+**What the encoder refuses.** Nothing is written and `GEAS_ERR_TYPE` is answered for a value carrying `GEAS_TY_INSTANCE`, `GEAS_TY_PLEDGE_REF`, or a tag past the enum anywhere, a variant tag no value of its type carries, a `Bool` past 1, a `Char` that is not a scalar value, a `None` with a box, a length with no data behind it, a `List` or a `Map` longer than its capacity, a list's element tag or a map's key tag that is not a type, a key that is not keyable, and nesting past `GEAS_WIRE_MAX_DEPTH`, the boundary's own 256 levels, so a value a boundary accepted always encodes. A size past `SIZE_MAX` is `GEAS_ERR_OOM`.
+
+**What the decoder refuses.** Nothing in an encoded value is trusted. Every length is checked against the bytes left before it is read, and every count has to fit in the bytes left at eight bytes an item, the smallest any value takes. The decoder also keeps one budget for the whole buffer, `len / 8` value slots, charged for every container's count and every box behind a `Some`, an `Ok`, or an `Err`, so a run of empty containers nested inside one another cannot claim more memory than the buffer could describe. Malformed bytes, a forbidden or unknown tag, a `Bool` past 1, a `Char` past U+10FFFF or in the surrogate range, a key that is not keyable or repeats, a count the bytes left cannot hold, an exhausted budget, and nesting past 256 levels are `GEAS_ERR_TYPE`; a count past `GEAS_VALUES_MAX_COUNT`, the most `GeasValue`s one allocation can hold, and an allocation that fails are `GEAS_ERR_OOM`. Bytes that decode are a well formed value, and that is all the decoder vouches for: a stored `Int` edited into a `UInt` decodes fine, so a resume and a claim hold what the row brought back to the contract's type table, see The checked boundary, and refuse it there.
+
+The codec itself has no cap on the length of a buffer. It does hold the node budget, see The checked boundary: a value of more than `GEAS_VALUE_MAX_NODES` nodes, counted as the tree it unfolds to, is `GEAS_ERR_OOM` before any size is measured, with `*need` set to 0, a size no encoded value has, so a sizing call tells a value past the budget from a buffer too small, and a park that meets such a value answers `GEAS_ERR_OOM` and writes nothing. That is what keeps every row the runtime writes one a resume reads back, since the boundary a resume crosses holds the same budget. A deep copy follows at most 4096 levels.
 
 ## The park row
 
-`geas_instance_park` writes one row into the `geas_park` table and `geas_instance_resume` reads it back. The row has two generations and the runtime reads both.
+```c
+GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key);
+GeasStatus geas_instance_resume(GeasRuntime* rt, const char* dsn, const char* key,
+                                uint64_t expected_hash, GeasContract** out);
+GeasStatus geas_instance_park_v(GeasContract* c, const GeasValue* dsn,
+                                const GeasValue* key);
+GeasStatus geas_instance_resume_v(GeasRuntime* rt, const GeasValue* dsn,
+                                  const GeasValue* key, uint64_t expected_hash,
+                                  GeasContract** out);
+```
 
-Format 1 is the ten column row: `pkey`, `contract`, `version`, `shape_hash`, `state`, `signed_at`, `vows`, `latches`, `errs`, `subtxn`. Format 2 adds an eleventh column, `flow`, one blob holding the workflow state. A fresh table is created with all eleven. A table created before the column existed is brought forward in place the first time this runtime parks into it or resumes from it, with one `ALTER TABLE geas_park ADD COLUMN flow BLOB` issued only after `pragma_table_info` showed the column missing, and the rows already in it read an empty `flow`, which is how a format 1 row is recognized. A runtime that predates the column cannot write into a table that has it, its ten value insert is refused by the backend, which is the loud failure wanted there.
+`geas_instance_park` writes one row into the `geas_park` table and `geas_instance_resume` reads it back. The `_v` spellings take the dsn and the key as `String` values, the form a compiled pledge body holds, refuse any other tag with `GEAS_ERR_TYPE`, and otherwise follow the C string forms exactly.
 
-The blob is versioned on its own. The writer emits version 4, and the reader accepts versions 2, 3, and 4. Version 2 has the same fields below except for `retry_attempts` and `retry_due_ms`; those resume as zero, with a full budget on the next fulfillment. Version 3 ends after the remedies, and version 4 adds the course frame at the tail. Format 1 has no blob, rather than a version 1 blob. Integers are little endian at fixed widths and values are the wire codec's canonical encoding, the bytes the `vows` and `errs` columns already use:
+The table is
+
+```sql
+CREATE TABLE IF NOT EXISTS geas_park (pkey TEXT PRIMARY KEY, contract TEXT,
+    version INTEGER, shape_hash INTEGER, state INTEGER, signed_at INTEGER,
+    vows BLOB, latches BLOB, errs BLOB, subtxn BLOB, flow BLOB, gen INTEGER)
+```
+
+and a park writes the whole row with `INSERT OR REPLACE`, so a key holds one row, the latest. The row has two generations and the runtime reads both. Format 1 is the first ten columns, `pkey` through `subtxn`; format 2 adds `flow`, one blob holding the workflow state, and `gen`. Each column holds:
+
+| column | contents |
+|---|---|
+| `pkey` | the key, bound as its bytes |
+| `contract` | the contract name, bound as its bytes |
+| `version` | the contract's version, the `u32` |
+| `shape_hash` | the shape hash, its 64 bits read as a signed integer |
+| `state` | the `GeasContractState`, 1 through 5 |
+| `signed_at` | the signing second, the clock's millisecond reading divided by 1000 |
+| `vows` | every vow's wire value back to back in declaration order, no count, each one's type the vow's |
+| `latches` | one byte per pledges table entry, 0 pending, 1 fulfilled, 2 broken |
+| `errs` | per pledges table entry, a presence byte, then the `Err` payload's wire value when it is 1 |
+| `subtxn` | one byte per subcontract, see Transactional fates |
+| `flow` | the workflow blob below, empty for a format 1 row |
+| `gen` | a nonzero odd number drawn at every write, `random() \| 1`, read as 0 on a row that has none |
+
+`gen` is what makes a claim exact. A row parked twice with the same bytes still carries a fresh `gen`, so a claimer that read the older write matches no row with its `DELETE` and reads the row again, and a row written before the column existed matches on 0.
+
+A table created before `flow` or `gen` existed is brought forward in place the first time this runtime parks into it, resumes from it, or claims from it, with one `ALTER TABLE geas_park ADD COLUMN flow BLOB` and one `ALTER TABLE geas_park ADD COLUMN gen INTEGER`, each issued only after `pragma_table_info` showed that column missing, and the rows already in it read an empty `flow`, which is how a format 1 row is recognized, and a `gen` of 0. Several processes may bring one table forward at once: another connection can add the column between the look and the `ALTER`, so an `ALTER` that fails is followed by a second look, and the column there now counts as success, while any other failure is the call's `GEAS_ERR_STORE`.
+
+The blob is versioned on its own. The writer emits version 5, and the reader accepts versions 2 through 5. Version 2 has the same fields below except for `retry_attempts` and `retry_due_ms`; those resume as zero, with a full budget on the next fulfillment. Version 3 ends after the remedies, version 4 adds the course frame and the together section at the tail, and version 5 has version 4's bytes with the stamps read differently: a not yet eligible item is stamped `INT64_MIN`, the runtime's `GEAS_NOT_ELIGIBLE`, and every other stamp, a negative one included, is the clock reading it was. A version 4 or older blob spells not yet eligible as any negative stamp, and a negative `wait_due_ms` there is `GEAS_ERR_TYPE`. Format 1 has no blob, rather than a version 1 blob. Integers are little endian at fixed widths and values are the wire codec's canonical encoding, the bytes the `vows` and `errs` columns already use:
 
 ```text
 "GFLW"                          4 bytes, magic
-u32  version                    4
+u32  version                    5
 i64  signed_ms                  sign time on the runtime clock
 u8   term_lapsed
 u32  next_seq                   latches fulfilled so far
 u32  npledges                   must equal the descriptor's
      per pledge:
-       i64  eligible_ms         -1 while not yet eligible
+       i64  eligible_ms         INT64_MIN while not yet eligible
        u8   lapsed
        u32  latch_seq           1 based order of the fulfilled latch, 0 if none
        u8   ok_present          then the wire value when 1
@@ -1114,7 +1400,7 @@ u32  nremedies                  must equal the descriptor's
        u32  status              last attempt's GeasStatus
        u8   lapsed
        u8   err_present         then the wire value when 1
-u8   has_course                 version 4, 0 and nothing more for a host driven contract
+u8   has_course                 0 and nothing more for a host driven contract
      when 1:
        u64  course_hash         must equal the registered descriptor's
        u8   state               GeasCourseState, RUNNING through CANCELLED
@@ -1135,7 +1421,9 @@ u8   has_course                 version 4, 0 and nothing more for a host driven 
            u8   value_present   1 exactly when status is GEAS_OK, then the wire value
 ```
 
-A signal's payload is its `ok` value, so it needs no field of its own. A blob with another magic or version, with counts that disagree with the registered descriptor, with a lapse flag on a latch that is not broken, with retry attempts beyond the declared budget, with a due time but no saved attempts, or with bytes left over is `GEAS_ERR_TYPE` and no instance is handed back. The `state` column accepts 5, `Remedying`.
+A signal's payload is its `ok` value, so it needs no field of its own. A blob with another magic or version, with counts that disagree with the registered descriptor, with a lapse flag on a latch that is not broken, with retry attempts beyond the declared budget, with a due time but no saved attempts, with a presence byte past 1, with a slot count that is not the course's, or with bytes left over is `GEAS_ERR_TYPE` and no instance is handed back, and a course frame on a contract with no course, or one whose course hash is not the registered one, is `GEAS_ERR_VERSION`. A retry due time further out than the pledge's own delay from now is held to that delay rather than refused. A remedy saved while it ran reads back failed with `GEAS_ERR_STATE`, see Parking a pass. The `state` column accepts 5, `Remedying`.
+
+Every column is held to the registered descriptor's counts on a plain resume as much as through an amends block. A contract with no pledge has nothing to put in `latches` or `errs`, so a row that carries bytes in either is `GEAS_ERR_TYPE`, and a contract with no subcontract has nothing to put in `subtxn`, so bytes there are `GEAS_ERR_TYPE` as well, the way a vow column with bytes past the last vow is.
 
 **Transactional fates.** The `subtxn` blob carries one byte per subcontract: 0 for an unopened episode, 2 for a committed episode, and 3 for a rolled back episode. The reader also accepts older rows whose 2 meant closed and uses the pledge latches to tell whether that episode committed. An open episode, byte 1, is refused at park and resume. An automatic break closes every open episode, so it can park with its errors and resume Broken.
 
@@ -1228,7 +1516,7 @@ answers the version an instance was amended from, and 0 for an instance signed o
 **The recorded shape.** `geas record FILE [--force]` writes `shapes/<Contract>.v<version>.shape` beside the source for every public contract the file declares, and a block is checked against that file. It is plain text, one record a line, every line ending in a newline:
 
 ```text
-geas shape 2
+geas shape 3
 contract NAME
 version N
 hash 0x<16 hex digits>          the shape hash
@@ -1242,31 +1530,31 @@ remedy NAME TARGET              one per remedy, declaration order
 type NAME DEFINITION            one per declared record or sum the boundary reaches, name order
 ```
 
-Types are canonical type codes. A pledge's `OK` is the code of what a fulfilled pledge stores, the `T` of a `Result<T, E>` or the whole return otherwise, and a signal's `PAYLOAD` is its parameter codes in parentheses. A `type` record spells a record as `{field:code,...}` and a sum as `=Variant(field:code)|Variant`, the layout segments the shape line ends in. The first line names the format version and a reader refuses one it does not know, and the shape line has to hash to the recorded hash, so an edited file is refused rather than trusted. The vow, item, sub, and remedy lines are the old name lists of the `GeasAmendDesc` the compiler emits, in order. The head of the recorded shape of `skeleton/order_course.geas`:
+Types are canonical type codes. A pledge's `OK` is the code of what a fulfilled pledge stores, the `T` of a `Result<T, E>` or the whole return otherwise, and a signal's `PAYLOAD` is its parameter codes in parentheses. A `type` record spells a record as `{field:code,...}` and a sum as `=Variant(field:code)|Variant`, the layout segments the shape line ends in. The first line names the format version, 3, and a reader refuses one it does not know: a file of format 1 or 2 records a shape hash this compiler does not compute, the first with no layouts and the second leaving out the subcontract members, the transactional flags, and the requirements, so the reader names the format and asks for `geas record` to be run again on the source of that version. The shape line has to hash to the recorded hash, so an edited file is refused rather than trusted. The vow, item, sub, and remedy lines are the old name lists of the `GeasAmendDesc` the compiler emits, in order. The head of the recorded shape of `skeleton/order_course.geas`:
 
 ```text
-geas shape 2
+geas shape 3
 contract OrderCourse
 version 1
-hash 0x4861f0a9753d79d4
-course 0xd0e7aba0f862d5a6
+hash 0xa5fa4f6bf483ba55
+course 0x9fb3ca94771a30a3
 ```
 
 ## Threading
 
 The runtime owns a worker pool. `geas_runtime_init` takes an `GeasRuntimeConfig` whose `max_threads` sizes it, 0 or a NULL config selecting the default of 4 workers; a request beyond 256 is refused with `GEAS_ERR_TYPE`. The pool drains one unbounded queue, intrusive through the future itself so queuing allocates nothing. `geas_runtime_shutdown` stops intake, drains what is queued, joins every worker, and only then frees instances, futures, and modules; nothing else may be calling into the runtime by then.
 
-The moments a fulfillment touches host memory are unchanged from the single threaded ABI, and that is the whole point of the copy boundary: copy-in happens inside `geas_pledge_fulfill` on the caller's thread, write back happens inside the delivering `geas_future_wait` on the waiting thread, and the pool worker in between only ever sees instance owned memory.
+The moments a fulfillment touches host memory are fixed whatever the pool does, and that is the whole point of the copy boundary: copy-in happens inside `geas_pledge_fulfill` on the caller's thread, write back happens inside the delivering `geas_future_wait` on the waiting thread, and the pool worker in between only ever sees instance owned memory.
 
 **Serialization.** Every instance carries one recursive mutex. It covers fulfillment validation and copy-in, the whole thunk run, the outcome latch, every block list allocation, and break, so fulfillments against one instance serialize in queue order while distinct instances run truly in parallel. The allocation helpers, `geas_bytes` and everything built on it, take the instance lock themselves: recursive acquisition makes them safe inside a thunk, where the worker already holds the lock, and cold acquisition makes them safe from a host thread outside any fulfillment. A single `GeasValue` is still not a shared object; two threads mutating the same value is a host bug. `geas_vow_ref` is safe from any thread, with the standing caveat that the pointer it returns is instance owned and dangles after break.
 
-**Wait semantics.** `geas_future_wait` blocks on the future's condition variable until the outcome exists, delivers exactly once, and performs the ref write back under the future's mutex on the waiting thread. A second wait is `GEAS_ERR_STATE`. The future struct itself is heap memory the runtime tracks per instance until release or shutdown, which is what makes a late wait on an unreleased handle safe; everything the delivered value points at is instance owned and dies at break, which is what keeps wait-before-break the rule for a host that wants the bytes.
+**Wait semantics.** `geas_future_wait` blocks on the future's condition variable until the outcome exists, delivers exactly once, and performs the ref write back on the waiting thread after it lets the future's mutex go, the default write backs under the instance lock and every `write_back` callback after that lock is let go too, see By-reference arguments. A second wait is `GEAS_ERR_STATE`. The future struct itself is heap memory the runtime tracks per instance until release or shutdown, which is what makes a late wait on an unreleased handle safe; everything the delivered value points at is instance owned and dies at break, which is what keeps wait-before-break the rule for a host that wants the bytes.
 
 **Break against in-flight work.** `geas_contract_break` takes the instance lock, so a thunk mid-run finishes and latches before the break proceeds; a task still queued finds the state already Broken when its worker arrives and never touches the freed heap. Before freeing anything the break forfeits every future not yet waited, delivered or not, to `GEAS_ERR_STATE` and clears its pointers into the instance heap. A fulfillment racing a break therefore resolves to exactly one of two outcomes: delivered before the break won, or `GEAS_ERR_STATE`; never a crash, never freed memory. An unwaited outcome is forfeited even if the pledge ran, so a host that wants a result waits before it breaks.
 
 **Lock ordering.** The hierarchy runs instance above runtime, then future, taken downward and never upward: a caller instance's mutex, then any callee instance mutexes a cross-contract call nests below it, then the runtime lock over the descriptor, instance, and binding tables, then the per-future mutex. The pool's queue lock is a leaf taken with no other lock held. The runtime lock never sits above an instance mutex: `geas_contract_sign` resolves the descriptor and dispatch table under the runtime lock alone, builds the instance with no locks held, the allocation helpers touching only the fresh, unpublished instance's own mutex, and publishes it under the runtime lock again, which is what lets a thunk holding its instance lock sign through `geas_instance_runtime`. `geas_future_wait` waits on the future mutex alone; the lazy tick it runs first only tries the instance lock and skips the tick when it is busy, so a waiter never holds up an instance and never queues behind one.
 
-The lock wrappers also maintain a thread local nesting count, one increment or decrement per hold, plus a zero check on release, so event delivery waits for the last instance lock on the thread.
+The lock wrappers also maintain a thread local nesting count, one increment or decrement per hold, plus a zero check on release, so event delivery waits for the last instance lock on the thread. The same count decides who may wait out another thread's delivery: a thread holding exactly the one instance lock it took for the call, outside every hook, delivery, write back, and together body, waits on that instance's delivery condition, which gives the lock up whole for the wait, so the waiter holds nothing while the delivering thread takes the lock back to finish, and every place a reservation is let go broadcasts under that lock. A thread holding more than one instance lock is inside a body and keeps the refusal, so no wait ever sits above a lock another thread needs.
 
 The workflow surface keeps this order and adds one habit. The clock and sleep functions are read under the runtime lock and called with it released. A remedy pass releases the instance lock between remedies for host snapshots. A retry delay, a pledge's or a remedy's, is waited with the instance lock released, so a sleeping worker holds up nothing, and the code that takes the lock back rechecks the instance before it touches anything. A remedy pass is owned by one thread from start to end; a `geas_contract_break` from another thread waits for it on a condition variable under the instance lock, holding nothing else.
 
@@ -1285,24 +1573,26 @@ Breaking latches the state at Broken, forfeits every unwaited future to `GEAS_ER
 Every pledge a module compiles gets a mangled symbol:
 
 ```text
-__geas_ash_{contract}_{pledge}_{sighash}_v{version}
+__geas_ash_{len}{contract}_{len}{pledge}_{sighash}_v{version}
 ```
 
-`{contract}` and `{pledge}` are the declared names, which are identifiers and therefore valid symbol fragments. `{sighash}` is the 16 lowercase hex digits of the FNV-1a 64 hash of the pledge's canonical signature spelling followed by the layout segment of every declared record and sum that signature reaches, in name order, the same segments the shape string ends in, see The shape hash. `{version}` is the contract's `version` attribute, 1 when the declaration carries none. The sig hash keeps two revisions of a pledge apart even when nothing about the surrounding contract moved, a field added to a record it takes included; the version keeps two shipped generations apart on purpose. A remedy's mangled name is built the same way over the remedy's own signature.
+`{contract}` and `{pledge}` are the declared names, which are identifiers and therefore valid symbol fragments, each one led by its length in bytes as a decimal number, `7Greeter` and `5greet`. The lengths are what keep the keyspace unambiguous: an identifier may hold an underscore, so without them pledge `b_c` of contract `A` and pledge `c` of contract `A_b` would spell one symbol. `{sighash}` is the 16 lowercase hex digits of the FNV-1a 64 hash, the shape hash's offset basis and prime, of the pledge's canonical signature spelling, `(codes)->code` in the type codes of The shape hash, followed by the layout segment of every declared record and sum that signature reaches, in name order, the same segments the shape string ends in. Parameter names never enter it. `{version}` is the contract's `version` attribute, 1 when the declaration carries none. The sig hash keeps two revisions of a pledge apart even when nothing about the surrounding contract moved, a field added to a record it takes included; the version keeps two shipped generations apart on purpose.
 
-`Greeter.greet` takes a `String` and answers `Result<String, GreetError>`, and `GreetError` is a sum with the one variant `Empty`, so its signature hash is taken over `(S)->R(S,NGreetError)type GreetError=Empty;`, which is `5155c52e95ed821d`. A signature that reaches no declared type, scalars and builtin composites of scalars only, hashes as its spelling alone, so its hash and its mangled name are the ones it had before layouts joined the hash.
+A remedy's mangled name is built the same way over the remedy's own signature, its pledge's Ok type as the parameter when it takes one, and the pledge it undoes does not enter it. A signal is never mangled, since nothing binds one: its pledges table entry carries a NULL `mangled`.
+
+`Greeter.greet` takes a `String` and answers `Result<String, GreetError>`, and `GreetError` is a sum with the one variant `Empty`, so its signature hash is taken over `(S)->R(S,NGreetError)type GreetError=Empty;`, which is `5155c52e95ed821d`, and its symbol is `__geas_ash_7Greeter_5greet_5155c52e95ed821d_v1`. A signature that reaches no declared type, scalars and builtin composites of scalars only, hashes as its spelling alone: `()->V` hashes to `0e2ba22315b89a85`.
 
 A schema row type is the one exception to the reach: a schema names a record the store owns, and a pledge that takes or answers a row spells it as an opaque name whose columns do not enter that pledge's signature hash. The schema's columns are a segment of the contract's shape string, `schema Accounts:id:I,balance:F,owner:S;`, so the layout of a schema row type is covered by the shape hash: a changed column moves the contract's hash, a host signing with the old hash gets `GEAS_ERR_VERSION`, and a row parked under the old schema no longer resumes as the current version.
 
-The mangled name appears twice on purpose: as the thunk's C identifier inside the module and as the `mangled` string in the pledge descriptor, so a debugger and the runtime agree about what they are looking at.
+The mangled name appears twice on purpose: as the thunk's C identifier inside the module and as the `mangled` string in the pledge descriptor, so a debugger and the runtime agree about what they are looking at. The thunk is `static`, the string is what the runtime keys, and so is every other symbol the emitted C defines save `geas_module_register`, the one the module exports: the `k{len}_{Contract}` stems of its descriptor tables and the `geas_clause{len}_{Contract}_{name}` functions of its clauses among them are private to the module, and their spelling is not part of the ABI.
 
-The contract type itself has a mangled name too, in the same grammar with an empty symbol slot and the shape hash where a pledge carries its signature hash:
+The contract type itself has a mangled name too, in the same grammar with an empty symbol, spelled as its length `0`, and the shape hash where a pledge carries its signature hash:
 
 ```text
-__geas_ash_{contract}__{shapehash}_v{version}
+__geas_ash_{len}{contract}_0_{shapehash}_v{version}
 ```
 
-The compiler does not emit this one; the runtime synthesizes it from the contract descriptor at registration, which it can do byte for byte because every piece is already in the descriptor. It exists so the iname table has one keyspace: every discoverable thing, contract type or pledge, is one mangled string.
+The compiler does not emit this one; the runtime synthesizes it from the contract descriptor at registration, which it can do byte for byte because every piece is already in the descriptor: `Greeter` at version 1 is `__geas_ash_7Greeter_0_8b67a53d561ff526_v1`. It exists so the iname table has one keyspace: every discoverable thing, contract type or pledge, is one mangled string.
 
 ## The iname table
 
@@ -1338,7 +1628,7 @@ GeasStatus geas_iname_dump(GeasRuntime* rt, char* buf, size_t cap, size_t* need)
 
 Lookup is exact: the whole mangled name or `GEAS_ERR_NAME`. A host holding yesterday's header therefore misses today's module instead of resolving to the wrong shape; the version mismatch is a clean name error before any hash comparison happens. Enumeration through `geas_iname_count` and `geas_iname_at` walks in strict mangled name order, deterministic for a given set of registered contracts; an index out of range is `GEAS_ERR_NAME`.
 
-`geas_iname_dump` renders the whole table in its canonical text form, the Layer 2 discovery payload. One entry per line in mangled name order, and this format is normative, a change to it is a wire change:
+`geas_iname_dump` renders the whole table in its canonical text form, the discovery payload a foreign host reads. One entry per line in mangled name order, byte order as `strcmp` sees it, and this format is normative, a change to it is a wire change:
 
 ```text
 {mangled} {kind} {shape_hash} v{version}\n
@@ -1347,12 +1637,14 @@ Lookup is exact: the whole mangled name or `GEAS_ERR_NAME`. A host holding yeste
 `{kind}` is spelled `contract` or `pledge`, `{shape_hash}` is 16 lowercase hex digits. The text is byte stable for a given set of registered contracts. `*need` receives the full size including the terminating NUL; when `cap` is at least that, the text and its NUL are written to `buf` and the call returns `GEAS_OK`, otherwise nothing is written and the call returns `GEAS_ERR_OOM`, so a NULL `buf` with `cap` 0 sizes the buffer. Loading the two skeleton modules dumps:
 
 ```text
-__geas_ash_Greeter2__ed0ccb47c5176d84_v2 contract ed0ccb47c5176d84 v2
-__geas_ash_Greeter2_greet_0b2357619b406722_v2 pledge ed0ccb47c5176d84 v2
-__geas_ash_Greeter__8b67a53d561ff526_v1 contract 8b67a53d561ff526 v1
-__geas_ash_Greeter_greet_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
-__geas_ash_Greeter_shout_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
+__geas_ash_7Greeter_0_8b67a53d561ff526_v1 contract 8b67a53d561ff526 v1
+__geas_ash_7Greeter_5greet_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
+__geas_ash_7Greeter_5shout_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
+__geas_ash_8Greeter2_0_ed0ccb47c5176d84_v2 contract ed0ccb47c5176d84 v2
+__geas_ash_8Greeter2_5greet_0b2357619b406722_v2 pledge ed0ccb47c5176d84 v2
 ```
+
+The length prefix sorts first, so every entry of `Greeter` lands before any of `Greeter2`, and a contract's own entry, its symbol spelled `0`, lands before its pledges.
 
 ## The freeze
 
@@ -1360,34 +1652,171 @@ __geas_ash_Greeter_shout_5155c52e95ed821d_v1 pledge 8b67a53d561ff526 v1
 
 ## The shape hash
 
-A contract's shape hash is FNV-1a 64, offset basis `0xcbf29ce484222325` and prime `0x100000001b3`, over the contract's canonical signature string:
+A contract's shape hash is FNV-1a 64, offset basis `0xcbf29ce484222325` and prime `0x100000001b3`, over the contract's canonical shape string, the bytes of that string and nothing else. So the hash is exactly as stable as the string, and the string is built to be deterministic by construction: no table iteration order touches it, two builds of the same source agree byte for byte, and any change a host or a park row could feel moves it.
 
-```text
-contract {name};vow {name}:{type};...pledge {name}:{sig};...
-```
+**Type codes.** Every type in the string is spelled in the checker's canonical code, the same spelling signature comparison uses:
 
-Bytes has canonical type code `X`, distinct from String's `S`. A contract with no Bytes retains its canonical shape, hash, and mangled names byte for byte. Proto spells Bytes as `bytes`, with `BytesOption` and the usual result wrapper names, and a bare Bytes RPC result uses `BytesValue`. The generated Go message fields are `[]byte`; TypeScript session fields are `Uint8Array`, which accepts the Buffer values delivered by `@grpc/proto-loader`.
+| type | code | type | code |
+|---|---|---|---|
+| `Int` | `I` | `List<T>` | `L(T)` |
+| `UInt` | `U` | `Option<T>` | `O(T)` |
+| `Float` | `F` | `Map<K, V>` | `M(K,V)` |
+| `Bool` | `B` | `Result<T, E>` | `R(T,E)` |
+| `Byte` | `Y` | `(A, B, ...)` | `T(A,B,...)` |
+| `Char` | `C` | a record, sum, or schema row named `Name` | `NName` |
+| `String` | `S` | a contract named `Name` | `KName` |
+| `Bytes` | `X` | a signature | `(A,B,...)->R` |
+| `Unit` | `V` | | |
+| `Duration` | `D` | | |
+| `Time` | `W` | | |
 
-Vows first, then pledges, each in declaration order, each type spelled in the checker's canonical form, the same spelling signature comparison uses. Schemas, the workflow segments, the course, and the contract term follow. The string is deterministic by construction, no table iteration order touches it, so two builds of the same header agree byte for byte and any change to a vow type or a pledge signature moves the hash.
+A contract code never reaches the string, since a contract type is refused at every boundary, and neither does a pledge type, which this version of the language does not have.
 
-**Layouts.** A canonical type code names a declared record or sum, `NCard`, and nothing more, so after every other segment the string carries one layout segment per declared record and sum the boundary reaches, in name order. The boundary is every vow, every pledge, signal, and remedy signature, and a type reaches the types of its own fields and variant payloads and the type arguments of `List`, `Map`, `Option`, `Result`, and `Tuple`. A record is spelled with its fields in declaration order and a sum with its variants in declaration order, a variant with no payload as its bare name:
+**The segments.** The string is a run of segments, each ending in `;`, in this order:
+
+1. `contract Name;`
+2. `vow name:code;` for each vow, declaration order.
+3. `pledge name:sig;` for each pledge in descriptor order, a subcontract's pledges in their place among the rest.
+4. `schema Name:col:code,col:code;` for each schema, declaration order.
+5. `signal name:sig;` for each signal, its signature answering `V`.
+6. `remedy name:target:sig;` for each remedy, `target` the pledge it undoes.
+7. `terms KIND NAME:term,term;` for each item that declares terms, the pledges first, then the subcontracts, the signals, and the remedies, each in descriptor order, `KIND` one of `pledge`, `sub`, `signal`, `remedy` and an anonymous subcontract named `#i` by its index. The terms are comma joined in source order: `within=MS`, `after=a+b`, and `retry=N/every=MS/backoff=F/cap=MS/on=V1+V2`, durations in milliseconds and the backoff in its shortest round trip spelling, so `2.0` is `2` and `2.50` is `2.5`.
+8. `course;` when the contract declares a course.
+9. `term MS;` when the contract carries a `term` attribute.
+10. `sub Name:members;` for each subcontract, `sub Name:transactional:members;` for a transactional one, the members its pledges then its signals, comma joined.
+11. `requirements fulfill=EXPR,partial=EXPR,break=EXPR;` when the source writes a requirements block, a line it leaves out spelled `-`, every binary node parenthesized and left associative, `&` and `|` and `!` over item and subcontract names.
+12. One layout segment for every declared record and sum the boundary reaches, in name order, see Layouts below.
+
+The version, every attribute but `term`, a vow's default, parameter names, clauses, bodies, the course's own statements, which the course hash covers, and amends blocks stay out, so a host's view of the contract is what the string pins.
+
+**Layouts.** A type code names a declared record or sum, `NCard`, and nothing more, so after every other segment the string carries one layout segment per declared record and sum the boundary reaches, in name order. The boundary is every vow, every pledge, signal, and remedy signature, and a type reaches the types of its own fields and variant payloads and the type arguments of `List`, `Map`, `Option`, `Result`, and `Tuple`. A record is spelled with its fields in declaration order and a sum with its variants in declaration order, a variant with no payload as its bare name:
 
 ```text
 type Name{field:code,field:code};
 type Name=Variant(field:code,field:code)|Variant;
 ```
 
-A type reached twice, a recursive one included, is spelled once. A contract whose boundary reaches no declared record or sum has no layout segment, so its shape, its hash, and its mangled names are the ones it had before layouts joined the string. `geas dump-shape`, the debug command the shape goldens run, prints the string, the hash, and every mangled name:
+A type reached twice, a recursive one included, is spelled once. A contract whose boundary reaches no declared record or sum has no layout segment. Adding a field to a record a pledge takes therefore moves the contract's shape hash and that pledge's mangled name, and a park row written before the change belongs to another shape, which an amends block covers, see Amendment.
+
+**A worked example.** `geas dump-shape`, the debug command the shape goldens run, prints the string, the hash, and every mangled name:
 
 ```text
 $ geas dump-shape skeleton/hello.geas
 // shape Greeter v1: contract Greeter;vow prefix:S;pledge greet:(S)->R(S,NGreetError);pledge shout:(S)->R(S,NGreetError);type GreetError=Empty;
 #define GEAS_HASH_Greeter 0x8b67a53d561ff526ULL
-#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
-#define GEAS_MANGLED_Greeter_shout "__geas_ash_Greeter_shout_5155c52e95ed821d_v1"
+#define GEAS_MANGLED_Greeter_greet "__geas_ash_7Greeter_5greet_5155c52e95ed821d_v1"
+#define GEAS_MANGLED_Greeter_shout "__geas_ash_7Greeter_5shout_5155c52e95ed821d_v1"
 ```
 
-Adding a field to a record a pledge takes therefore moves the contract's shape hash and that pledge's mangled name, and a park row written before the change belongs to another shape, which an amends block covers, see Amendment.
+So that is the small case, and every other segment shows up in a contract that uses the rest of the surface:
+
+```geas
+import std.store
+
+record Card {
+    number: String
+    expiry: String
+}
+
+record Receipt {
+    id: String
+    amount: Int
+    tags: List<String>
+}
+
+PayError is either Declined(reason: String) or Timeout or Gateway(code: Int)
+
+contract Order [version: 3, term: 7d] {
+    vow id: String
+    vow dsn: String = "file:orders.db"
+    vow limit: Option<Int>
+    schema Lines { sku: String, qty: Int, price: Float }
+
+    subcontract Payment {
+        pledge authorize(card: Card) -> Result<String, PayError>
+            within 30s
+            retry 3 every 2s backoff 2.50 cap 30s on Timeout, Gateway
+        pledge capture(token: String, amount: Int) -> Result<Receipt, PayError>
+            after authorize
+            within 1m
+        signal settled(receipt: Receipt, at: Time) within 1h
+    }
+
+    subcontract Stock transactional {
+        pledge hold(sku: String, qty: Int) -> Result<Unit, PayError> {
+            return Ok(done())
+        }
+    }
+
+    pledge ship(receipt: Receipt) -> Option<String>
+        after Payment, Stock
+
+    signal delivered(code: String) after ship within 3d
+
+    remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>
+        within 5m
+        retry 2 every 1m
+
+    clause done() -> Unit {
+        return
+    }
+
+    requirements {
+        fulfill: Payment && Stock && (ship || delivered)
+        partial: Payment || Stock
+        break: !Payment && !Stock
+    }
+
+    course {
+        let token = authorize(Card { number: id, expiry: "12/30" })?
+        let receipt = capture(token, 100)?
+        hold("sku-1", 2)?
+        let tracking = ship(receipt)
+        let code = await delivered
+    }
+}
+```
+
+Its shape string, one line in the output and broken here at each segment for reading:
+
+```text
+contract Order;
+vow id:S;vow dsn:S;vow limit:O(I);
+pledge authorize:(NCard)->R(S,NPayError);
+pledge capture:(S,I)->R(NReceipt,NPayError);
+pledge hold:(S,I)->R(V,NPayError);
+pledge ship:(NReceipt)->O(S);
+schema Lines:sku:S,qty:I,price:F;
+signal settled:(NReceipt,W)->V;
+signal delivered:(S)->V;
+remedy refund:capture:(NReceipt)->R(V,NPayError);
+terms pledge authorize:within=30000,retry=3/every=2000/backoff=2.5/cap=30000/on=Timeout+Gateway;
+terms pledge capture:after=authorize,within=60000;
+terms pledge ship:after=Payment+Stock;
+terms signal settled:within=3600000;
+terms signal delivered:after=ship,within=259200000;
+terms remedy refund:within=300000,retry=2/every=60000;
+course;
+term 604800000;
+sub Payment:authorize,capture,settled;
+sub Stock:transactional:hold;
+requirements fulfill=((Payment&Stock)&(ship|delivered)),partial=(Payment|Stock),break=(!Payment&!Stock);
+type Card{number:S,expiry:S};
+type PayError=Declined(reason:S)|Timeout|Gateway(code:I);
+type Receipt{id:S,amount:I,tags:L(S)};
+```
+
+hashes to `0x11f6cee48ef5b2a7`, and the names it mangles are
+
+```text
+__geas_ash_5Order_9authorize_654154b40815d02c_v3
+__geas_ash_5Order_7capture_78637dc94df8dc3d_v3
+__geas_ash_5Order_4hold_d5ef5838ba824176_v3
+__geas_ash_5Order_4ship_9bbf824df9b5f205_v3
+__geas_ash_5Order_6refund_52557414ab70af71_v3
+```
+
+`authorize` hashes `(NCard)->R(S,NPayError)type Card{number:S,expiry:S};type PayError=Declined(reason:S)|Timeout|Gateway(code:I);`, its spelling and the two layouts it reaches, and `refund` hashes `(NReceipt)->R(V,NPayError)` and the layouts of `PayError` and `Receipt`. The course hash of the same contract is `0x2582404b4ec1cabb`, see The course.
 
 A host that passes the expected hash to `geas_contract_sign` gets `GEAS_ERR_VERSION` when the loaded module's shape disagrees, which is the whole defense against fulfilling yesterday's contract through today's module. Passing 0 skips the check.
 
@@ -1408,18 +1837,28 @@ The instance is broken and the runtime shut down on every path, so the sanitizer
 `geas emit-header file.geas` runs the whole front end and writes `target/geas-out/<stem>.geas.h`, the C header a foreign host compiles against instead of hardcoding mangled strings. The header carries no layouts, those stay in `geas_abi.h`; it spells names and hashes alone, two defines per surface:
 
 ```c
+#ifndef GEAS_HEADER_HELLO_A430D84680AABD0B
+#define GEAS_HEADER_HELLO_A430D84680AABD0B
+
 /* contract Greeter, version 1
  * vow prefix: String (default)
  */
 #define GEAS_HASH_Greeter 0x8b67a53d561ff526ULL
 
 /* pledge greet(name: String) -> Result<String, GreetError> */
-#define GEAS_MANGLED_Greeter_greet "__geas_ash_Greeter_greet_5155c52e95ed821d_v1"
+#define GEAS_MANGLED_Greeter_greet "__geas_ash_7Greeter_5greet_5155c52e95ed821d_v1"
 ```
 
 One `GEAS_HASH_{Contract}` per public contract, the shape hash `geas_contract_sign` checks, and one `GEAS_MANGLED_{Contract}_{pledge}` per pledge, the exact string the iname table keys, each under a comment spelling the signature the way the source wrote it, an abstract pledge marked so the host knows to bind before signing. Internal contracts publish no descriptor and appear in no header. The hashes and mangled names come from the same canonical spellings the module emitter hashes, so a header and its module cannot disagree, and the text is byte stable for a given source, which is what lets `tests/golden/hello.geas.h` pin it.
 
 A contract with remedies gets one more define per remedy after its pledges, `GEAS_MANGLED_{Contract}_{remedy}`, under a comment that names the pledge it undoes, `/* remedy refund for capture(receipt: Receipt) -> Result<Unit, PayError>, abstract */`, since a remedy binds through `geas_pledge_bind` exactly the way a pledge does. A contract without one gets the header it always got.
+
+The include guard is `GEAS_HEADER_`, then the file's stem in capitals with every byte outside letters and digits spelled `_`, then `_` and the FNV-1a 64 hash of the stem itself in sixteen capital hex digits, so two stems that spell one identifier, `a-b` and `a_b`, still guard apart. A macro name is the contract and item names joined by underscores, which the mangled names keep apart with their lengths and a macro cannot, so a source in which two items would spell one macro is refused rather than written:
+
+```text
+error: geas: the header macro GEAS_MANGLED_A_b_c would name both pledge b_c of contract A and pledge c of contract A_b; rename one of them so each macro names one item
+```
+
 
 ## Status codes
 
@@ -1428,13 +1867,53 @@ The numbers are part of the wire: `GEAS_OK` is 0 and the rest count up in the or
 | status | meaning |
 |---|---|
 | `GEAS_OK` | the operation ran; a pledge's Err is still `GEAS_OK` |
-| `GEAS_ERR_STATE` | illegal in the contract's current state, a second wait, a future a break forfeited, load, register, and bind after the freeze, a fulfillment or signal before its `after` landed or after its `within` lapsed, or anything but a read while the contract is Remedying |
+| `GEAS_ERR_STATE` | illegal in the contract's current state or from the calling thread, each reason listed below this table |
 | `GEAS_ERR_TYPE` | argument count or type mismatch, at a thunk, at sign, at a ref, a value that does not conform to its declared type at the checked boundary, a body's answer that does not, a park row whose values do not, a type table the registrar refuses, an oversized pool request, a pledge call on a signal or a signal call on a pledge, or a workflow table the sign refuses |
 | `GEAS_ERR_VERSION` | shape hash disagreed at sign, or a park row whose version and shape hash neither the registered contract nor one of its amends blocks accounts for |
 | `GEAS_ERR_UNBOUND` | an abstract pledge, an abstract remedy, or an unsupplied vow at sign |
 | `GEAS_ERR_NAME` | no contract, pledge, vow, or iname entry under that name |
 | `GEAS_ERR_DEADLOCK` | reserved; v1 constructs no lock cycles and ships no detector |
-| `GEAS_ERR_OOM` | allocation failed |
-| `GEAS_ERR_LOAD` | dlopen or registrar failure on a module |
+| `GEAS_ERR_OOM` | allocation failed, a size past what memory can address, or a value past the node budget, `GEAS_VALUE_MAX_NODES` |
+| `GEAS_ERR_LOAD` | a module dlopen refused, or one with no `geas_module_register` |
 | `GEAS_ERR_NET` | reserved; the status numbers are pinned and this slot keeps its place |
 | `GEAS_ERR_STORE` | the backend could not complete a store operation |
+
+So `GEAS_ERR_STATE` is the one status for "not now, or not here", and a host tells its cases apart by where the call stood. Every reason it is answered, by the call that answers it:
+
+- **Ordering.** A fulfillment or a signal whose `after` has not landed yet, the item not eligible. It becomes possible once what it waits on lands, so it is the one case a host may simply make again later.
+- **A retry in flight.** A fulfillment of a pledge already waiting out its retry delay on another call, or made before the due time a parked retry recorded.
+- **A lapse.** A fulfillment or a signal after its `within` ran out, the item latched broken by the deadline; `geas_partial_lapsed` reads 1 for it. Final.
+- **The contract is over or not yet begun.** Any mutation on an Unsigned contract, on one that is Remedying, Broken, or reclaimed by an explicit break, or on one a release handed off; on a Remedying contract everything but a read. A fulfillment that ran into a break or a release under way, its receipt forfeited, and a wait on a receipt a break or a release forfeited. Final.
+- **A course contract.** A host fulfillment of a pledge of an engine driven contract, whose course makes its calls; signals are still the host's. Final for that instance.
+- **The wrong thread.** A fulfill, signal, park, break, or release from a hook on the instance it is delivering, or from a body, a write back callback, or a together body on an instance another thread is delivering; a course operation from anywhere but its course; `geas_course_wait` from a body, a hook, a delivery, or a thread holding an instance lock; `geas_runtime_stop_ticker` from the ticker or from a thread holding an instance lock; `geas_contract_free` from a body, a hook, or such a thread. The same call from a host thread is fine, and a host thread waits out another thread's delivery instead of being refused, see Events.
+- **A cancel request.** Under `geas_contract_request_cancel`, an attempt whose outcome the pledge's `retry` would try again is not latched and its fulfillment answers `GEAS_ERR_STATE`, the pledge still pending; a default retry delay a request, a break, a release, or shutdown woke answers the same. The pledge can be fulfilled again; under a break or a release the instance is ending.
+- **Park and autopark.** A park of an Unsigned or explicitly broken instance, or while a body runs, a receipt is unwaited, or a transactional episode is open. It becomes possible once that body returns, that receipt is waited, or that episode ends.
+- **Release.** A release of an Unsigned instance, of one a break reclaimed or has pending, or of one already released or with a release pending; a break while a release is pending.
+- **Receipts.** A second wait on one receipt, and `geas_future_release` of a receipt still pending or completed but unwaited.
+- **Handles and the runtime.** `geas_contract_free` of an instance not yet ended or with anything still running on it, or of one a body signed; `geas_contract_request_cancel` after a break or a release reclaimed the instance; module load, registration, and bind after the freeze; a second ticker start or a stop with none running; a signal payload or a remedy status read before there is one; a claim whose row was rewritten under it eight times in a row.
+
+## Stability
+
+So from 1.0.0 on this document is a promise and not a snapshot. Every 1.x release of the compiler and the runtime keeps everything below exactly as it stands, and only a 2.0.0 may break any of it, the version number being the one place a break is allowed to show up.
+
+**What is frozen.** The C surface of `geas.h` and `geas_abi.h`, and the two value codec calls of `geas_wire.h`, `geas_wire_encode_value` and `geas_wire_decode_value`: every function they declare, with its name, its parameters, and the meaning of every status it answers, and every struct, enum, macro, and typedef, with its layout, its field order and offsets, and its numbering. That covers the value representation, the thunk frame, every descriptor table and the size macros `GEAS_CONTRACT_DESC_V1_SIZE` through `GEAS_CONTRACT_DESC_V7_SIZE`, the type table, the event kinds, the status codes, the contract, item, remedy, and course states, the store calls and their terms, and the course entry points the emitter calls. The limits the headers name are frozen with their values, `GEAS_VALUE_MAX_DEPTH`, `GEAS_WIRE_MAX_DEPTH`, `GEAS_VALUE_MAX_NODES`, and `GEAS_SLOT_MIN_NODES_MAX`, so a value a 1.0.0 boundary accepts, a row a 1.0.0 park writes, and a course slot a 1.0.0 registrar takes are accepted, read back, and taken by every later 1.x runtime, and the status a value past one of them answers stays the status it answers now. Beside the headers, the formats a module, a host, or a database holds on to are frozen too: the mangling grammar, the shape string and its hash, the signature hash, the course hash, the text of `geas_iname_dump`, the value wire codec, the `geas_park` table and its row, the flow blob, the shape file `geas record` writes, and the names `geas emit-header` defines. So a module built by 1.0.0 loads into every later 1.x runtime, a host compiled against the 1.0.0 headers keeps working against every later 1.x runtime without a rebuild, a park row written by 1.0.0 resumes under every later 1.x runtime, and a contract whose source did not change keeps its shape hash, its course hash, and every mangled name byte for byte under every later 1.x compiler.
+
+**How it still grows.** Now frozen does not mean finished, the surface grows, it just grows in three ways that leave every old reader right:
+
+- A struct the runtime reads from a module grows only at its tail, the way the descriptor grew through seven tails, and each new tail gets its own `GEAS_CONTRACT_DESC_Vn_SIZE`. The registrar reads exactly the size a module reports and zero fills the rest, so an older module reads as one that declares nothing new, and a newer runtime never reads past what an older module wrote.
+- An enum grows only at its end. A new event kind, status, or type tag takes the next number and every existing number keeps its meaning, so a host reads a value it does not know as one to pass over, and a host written that way keeps working when the enum grows.
+- New behavior arrives as new calls. A call that exists keeps its signature and its contract, and a call that needs another parameter becomes a new call beside it.
+
+The persistent formats follow the same rule. The flow blob takes a new version when it gains a field, and the reader keeps reading every version before it, the way it reads versions 2 through 5 today; the park table gains a column only through the same checked `ALTER TABLE` the `flow` and `gen` columns came in by; and a new shape string segment is added only for a declaration that did not exist before, so a contract that does not use it keeps its hash.
+
+**What was never part of it.** Some of what the runtime and the compiler expose is there for the tests, the tools, or the build, and none of it is promised:
+
+- `runtime/src/runtime_internal.h` and every `geas_rt_*` name. They are hidden from the shared object to begin with.
+- Every symbol the emitted C defines other than `geas_module_register`, the one it exports: the `k{len}_{Contract}` table stems, the `geas_clause...` functions, the labels and slots of a course function, and the emitted C's text. The mangled names are frozen as the strings the descriptors carry and the iname table keys, not as C symbols, since every thunk is `static`.
+- The text `geas_value_render` writes, which is for reading and for logs. Its size protocol and its NUL are frozen, its spelling is not.
+- The output of `geas lex`, `geas parse`, and the debug commands the usage line leaves out, `geas dump-shape`, `geas dump-course`, `geas dump-types`, and the rest of the `dump-` family, and the wording of every diagnostic the compiler prints. The shape string `dump-shape` prints is frozen as a string; the lines around it are not.
+- The store driver in `geas_store.h` and the frame calls in `geas_wire.h`, see Calls outside the ABI.
+- The `sqlite3_*` symbols `libgeasrt` exports, which follow the vendored SQLite.
+- The binding layers above the C surface, the Python package, the dusk host binding, and the generated protobuf, Go, and TypeScript. They sit on the frozen C surface, so they keep working, but their own spellings may still move in a minor release.
+
+A host that sticks to the two headers and the formats above can treat a 1.x upgrade as a drop in, and that is the whole point of drawing the line here.

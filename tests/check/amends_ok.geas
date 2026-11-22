@@ -18,7 +18,6 @@ contract Saga [version: 3] {
         rename dispatch -> ship
         rename Billing -> Payment
         rename charge -> capture
-        rename url -> dsn
         retire legacy
         latch delivered as pending
     }

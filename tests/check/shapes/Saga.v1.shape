@@ -1,9 +1,9 @@
-geas shape 2
+geas shape 3
 contract Saga
 version 1
-hash 0x7e86d13f72aa73f8
+hash 0x4d7c37624831d212
 course 0x0000000000000000
-shape contract Saga;vow store_url:S;vow url:S;vow grace:D;pledge charge:()->V;pledge dispatch:()->V;pledge legacy:()->V;
+shape contract Saga;vow store_url:S;vow url:S;vow grace:D;pledge charge:()->V;pledge dispatch:()->V;pledge legacy:()->V;sub Billing:charge;
 vow store_url S
 vow url S
 vow grace D

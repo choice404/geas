@@ -1,0 +1,9 @@
+// A clause runs whole inside one step and keeps nothing in the frame, so a
+// change to its body leaves the course hash alone
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    clause one(value: Int) -> Int { return value + 5 }
+    course {
+        visit(one(1))?
+    }
+}

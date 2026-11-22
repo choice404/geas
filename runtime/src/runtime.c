@@ -89,6 +89,19 @@
 
 typedef GeasStatus (*GeasRegisterFn)(GeasRuntime*);
 
+/* Raised on a thread while it runs ref write back callbacks, which the
+ * instance they came from still waits on, so a shutdown there is refused */
+static _Thread_local uint32_t t_write_back;
+
+int geas_rt_in_write_back(void) {
+    return t_write_back > 0;
+}
+
+/* The receipt this pool worker is running, from its gate until its outcome
+ * is published after the delivery of its events. A hook on this thread
+ * that waited on it would wait on itself, so that wait is refused */
+static _Thread_local struct GeasFuture* t_running_future;
+
 /* ---- locking primitives ---- */
 
 /* The instance lock is recursive on purpose: a pool worker holds it across
@@ -262,6 +275,104 @@ static void* pool_worker(void* arg) {
     }
 }
 
+/* ---- the growable tables ---- */
+
+GeasStatus geas_rt_table_grow(void** base, size_t* cap, size_t need, size_t elem) {
+    if (need <= *cap) return GEAS_OK;
+    size_t grown = *cap ? *cap : GEAS_TABLE_FIRST_CAP;
+    while (grown < need) {
+        if (grown > SIZE_MAX / 2) return GEAS_ERR_OOM;
+        grown *= 2;
+    }
+    if (grown > SIZE_MAX / elem) return GEAS_ERR_OOM;
+    void* table = realloc(*base, grown * elem);
+    if (!table) return GEAS_ERR_OOM;
+    *base = table;
+    *cap = grown;
+    return GEAS_OK;
+}
+
+/* Room for the instances in the table, the reserved ones, and need more.
+ * Under the runtime lock */
+static GeasStatus instance_room(GeasRuntime* rt, size_t need) {
+    size_t used = rt->ninstances + rt->nreserved;
+    if (need > SIZE_MAX - used) return GEAS_ERR_OOM;
+    void* base = rt->instances;
+    GeasStatus st = geas_rt_table_grow(&base, &rt->instance_cap, used + need,
+                                       sizeof(GeasContract*));
+    rt->instances = base;
+    return st;
+}
+
+GeasStatus geas_rt_instance_reserve(GeasRuntime* rt) {
+    GeasStatus st = instance_room(rt, 1);
+    if (st == GEAS_OK) rt->nreserved++;
+    return st;
+}
+
+void geas_rt_instance_unreserve(GeasRuntime* rt) {
+    rt->nreserved--;
+}
+
+GeasStatus geas_rt_instance_add(GeasRuntime* rt, GeasContract* c, int is_reserved) {
+    if (is_reserved) {
+        rt->nreserved--;
+    } else {
+        GeasStatus st = instance_room(rt, 1);
+        if (st != GEAS_OK) return st;
+    }
+    c->slot = rt->ninstances;
+    rt->instances[rt->ninstances++] = c;
+    return GEAS_OK;
+}
+
+/* Takes c out of the table, the last entry moving into its slot. Under the
+ * runtime lock */
+static void instance_remove(GeasRuntime* rt, GeasContract* c) {
+    size_t last = rt->ninstances - 1;
+    GeasContract* moved = rt->instances[last];
+    rt->instances[c->slot] = moved;
+    moved->slot = c->slot;
+    rt->ninstances = last;
+}
+
+GeasStatus geas_rt_instances_pin(GeasRuntime* rt, GeasContract*** out, size_t* n) {
+    *out = NULL;
+    *n = 0;
+    pthread_mutex_lock(&rt->lock);
+    size_t count = rt->ninstances;
+    GeasContract** list = count ? malloc(count * sizeof(GeasContract*)) : NULL;
+    if (count && !list) {
+        pthread_mutex_unlock(&rt->lock);
+        return GEAS_ERR_OOM;
+    }
+    for (size_t i = 0; i < count; i++) {
+        list[i] = rt->instances[i];
+        list[i]->pins++;
+    }
+    pthread_mutex_unlock(&rt->lock);
+    *out = list;
+    *n = count;
+    return GEAS_OK;
+}
+
+static void instance_free(GeasContract* c);
+
+void geas_rt_instances_unpin(GeasRuntime* rt, GeasContract** list, size_t n) {
+    size_t nfree = 0;
+    pthread_mutex_lock(&rt->lock);
+    for (size_t i = 0; i < n; i++) {
+        GeasContract* c = list[i];
+        c->pins--;
+        /* The freed ones gather at the front of the list, freed below with
+         * the lock released */
+        if (c->pins == 0 && c->is_dropped) list[nfree++] = c;
+    }
+    pthread_mutex_unlock(&rt->lock);
+    for (size_t i = 0; i < nfree; i++) instance_free(list[i]);
+    free(list);
+}
+
 /* ---- the iname table ---- */
 
 /* Binary search over the sorted table. Returns 1 with *pos the index on a
@@ -288,13 +399,13 @@ static int iname_find(const GeasRuntime* rt, const char* mangled, size_t* pos) {
 static GeasStatus iname_insert(GeasRuntime* rt, const GeasInameEntry* e) {
     size_t pos;
     if (iname_find(rt, e->mangled, &pos)) return GEAS_ERR_NAME;
-    if (rt->ninames == rt->iname_cap) {
-        size_t cap = rt->iname_cap ? rt->iname_cap * 2 : 16;
-        GeasInameEntry* grown = realloc(rt->inames, cap * sizeof(*grown));
-        if (!grown) return GEAS_ERR_OOM;
-        rt->inames = grown;
-        rt->iname_cap = cap;
-    }
+    /* The table grows the way every runtime table does, its size computed
+     * with no overflow */
+    void* table = rt->inames;
+    GeasStatus st = geas_rt_table_grow(&table, &rt->iname_cap, rt->ninames + 1,
+                                       sizeof(GeasInameEntry));
+    rt->inames = table;
+    if (st != GEAS_OK) return st;
     memmove(rt->inames + pos + 1, rt->inames + pos,
             (rt->ninames - pos) * sizeof(GeasInameEntry));
     rt->inames[pos] = *e;
@@ -303,16 +414,20 @@ static GeasStatus iname_insert(GeasRuntime* rt, const GeasInameEntry* e) {
 }
 
 /* The contract level mangled name the runtime synthesizes, since the
- * compiler mangles pledges only: __geas_ash_{contract}__{shapehash16}_v{ver},
- * the pledge format with an empty symbol slot and the shape hash where a
- * pledge carries its signature hash. Heap the runtime owns until shutdown. */
+ * compiler mangles pledges only:
+ * __geas_ash_{len}{contract}_0_{shapehash16}_v{ver}, the pledge format with
+ * an empty symbol slot, length 0, and the shape hash where a pledge carries
+ * its signature hash. Every name is led by its length in decimal, so no
+ * contract name can run into the slot after it. Heap the runtime owns until
+ * shutdown. */
 static char* iname_contract_mangled(const GeasContractDesc* desc) {
-    int n = snprintf(NULL, 0, "__geas_ash_%s__%016llx_v%u", desc->name,
+    size_t len = strlen(desc->name);
+    int n = snprintf(NULL, 0, "__geas_ash_%zu%s_0_%016llx_v%u", len, desc->name,
                      (unsigned long long)desc->shape_hash, desc->version);
     if (n < 0) return NULL;
     char* s = malloc((size_t)n + 1);
     if (!s) return NULL;
-    snprintf(s, (size_t)n + 1, "__geas_ash_%s__%016llx_v%u", desc->name,
+    snprintf(s, (size_t)n + 1, "__geas_ash_%zu%s_0_%016llx_v%u", len, desc->name,
              (unsigned long long)desc->shape_hash, desc->version);
     return s;
 }
@@ -443,24 +558,37 @@ static void contract_free_owned(GeasContract* c) {
     c->bindings = NULL;
 }
 
+/* Shutdown publishes itself first and wakes every retry wait, so a body
+ * that polls geas_cancel_requested returns and lets go of its instance. Only
+ * then is the ticker joined: a tick waiting on that instance's lock gets it
+ * and ends. The pool drains last, after the ticker can schedule nothing more,
+ * and once the workers are joined the rest is single threaded */
+/* Shutdown joins the ticker and every pool worker, so it is refused before
+ * anything moves on a thread it would wait for or that holds what they
+ * wait for: the ticker, a pool worker, which runs only under an instance
+ * lock, any other holder of an instance lock, a hook or a delivery, a ref
+ * write back callback, and the body of a together call. The call returns nothing, so the refusal is a
+ * line on stderr and the runtime goes on as it was */
 void geas_runtime_shutdown(GeasRuntime* rt) {
     if (!rt) return;
-    /* The ticker goes first, so no tick schedules a course behind the drain */
-    geas_rt_ticker_shutdown(rt);
-    /* Publish shutdown before waiting for a body that polls cancellation */
-    __atomic_store_n(&rt->shutting_down, 1, __ATOMIC_RELEASE);
-    pthread_mutex_lock(&rt->lock);
-    size_t ninstances = rt->ninstances;
-    GeasContract* instances[GEAS_MAX_INSTANCES];
-    memcpy(instances, rt->instances, ninstances * sizeof(*instances));
-    pthread_mutex_unlock(&rt->lock);
-    for (size_t i = 0; i < ninstances; i++) {
-        pthread_mutex_lock(&instances[i]->cancel_mu);
-        pthread_cond_broadcast(&instances[i]->cancel_cv);
-        pthread_mutex_unlock(&instances[i]->cancel_mu);
+    if (geas_rt_thread_busy() || geas_rt_in_join_body() || t_write_back ||
+        geas_rt_on_ticker(rt)) {
+        fprintf(stderr, "[libgeasrt] geas_runtime_shutdown refused: called from a body, a "
+                        "hook, a write back, the ticker, or a thread holding an instance "
+                        "lock\n");
+        return;
     }
-    /* Drain and join first. After the joins no worker exists, so the rest of
-     * shutdown is single threaded and needs no locks. */
+    __atomic_store_n(&rt->shutting_down, 1, __ATOMIC_RELEASE);
+    /* cancel_mu is a leaf, so it is taken under the runtime lock */
+    pthread_mutex_lock(&rt->lock);
+    for (size_t i = 0; i < rt->ninstances; i++) {
+        GeasContract* c = rt->instances[i];
+        pthread_mutex_lock(&c->cancel_mu);
+        pthread_cond_broadcast(&c->cancel_cv);
+        pthread_mutex_unlock(&c->cancel_mu);
+    }
+    pthread_mutex_unlock(&rt->lock);
+    geas_rt_ticker_shutdown(rt);
     pthread_mutex_lock(&rt->qmu);
     rt->qstop = 1;
     pthread_cond_broadcast(&rt->qcv);
@@ -469,32 +597,13 @@ void geas_runtime_shutdown(GeasRuntime* rt) {
         pthread_join(rt->workers[i], NULL);
     }
     free(rt->workers);
-    for (size_t i = 0; i < rt->ninstances; i++) {
-        GeasContract* c = rt->instances[i];
-        struct GeasFuture* f = c->futures;
-        while (f) {
-            struct GeasFuture* next = f->next;
-            future_free(f);
-            f = next;
-        }
-        if (c->store) {
-            geas_store_close(c->store);
-            c->store = NULL;
-        }
-        contract_free_owned(c);
-        free(c->pledge_state);
-        free(c->pledge_err);
-        free(c->sub_txn);
-        geas_rt_flow_free(c);
-        geas_rt_course_free(c);
-        geas_rt_autopark_free(c);
-        pthread_mutex_destroy(&c->mu);
-        free(c);
-    }
+    for (size_t i = 0; i < rt->ninstances; i++) instance_free(rt->instances[i]);
+    free(rt->instances);
     /* The descriptor copies are the runtime's own, see the registrar. */
     for (size_t i = 0; i < rt->ndescs; i++) {
         free((void*)rt->descs[i]);
     }
+    free(rt->descs);
     for (size_t i = 0; i < rt->ninames; i++) {
         /* A contract entry's mangled name is its own heap; a pledge entry
          * borrows its descriptor's string, so only the contract entries free. */
@@ -506,6 +615,8 @@ void geas_runtime_shutdown(GeasRuntime* rt) {
     for (size_t i = 0; i < rt->nmodules; i++) {
         dlclose(rt->modules[i]);
     }
+    free(rt->modules);
+    free(rt->bindings);
     pthread_cond_destroy(&rt->qcv);
     pthread_mutex_destroy(&rt->qmu);
     pthread_mutex_destroy(&rt->lock);
@@ -514,10 +625,18 @@ void geas_runtime_shutdown(GeasRuntime* rt) {
 
 GeasStatus geas_module_load(GeasRuntime* rt, const char* so_path) {
     if (!rt || !so_path) return GEAS_ERR_TYPE;
+    /* Room for the handle is made before the module registers anything,
+     * the table growing as it needs, so a table that cannot grow refuses the
+     * load whole with GEAS_ERR_OOM */
     pthread_mutex_lock(&rt->lock);
     int frozen = rt->frozen;
+    void* room = rt->modules;
+    GeasStatus grown = geas_rt_table_grow(&room, &rt->module_cap, rt->nmodules + 1,
+                                          sizeof(void*));
+    rt->modules = room;
     pthread_mutex_unlock(&rt->lock);
     if (frozen) return GEAS_ERR_STATE;
+    if (grown != GEAS_OK) return grown;
     void* handle = dlopen(so_path, RTLD_NOW | RTLD_LOCAL);
     if (!handle) return GEAS_ERR_LOAD;
     GeasRegisterFn reg = (GeasRegisterFn)dlsym(handle, "geas_module_register");
@@ -531,13 +650,64 @@ GeasStatus geas_module_load(GeasRuntime* rt, const char* so_path) {
         return st;
     }
     pthread_mutex_lock(&rt->lock);
-    if (rt->nmodules == GEAS_MAX_MODULES) {
-        pthread_mutex_unlock(&rt->lock);
-        dlclose(handle);
-        return GEAS_ERR_OOM;
-    }
-    rt->modules[rt->nmodules++] = handle;
+    void* base = rt->modules;
+    st = geas_rt_table_grow(&base, &rt->module_cap, rt->nmodules + 1, sizeof(void*));
+    rt->modules = base;
+    if (st == GEAS_OK) rt->modules[rt->nmodules++] = handle;
     pthread_mutex_unlock(&rt->lock);
+    /* The module registered its contracts and stays loaded: they point into
+     * its image. Only the handle could not be kept for the close at
+     * shutdown, which costs nothing but that close */
+    if (st != GEAS_OK) fprintf(stderr, "[libgeasrt] module %s kept open without its handle\n", so_path);
+    return st;
+}
+
+/* ---- the registrar ---- */
+
+/* Every table a count says is there is there, and every name the runtime
+ * reads is set: the pledges, the vows, the remedies, the atoms, the policy
+ * lines, the schemas and their columns, and the attributes. A subcontract
+ * may be anonymous, a NULL entry or a NULL subs table, and a pledge may carry
+ * no mangled name. Runs before any other check reads a table, on the
+ * runtime's own copy of the descriptor */
+static int names_present(const void* table, size_t stride, uint32_t n, size_t name_at) {
+    if (n == 0) return 1;
+    if (!table) return 0;
+    const uint8_t* row = table;
+    for (uint32_t i = 0; i < n; i++) {
+        const char* name;
+        memcpy(&name, row + (size_t)i * stride + name_at, sizeof(name));
+        if (!name) return 0;
+    }
+    return 1;
+}
+
+static int schemas_present(const GeasContractDesc* d) {
+    if (d->nschemas > 0 && !d->schemas) return 0;
+    for (uint32_t i = 0; i < d->nschemas; i++) {
+        const GeasSchemaDesc* sd = &d->schemas[i];
+        if (!sd->table) return 0;
+        if (!names_present(sd->cols, sizeof(GeasSchemaCol), sd->ncols,
+                           offsetof(GeasSchemaCol, name))) return 0;
+    }
+    return 1;
+}
+
+static GeasStatus validate_structure(const GeasContractDesc* d) {
+    if (!names_present(d->pledges, sizeof(GeasPledgeDesc), d->npledges,
+                       offsetof(GeasPledgeDesc, name))) return GEAS_ERR_TYPE;
+    if (!names_present(d->vows, sizeof(GeasVowDesc), d->nvows,
+                       offsetof(GeasVowDesc, name))) return GEAS_ERR_TYPE;
+    if (!names_present(d->remedies, sizeof(GeasRemedyDesc), d->nremedies,
+                       offsetof(GeasRemedyDesc, name))) return GEAS_ERR_TYPE;
+    if (!names_present(d->attrs, sizeof(GeasAttrDesc), d->nattrs,
+                       offsetof(GeasAttrDesc, name))) return GEAS_ERR_TYPE;
+    if (d->natoms > 0 && !d->atoms) return GEAS_ERR_TYPE;
+    if (d->nfulfill > 0 && !d->req_fulfill) return GEAS_ERR_TYPE;
+    if (d->npartial > 0 && !d->req_partial) return GEAS_ERR_TYPE;
+    if (d->nbreak > 0 && !d->req_break) return GEAS_ERR_TYPE;
+    if (d->namends > 0 && !d->amends) return GEAS_ERR_TYPE;
+    if (!schemas_present(d)) return GEAS_ERR_TYPE;
     return GEAS_OK;
 }
 
@@ -583,9 +753,22 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
         own->vow_types = NULL;
         own->remedy_types = NULL;
     }
-    GeasStatus attr_status = geas_rt_validate_attrs(own);
+    /* A descriptor that ends before the slot table carries none */
+    if (desc_size < offsetof(GeasContractDesc, course_slot_types) +
+                        sizeof(own->course_slot_types)) {
+        own->course_slot_types = NULL;
+    }
+    /* A partial symbol tail names no foreign symbol */
+    if (desc_size < offsetof(GeasContractDesc, remedy_symbols) + sizeof(own->remedy_symbols)) {
+        own->pledge_symbols = NULL;
+        own->remedy_symbols = NULL;
+    }
+    GeasStatus attr_status = validate_structure(own);
+    if (attr_status == GEAS_OK) attr_status = geas_rt_validate_attrs(own);
     if (attr_status == GEAS_OK) attr_status = geas_rt_validate_amends(own);
     if (attr_status == GEAS_OK) attr_status = geas_rt_validate_types(own);
+    if (attr_status == GEAS_OK) attr_status = geas_rt_validate_slot_types(own);
+    if (attr_status == GEAS_OK) attr_status = geas_rt_validate_symbols(own);
     if (attr_status != GEAS_OK) {
         free(own);
         return attr_status;
@@ -593,7 +776,11 @@ GeasStatus geas_register_contract_sized(GeasRuntime* rt,
     pthread_mutex_lock(&rt->lock);
     GeasStatus st = GEAS_OK;
     if (rt->frozen) st = GEAS_ERR_STATE;
-    if (st == GEAS_OK && rt->ndescs == GEAS_MAX_CONTRACT_TYPES) st = GEAS_ERR_OOM;
+    if (st == GEAS_OK) {
+        void* base = (void*)rt->descs;
+        st = geas_rt_table_grow(&base, &rt->desc_cap, rt->ndescs + 1, sizeof(*rt->descs));
+        rt->descs = base;
+    }
     for (size_t i = 0; st == GEAS_OK && i < rt->ndescs; i++) {
         if (strcmp(rt->descs[i]->name, own->name) == 0) st = GEAS_ERR_NAME;
     }
@@ -723,21 +910,11 @@ static GeasStatus copy_vow_value(GeasContract* c, const GeasValue* src,
     return geas_value_deep_copy(c, src, dst);
 }
 
-/* Fills the instance's vow storage: defaults first, then the overrides, each
- * override checked by name and by type, and every vow accounted for. */
-static GeasStatus bind_vows(GeasContract* c, const GeasVowBinding* vows,
-                           size_t nvows) {
+/* The overrides into their slots, each checked by name and by type, with
+ * bound marking every slot an override filled */
+static GeasStatus bind_overrides(GeasContract* c, const GeasVowBinding* vows,
+                                size_t nvows, uint8_t* bound) {
     const GeasContractDesc* desc = c->desc;
-    if (desc->nvows == 0) {
-        return (nvows == 0) ? GEAS_OK : GEAS_ERR_NAME;
-    }
-    c->vow_vals = (GeasValue*)geas_bytes(c, desc->nvows * sizeof(GeasValue));
-    if (!c->vow_vals) return GEAS_ERR_OOM;
-    memset(c->vow_vals, 0, desc->nvows * sizeof(GeasValue));
-
-    uint8_t bound[GEAS_MAX_CONTRACT_TYPES] = {0};
-    if (desc->nvows > GEAS_MAX_CONTRACT_TYPES) return GEAS_ERR_OOM;
-
     for (size_t i = 0; i < nvows; i++) {
         if (!vows[i].name) return GEAS_ERR_NAME;
         const GeasVowDesc* vd = find_vow_desc(desc, vows[i].name);
@@ -748,20 +925,36 @@ static GeasStatus bind_vows(GeasContract* c, const GeasVowBinding* vows,
         if (st != GEAS_OK) return st;
         bound[slot] = 1;
     }
-    for (uint32_t j = 0; j < desc->nvows; j++) {
-        if (bound[j]) continue;
-        if (!desc->vows[j].has_default) return GEAS_ERR_UNBOUND;
-        GeasStatus st = copy_vow_value(c, &desc->vows[j].default_value,
-                                      &c->vow_vals[j]);
-        if (st != GEAS_OK) return st;
+    return GEAS_OK;
+}
+
+/* Fills the instance's vow storage: the overrides first, then a default for
+ * every vow left, and every vow accounted for. The marks are one byte per
+ * declared vow, however many the contract declares */
+static GeasStatus bind_vows(GeasContract* c, const GeasVowBinding* vows,
+                           size_t nvows) {
+    const GeasContractDesc* desc = c->desc;
+    if (desc->nvows == 0) {
+        return (nvows == 0) ? GEAS_OK : GEAS_ERR_NAME;
     }
+    c->vow_vals = (GeasValue*)geas_bytes(c, (uint64_t)desc->nvows * sizeof(GeasValue));
+    if (!c->vow_vals) return GEAS_ERR_OOM;
+    memset(c->vow_vals, 0, desc->nvows * sizeof(GeasValue));
+    uint8_t* bound = calloc(desc->nvows, 1);
+    if (!bound) return GEAS_ERR_OOM;
+    GeasStatus st = bind_overrides(c, vows, nvows, bound);
+    for (uint32_t j = 0; st == GEAS_OK && j < desc->nvows; j++) {
+        if (bound[j]) continue;
+        if (!desc->vows[j].has_default) st = GEAS_ERR_UNBOUND;
+        else st = copy_vow_value(c, &desc->vows[j].default_value, &c->vow_vals[j]);
+    }
+    free(bound);
     /* Every vow, a default as much as an override, is held to its declared
      * type in the copy the instance keeps */
-    for (uint32_t j = 0; j < desc->nvows; j++) {
-        GeasStatus st = geas_rt_check_vow(desc, j, &c->vow_vals[j]);
-        if (st != GEAS_OK) return st;
+    for (uint32_t j = 0; st == GEAS_OK && j < desc->nvows; j++) {
+        st = geas_rt_check_vow(desc, j, &c->vow_vals[j]);
     }
-    return GEAS_OK;
+    return st;
 }
 
 /* Adapts a user body to the retry runner's plain thunk frame. The two local
@@ -817,9 +1010,10 @@ static GeasStatus run_bound_attempts(GeasContract* c, uint32_t pidx, GeasPledgeF
 }
 
 /* Resolves the dispatch table into plain heap under the runtime lock, one fn
- * per pledge, the host binding beating the compiled body. A pledge with
- * neither refuses the whole sign; a signal has no body by design and keeps a
- * NULL slot nothing ever calls. The buffer is deliberately not instance
+ * per pledge, the host binding beating the compiled body and the compiled
+ * body beating a foreign symbol, see foreign.c. A pledge with none of them
+ * refuses the whole sign; a signal has no body by design and keeps a NULL
+ * slot nothing ever calls. The buffer is deliberately not instance
  * memory: sign never touches an instance mutex while the runtime lock is
  * held, the ordering rule cross-contract calls rely on. */
 static GeasStatus resolve_dispatch(const GeasRuntime* rt,
@@ -833,6 +1027,7 @@ static GeasStatus resolve_dispatch(const GeasRuntime* rt,
         if (geas_rt_is_signal(desc, i)) continue;
         GeasPledgeFn fn = geas_rt_find_binding(rt, &desc->pledges[i]);
         if (!fn) fn = desc->pledges[i].fn;
+        if (!fn) fn = geas_rt_foreign_pledge(desc, i);
         if (!fn) {
             free(fns);
             return GEAS_ERR_UNBOUND;
@@ -1292,6 +1487,21 @@ static GeasStatus store_ok_unit(GeasContract* c, GeasValue* out) {
     return store_ok(c, &unit, out);
 }
 
+/* Whether schema is one of the schemas of the instance's own contract. Only
+ * those have a table the sign reconciled, so the SQL the store builds names
+ * a table and columns the descriptor vouched for, and any other pointer is
+ * GEAS_ERR_TYPE before the schema is read */
+static int schema_owned(const GeasContract* c, const GeasSchemaDesc* schema) {
+    const GeasContractDesc* d = c->desc;
+    if (!d || !d->schemas || d->nschemas == 0) return 0;
+    uintptr_t at = (uintptr_t)schema;
+    uintptr_t first = (uintptr_t)d->schemas;
+    if (at < first) return 0;
+    uintptr_t offset = at - first;
+    if (offset % sizeof(GeasSchemaDesc) != 0) return 0;
+    return offset / sizeof(GeasSchemaDesc) < d->nschemas;
+}
+
 /* The row parameters an insert or update binds: a record's fields are the
  * schema's columns in declaration order, so its field array is the parameter
  * frame as it stands. A value that is not a record of the right width is a
@@ -1306,6 +1516,7 @@ static const GeasValue* store_row_params(const GeasSchemaDesc* s,
 GeasStatus geas_store_find(GeasContract* c, const GeasSchemaDesc* schema,
                          const GeasValue* key, GeasValue* out) {
     if (!c || !schema || !key || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
@@ -1347,6 +1558,7 @@ GeasStatus geas_store_query_eq(GeasContract* c, const GeasSchemaDesc* schema,
                              uint32_t col, const GeasValue* value,
                              GeasValue* out) {
     if (!c || !schema || !value || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || col >= schema->ncols) return GEAS_ERR_TYPE;
     if (value->ty != schema->cols[col].ty) return GEAS_ERR_TYPE;
@@ -1375,6 +1587,7 @@ GeasStatus geas_store_query_where(GeasContract* c, const GeasSchemaDesc* schema,
                                 const GeasStoreTerm* terms, uint32_t nterms,
                                 GeasValue* out) {
     if (!c || !schema || !terms || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || nterms == 0) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < nterms; i++) {
@@ -1412,6 +1625,7 @@ GeasStatus geas_store_query_ordered(GeasContract* c, const GeasSchemaDesc* schem
                                   uint32_t order_col, uint32_t order_desc,
                                   GeasValue* out) {
     if (!c || !schema || !terms || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || nterms == 0) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < nterms; i++) {
@@ -1451,6 +1665,7 @@ GeasStatus geas_store_query_page(GeasContract* c, const GeasSchemaDesc* schema,
                                uint32_t order_col, uint32_t order_desc,
                                const GeasValue* limit, GeasValue* out) {
     if (!c || !schema || !terms || !limit || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || nterms == 0) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < nterms; i++) {
@@ -1494,6 +1709,7 @@ GeasStatus geas_store_select(GeasContract* c, const GeasSchemaDesc* schema,
                            uint32_t order_col, uint32_t order_desc,
                            const GeasValue* limit, GeasValue* out) {
     if (!c || !schema || !terms || !group_lens || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || ngroups == 0) return GEAS_ERR_TYPE;
     uint32_t total_terms = 0;
@@ -1551,6 +1767,7 @@ GeasStatus geas_store_count_any(GeasContract* c, const GeasSchemaDesc* schema,
                               const uint32_t* group_lens, uint32_t ngroups,
                               GeasValue* out) {
     if (!c || !schema || !terms || !group_lens || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || ngroups == 0) return GEAS_ERR_TYPE;
     uint32_t total_terms = 0;
@@ -1616,6 +1833,7 @@ GeasStatus geas_store_sum_any(GeasContract* c, const GeasSchemaDesc* schema,
                             const uint32_t* group_lens, uint32_t ngroups,
                             GeasValue* out) {
     if (!c || !schema || !terms || !group_lens || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || ngroups == 0) return GEAS_ERR_TYPE;
     uint32_t total_terms = 0;
@@ -1690,6 +1908,7 @@ GeasStatus geas_store_agg_any(GeasContract* c, const GeasSchemaDesc* schema,
                             const uint32_t* group_lens, uint32_t ngroups,
                             GeasValue* out) {
     if (!c || !schema || !terms || !group_lens || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || ngroups == 0) return GEAS_ERR_TYPE;
     if (agg > GEAS_AGG_AVG) return GEAS_ERR_TYPE;
@@ -1810,6 +2029,7 @@ GeasStatus geas_store_count_where(GeasContract* c, const GeasSchemaDesc* schema,
                                 const GeasStoreTerm* terms, uint32_t nterms,
                                 GeasValue* out) {
     if (!c || !schema || !terms || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || nterms == 0) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < nterms; i++) {
@@ -1868,6 +2088,7 @@ GeasStatus geas_store_sum_where(GeasContract* c, const GeasSchemaDesc* schema,
                               uint32_t sum_col, const GeasStoreTerm* terms,
                               uint32_t nterms, GeasValue* out) {
     if (!c || !schema || !terms || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     if (schema->ncols == 0 || nterms == 0) return GEAS_ERR_TYPE;
     for (uint32_t i = 0; i < nterms; i++) {
@@ -1932,6 +2153,7 @@ GeasStatus geas_store_sum_where(GeasContract* c, const GeasSchemaDesc* schema,
 GeasStatus geas_store_insert(GeasContract* c, const GeasSchemaDesc* schema,
                            const GeasValue* row, GeasValue* out) {
     if (!c || !schema || !row || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     const GeasValue* params = store_row_params(schema, row);
     if (!params) return GEAS_ERR_TYPE;
@@ -1955,6 +2177,7 @@ GeasStatus geas_store_update(GeasContract* c, const GeasSchemaDesc* schema,
                            const GeasValue* key, const GeasValue* row,
                            GeasValue* out) {
     if (!c || !schema || !key || !row || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     const GeasValue* rowp = store_row_params(schema, row);
     if (!rowp) return GEAS_ERR_TYPE;
@@ -1983,6 +2206,7 @@ GeasStatus geas_store_update(GeasContract* c, const GeasSchemaDesc* schema,
 GeasStatus geas_store_delete(GeasContract* c, const GeasSchemaDesc* schema,
                            const GeasValue* key, GeasValue* out) {
     if (!c || !schema || !key || !out) return GEAS_ERR_TYPE;
+    if (!schema_owned(c, schema)) return GEAS_ERR_TYPE;
     memset(out, 0, sizeof(*out));
     geas_rt_lock(c);
     GeasStatus st = GEAS_ERR_STORE;
@@ -2003,10 +2227,20 @@ GeasStatus geas_store_delete(GeasContract* c, const GeasSchemaDesc* schema,
     return st;
 }
 
-/* Tears down an instance that never published, the one cleanup a failed sign
- * and a failed resume share. Nothing else can reach the instance, so no lock
- * is taken. */
-static void instance_discard(GeasContract* c) {
+/* Releases every byte an instance holds: its receipts, its connection, its
+ * heap, its latch and workflow arrays, its course, and the struct itself.
+ * Called with nothing else able to reach the instance, so no lock is taken:
+ * a sign or a resume that failed before publishing, geas_contract_free once
+ * the instance left the table and no walker holds it, and shutdown after the
+ * pool is joined */
+static void instance_free(GeasContract* c) {
+    struct GeasFuture* f = c->futures;
+    while (f) {
+        struct GeasFuture* next = f->next;
+        future_free(f);
+        f = next;
+    }
+    c->futures = NULL;
     if (c->store) {
         geas_store_close(c->store);
         c->store = NULL;
@@ -2036,6 +2270,8 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
                             uint64_t expected_hash, GeasContract** out) {
     if (!rt || !contract_name || !out) return GEAS_ERR_TYPE;
     if (nvows > 0 && !vows) return GEAS_ERR_TYPE;
+    /* Read before the build takes the fresh instance's lock, which would count */
+    int is_body_owned = geas_rt_in_body_here();
     pthread_mutex_lock(&rt->lock);
     const GeasContractDesc* desc = find_desc(rt, contract_name);
     if (!desc) {
@@ -2111,17 +2347,14 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
         /* One clock for both stamps: the millisecond time the terms count
          * from, and the Unix second the signature has always carried. */
         int64_t now = geas_rt_now(rt);
+        c->is_body_owned = (uint8_t)is_body_owned;
         c->state = GEAS_SIGNED;
         c->shape_hash = desc->shape_hash;
         c->signed_at = now / 1000;
         geas_rt_flow_start(c, now);
         geas_rt_lock(c);
         pthread_mutex_lock(&rt->lock);
-        if (rt->ninstances + rt->nreserved >= GEAS_MAX_INSTANCES) {
-            st = GEAS_ERR_OOM;
-        } else {
-            rt->instances[rt->ninstances++] = c;
-        }
+        st = geas_rt_instance_add(rt, c, 0);
         pthread_mutex_unlock(&rt->lock);
         if (st == GEAS_OK) {
             *out = c;
@@ -2131,7 +2364,7 @@ GeasStatus geas_contract_sign(GeasRuntime* rt, const char* contract_name,
         geas_rt_unlock(c);
     }
     if (st != GEAS_OK) {
-        instance_discard(c);
+        instance_free(c);
         return st;
     }
     *out = c;
@@ -2173,38 +2406,124 @@ GeasRuntime* geas_instance_runtime(const GeasContract* c) {
  * exactly two outcomes: delivered before the break, or GEAS_ERR_STATE. */
 GeasStatus geas_contract_break(GeasContract* c) {
     if (!c) return GEAS_ERR_TYPE;
-    if (geas_rt_events_blocked(c)) return GEAS_ERR_STATE;
+    /* A hook, a body, or a write back meeting another delivery is refused
+     * before anything is published; a host thread goes on and waits */
+    if (geas_rt_events_blocked(c) && !geas_rt_host_may_wait()) return GEAS_ERR_STATE;
     __atomic_add_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
     geas_rt_publish_cancel(c, CANCEL_BREAK);
     geas_rt_lock(c);
+    /* The whole delivery is waited out, a remedy pass's reservation
+     * included, the way a break waits for that pass. The delivery may carry
+     * the published request itself at its end; this call then finds the
+     * instance reclaimed and reads the status the delivery left it */
+    geas_rt_await_delivery(c, GEAS_AWAIT_ALL);
     GeasStatus st = GEAS_OK;
     if (geas_rt_events_blocked(c)) {
         /* Delivery carries a request accepted before its reservation */
     } else if (c->state == GEAS_UNSIGNED) {
         st = GEAS_ERR_STATE;
     } else if (c->flow.released || c->flow.release_pending) {
-        /* A released instance was handed off; there is nothing here to break */
+        /* A released instance was handed off; there is nothing here to
+         * break, and the bit this call published goes with the refusal, so a
+         * release withdrawn later leaves no break standing */
+        geas_rt_withdraw_cancel(c, CANCEL_BREAK);
         st = GEAS_ERR_STATE;
     } else {
         st = geas_rt_break_explicit(c);
     }
-    geas_rt_unlock(c);
-    /* Depart before reading the status so a later failure goes to stderr
-     * The total atomic order pairs this read with the delivery owner's report */
+    /* The status a delivery owner left is read and this caller departs under
+     * the lock the owner reports under, so the owner either stored its
+     * status before this read or finds no caller and writes to stderr. The
+     * departure is this call's last write to the instance: once the count
+     * reads zero geas_contract_free may take the handle, and the unlock
+     * below touches nothing past the mutex */
+    GeasStatus deferred = __atomic_exchange_n(&c->event_cancel_status, GEAS_OK,
+                                              __ATOMIC_SEQ_CST);
     __atomic_sub_fetch(&c->break_callers, 1, __ATOMIC_SEQ_CST);
-    GeasStatus deferred = __atomic_load_n(&c->event_cancel_status, __ATOMIC_SEQ_CST);
+    geas_rt_unlock(c);
     if (st == GEAS_OK && deferred != GEAS_OK) st = deferred;
     return st;
 }
 
-/* Polls only atomic flags, including while the caller holds the instance
- * lock and the breaker is waiting for that same lock. A request, a break,
- * and a release all read 1 */
+/* ---- freeing a handle ---- */
+
+/* Whether nothing on any thread still uses the instance: its heap reclaimed
+ * by a break or a release, no break or release call still on its way out,
+ * no ref callback running, no body, retry wait, remedy pass, or pending
+ * release, no event queued or being delivered, no course entry or together
+ * call on the pool or running, no course reader, and no receipt the pool still holds or that
+ * has not completed. Under the instance lock */
+static GeasStatus free_ready(GeasContract* c) {
+    const GeasFlow* f = &c->flow;
+    if (!f->reclaimed) return GEAS_ERR_STATE;
+    /* A break or a release still inside its call touches the instance again
+     * before it returns */
+    if (__atomic_load_n(&c->break_callers, __ATOMIC_SEQ_CST) ||
+        __atomic_load_n(&c->release_callers, __ATOMIC_SEQ_CST))
+        return GEAS_ERR_STATE;
+    if (c->write_backs) return GEAS_ERR_STATE;
+    if (f->in_thunk || f->retrying || f->remedy_active || f->release_pending)
+        return GEAS_ERR_STATE;
+    if (c->event_head || c->event_enqueued || c->event_delivering ||
+        __atomic_load_n(&c->event_owner, __ATOMIC_ACQUIRE))
+        return GEAS_ERR_STATE;
+    GeasCourse* k = c->course;
+    if (k) {
+        if (k->queued || k->executing || k->join_inflight) return GEAS_ERR_STATE;
+        pthread_mutex_lock(&k->mu);
+        uint32_t settling = k->settling + k->readers;
+        pthread_mutex_unlock(&k->mu);
+        if (settling) return GEAS_ERR_STATE;
+    }
+    for (struct GeasFuture* fut = c->futures; fut; fut = fut->next) {
+        pthread_mutex_lock(&fut->mu);
+        int is_held = fut->refcnt > 1 || !__atomic_load_n(&fut->done, __ATOMIC_RELAXED);
+        pthread_mutex_unlock(&fut->mu);
+        if (is_held) return GEAS_ERR_STATE;
+    }
+    return GEAS_OK;
+}
+
+/* The handle's end. The instance leaves the table under the runtime lock,
+ * so a later walker never finds it, and its memory goes at once or, when a
+ * runtime tick or the ticker still holds the pointer, when that walker lets
+ * go. Refused from a body, a hook, or any thread holding an instance lock,
+ * all of which the instance could still be under */
+GeasStatus geas_contract_free(GeasContract* c) {
+    if (!c) return GEAS_ERR_TYPE;
+    if (geas_rt_thread_busy()) return GEAS_ERR_STATE;
+    /* A body's frame still holds an instance the body signed */
+    if (c->is_body_owned) return GEAS_ERR_STATE;
+    GeasRuntime* rt = c->rt;
+    geas_rt_lock(c);
+    /* The delivery of the instance's last events, RECLAIMED or RELEASED
+     * among them, is waited out rather than refused */
+    geas_rt_await_delivery(c, GEAS_AWAIT_ALL);
+    GeasStatus st = free_ready(c);
+    geas_rt_unlock(c);
+    if (st != GEAS_OK) return st;
+    pthread_mutex_lock(&rt->lock);
+    instance_remove(rt, c);
+    c->is_dropped = 1;
+    int is_now = c->pins == 0;
+    pthread_mutex_unlock(&rt->lock);
+    if (is_now) instance_free(c);
+    return GEAS_OK;
+}
+
+/* Polls only atomic flags and this thread's own pass marker, including
+ * while the caller holds the instance lock and the breaker is waiting for
+ * that same lock. A request, a break, and a release all read 1, and so does
+ * a runtime shutting down. Inside the instance's own remedy pass only the
+ * shutdown reads 1: a remedy is the work the cancel asked for, so the cancel
+ * that started the pass never cuts a remedy body, a process it runs, or
+ * anything else that polls here on the pass's thread */
 int geas_cancel_requested(void* ctx) {
     GeasContract* c = ctx;
     if (!c) return 0;
-    return (geas_rt_cancel_bits(c) & CANCEL_ANY) != 0 ||
-           __atomic_load_n(&c->rt->shutting_down, __ATOMIC_ACQUIRE);
+    if (__atomic_load_n(&c->rt->shutting_down, __ATOMIC_ACQUIRE)) return 1;
+    if (geas_rt_remedy_pass_here(c)) return 0;
+    return (geas_rt_cancel_bits(c) & CANCEL_ANY) != 0;
 }
 
 /* cancel_mu is a leaf, so this may run with or without the instance lock */
@@ -2509,9 +2828,13 @@ static GeasStatus bind_body(GeasRuntime* rt, const char* pledge_name,
             return GEAS_OK;
         }
     }
-    if (rt->nbindings == GEAS_MAX_BINDINGS) {
+    void* base = rt->bindings;
+    GeasStatus grown = geas_rt_table_grow(&base, &rt->binding_cap, rt->nbindings + 1,
+                                          sizeof(GeasBinding));
+    rt->bindings = base;
+    if (grown != GEAS_OK) {
         pthread_mutex_unlock(&rt->lock);
-        return GEAS_ERR_OOM;
+        return grown;
     }
     rt->bindings[rt->nbindings] = (GeasBinding){ target.key, fn, user_fn, user };
     rt->nbindings++;
@@ -2558,14 +2881,10 @@ static GeasStatus ref_copy_in(GeasContract* c, const GeasRef* r, GeasValue* slot
 
 /* Writes one slot's final value back to host memory, the default protocol
  * when the ref carries no callback: scalars in place, strings as a whole
- * GeasString struct whose bytes stay instance owned. Runs on the thread that
- * collects the outcome, while the host is blocked in the geas call. */
-static GeasStatus ref_write_back(const GeasRef* r, const GeasValue* slot) {
-    if (slot->ty != r->ty) return GEAS_ERR_TYPE;
-    if (r->write_back) {
-        r->write_back(r->host_ptr, slot, r->user);
-        return GEAS_OK;
-    }
+ * GeasString struct whose bytes stay instance owned. Runs under the instance
+ * lock on the thread that collects the outcome, while the host is blocked in
+ * the geas call. */
+static GeasStatus ref_write_default(const GeasRef* r, const GeasValue* slot) {
     switch ((GeasTypeTag)r->ty) {
     case GEAS_TY_INT:   *(int64_t*)r->host_ptr   = slot->as.i;  return GEAS_OK;
     case GEAS_TY_UINT:  *(uint64_t*)r->host_ptr  = slot->as.u;  return GEAS_OK;
@@ -2580,18 +2899,104 @@ static GeasStatus ref_write_back(const GeasRef* r, const GeasValue* slot) {
     }
 }
 
-/* Applies every write back of a delivered fulfillment. Slot types are
- * checked first so a pledge that broke the protocol writes nothing at all. */
-static GeasStatus write_back_refs(const GeasRef* refs, const GeasValue* slots,
-                                 size_t nrefs) {
+/* One write back a ref callback carries out with no runtime lock held: the
+ * ref, copied off the instance heap it rides on, and a private copy of the
+ * slot's final value, string bytes included, so the value stays whole for
+ * the callback whatever a break, a release, or a free does meanwhile */
+typedef struct WriteBackCall {
+    GeasRef   ref;
+    GeasValue value;
+} WriteBackCall;
+
+/* The callback write backs one delivery owes, in ref order, in one block
+ * with their string bytes behind them. Empty when no ref has a callback */
+typedef struct WriteBackSet {
+    WriteBackCall* calls;
+    size_t         ncalls;
+} WriteBackSet;
+
+static int is_bytes_tag(uint32_t ty) {
+    return ty == GEAS_TY_STRING || ty == GEAS_TY_BYTES;
+}
+
+/* Sizes and allocates the block for the callbacks among nrefs refs.
+ * GEAS_ERR_OOM when the block cannot be had or its size would overflow */
+static GeasStatus write_back_alloc(const GeasRef* refs, const GeasValue* slots,
+                                   size_t nrefs, WriteBackSet* set) {
+    size_t ncalls = 0;
+    size_t nbytes = 0;
+    for (size_t i = 0; i < nrefs; i++) {
+        if (!refs[i].write_back) continue;
+        ncalls++;
+        if (!is_bytes_tag(slots[i].ty)) continue;
+        if (slots[i].as.s.len > SIZE_MAX - nbytes) return GEAS_ERR_OOM;
+        nbytes += (size_t)slots[i].as.s.len;
+    }
+    if (ncalls == 0) return GEAS_OK;
+    if (ncalls > (SIZE_MAX - nbytes) / sizeof(WriteBackCall)) return GEAS_ERR_OOM;
+    set->calls = malloc(ncalls * sizeof(WriteBackCall) + nbytes);
+    if (!set->calls) return GEAS_ERR_OOM;
+    set->ncalls = ncalls;
+    return GEAS_OK;
+}
+
+/* Applies the write backs of a delivered fulfillment under the instance
+ * lock. Slot types are checked first and the block for the callbacks is
+ * had next, so a pledge that broke the protocol, or a copy that cannot be
+ * made, writes nothing at all. Each ref with no callback is written at
+ * once; each callback is set aside with its own copy of the value for
+ * write_back_run, and the instance counts it as running until then */
+static GeasStatus write_back_take(GeasContract* c, const GeasRef* refs,
+                                  const GeasValue* slots, size_t nrefs,
+                                  WriteBackSet* set) {
+    memset(set, 0, sizeof(*set));
     for (size_t i = 0; i < nrefs; i++) {
         if (slots[i].ty != refs[i].ty) return GEAS_ERR_TYPE;
     }
+    GeasStatus st = write_back_alloc(refs, slots, nrefs, set);
+    if (st != GEAS_OK) return st;
+    uint8_t* bytes = (uint8_t*)(set->calls + set->ncalls);
+    size_t n = 0;
     for (size_t i = 0; i < nrefs; i++) {
-        GeasStatus st = ref_write_back(&refs[i], &slots[i]);
-        if (st != GEAS_OK) return st;
+        if (refs[i].write_back) {
+            WriteBackCall* call = &set->calls[n++];
+            call->ref = refs[i];
+            call->value = slots[i];
+            if (!is_bytes_tag(slots[i].ty) || slots[i].as.s.len == 0) continue;
+            memcpy(bytes, slots[i].as.s.ptr, (size_t)slots[i].as.s.len);
+            call->value.as.s.ptr = bytes;
+            bytes += slots[i].as.s.len;
+            continue;
+        }
+        st = ref_write_default(&refs[i], &slots[i]);
+        if (st != GEAS_OK) {
+            free(set->calls);
+            memset(set, 0, sizeof(*set));
+            return st;
+        }
     }
+    if (set->ncalls) c->write_backs++;
     return GEAS_OK;
+}
+
+/* Runs the callbacks write_back_take set aside, in ref order, on the thread
+ * that collects the outcome and with this instance's lock released, so a
+ * callback may call into the runtime, this instance included, and a slow
+ * one holds up no tick, break, or signal. Then retakes the lock to end the
+ * count that kept geas_contract_free away, the last touch of the instance */
+static void write_back_run(GeasContract* c, WriteBackSet* set) {
+    if (!set->ncalls) return;
+    t_write_back++;
+    for (size_t i = 0; i < set->ncalls; i++) {
+        const WriteBackCall* call = &set->calls[i];
+        call->ref.write_back(call->ref.host_ptr, &call->value, call->ref.user);
+    }
+    t_write_back--;
+    free(set->calls);
+    memset(set, 0, sizeof(*set));
+    geas_rt_lock(c);
+    c->write_backs--;
+    geas_rt_unlock(c);
 }
 
 /* Builds the frame a thunk sees: one instance owned slot per declared
@@ -2601,8 +3006,9 @@ static GeasStatus write_back_refs(const GeasRef* refs, const GeasValue* slots,
 static GeasStatus build_frame(GeasContract* c, const GeasValue* args,
                               size_t nargs, const GeasRef* refs, size_t nrefs,
                               GeasValue** frame_out) {
-    size_t total = nargs + nrefs;
     *frame_out = NULL;
+    if (nrefs > SIZE_MAX - nargs) return GEAS_ERR_OOM;
+    size_t total = nargs + nrefs;
     if (total == 0) return GEAS_OK;
     if (total > SIZE_MAX / sizeof(GeasValue)) return GEAS_ERR_OOM;
     GeasValue* frame = (GeasValue*)geas_bytes(c, total * sizeof(GeasValue));
@@ -2680,11 +3086,21 @@ static int atom_true(const GeasContract* c, const GeasReqAtom* a) {
 }
 
 /* Evaluates one postfix policy line. An empty line is a line the source did
- * not write and never fires. Each of the parser's 500 nesting levels can
- * leave an AND and an OR operand on the stack, including repeated atoms
- * within a written block's 64 distinct names. Default chains need two slots
- * A malformed program that overflows or underflows reads false
- */
+ * not write and never fires. A malformed program that overflows or
+ * underflows reads false.
+ *
+ * No program the compiler emits comes near the stack bound. A written line
+ * is the post order walk of its tree, and each operator folds left, so the
+ * stack a node needs is the larger of its left operand's and one more than
+ * its right operand's. Within one level, with atoms alone, an AND chain
+ * needs 2 slots and an OR chain over AND chains 3, as for a || b && c. A
+ * right operand that is a parenthesized group opens the next level, and
+ * each level can add at most its pending OR operand and its pending AND
+ * operand, 2 slots, while a negation adds none. The line itself is the
+ * first of the parser's 500 nesting levels, so a written line needs at most
+ * 3 + 2 * 499 = 1001 slots however many atoms it repeats, the 64 distinct
+ * names of a block bounding the atom table and not the stack. A synthesized
+ * default line, up to 255 items, is one chain folded left and needs 2 */
 #define REQ_STACK_MAX 1024
 
 static int eval_line(const GeasContract* c, const GeasReqOp* ops, uint32_t n) {
@@ -2935,12 +3351,14 @@ static GeasStatus txn_after(GeasContract* c, uint32_t pidx, GeasStatus st,
  * that is already Broken. */
 static void run_task(struct GeasFuture* f) {
     GeasContract* c = f->c;
+    t_running_future = f;
     geas_rt_lock(c);
     GeasStatus gate = geas_rt_fulfill_gate(c, f->pidx);
     if (gate == GEAS_OK) gate = txn_before(c, f->pidx);
     if (gate != GEAS_OK) {
-        future_finish(f, gate, NULL);
         geas_rt_unlock(c);
+        future_finish(f, gate, NULL);
+        t_running_future = NULL;
         return;
     }
     GeasValue out;
@@ -2956,8 +3374,14 @@ static void run_task(struct GeasFuture* f) {
     st = txn_after(c, f->pidx, st, &out);
     geas_rt_remedy_drive(c);
     f->is_running = 0;
-    future_finish(f, st, &out);
+    /* The outermost release delivers the events this fulfillment recorded,
+     * and only then is the outcome published, so a host whose wait returned
+     * has seen them arrive. The pool's hold keeps the receipt alive across
+     * the gap; a break that reclaims meanwhile forfeits it first, and the
+     * finish below is then a no op, as it is for any forfeited receipt */
     geas_rt_unlock(c);
+    future_finish(f, st, &out);
+    t_running_future = NULL;
 }
 
 /* Starts a fulfillment: validate and copy in on the caller's thread, under
@@ -2973,6 +3397,9 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
     GeasStatus st = GEAS_OK;
     int ready = 0;
     geas_rt_lock(c);
+    /* A host thread waits out another thread's delivery here; a hook, a
+     * body, or a write back keeps the refusal below */
+    geas_rt_await_delivery(c, GEAS_AWAIT_LIVE);
     geas_rt_tick(c);
     do {
         if ((nargs > 0 && !args) || (nrefs > 0 && !refs)) {
@@ -2994,7 +3421,8 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
             st = GEAS_ERR_TYPE;
             break;
         }
-        if (nargs + nrefs != p->nargs) {
+        /* Compared without the sum, which a host's counts could wrap */
+        if (nargs > p->nargs || nrefs != p->nargs - nargs) {
             st = GEAS_ERR_TYPE;
             break;
         }
@@ -3018,16 +3446,23 @@ GeasFuture* geas_pledge_fulfill(GeasContract* c, const char* pledge_name,
         f->ref_slots = (nrefs > 0 && frame) ? frame + nargs : NULL;
         ready = 1;
     } while (0);
+    /* The pool takes its own hold while the instance lock is still held, so
+     * a break and a free on other threads between the unlock and the
+     * enqueue find the receipt held and leave the instance in place. The
+     * runtime is read here for the same reason: nothing after the unlock
+     * reads the instance */
+    GeasRuntime* rt = c->rt;
+    if (ready) {
+        pthread_mutex_lock(&f->mu);
+        f->refcnt = 2;
+        pthread_mutex_unlock(&f->mu);
+    }
     geas_rt_unlock(c);
     if (!ready) {
         future_finish(f, st, NULL);
         return f;
     }
-    /* The pool takes its own hold before the future is visible to a worker;
-     * nothing else can see the count yet, so the plain write is safe and the
-     * queue lock publishes it. */
-    f->refcnt = 2;
-    pool_enqueue(c->rt, f);
+    pool_enqueue(rt, f);
     return f;
 }
 
@@ -3040,47 +3475,67 @@ GeasStatus geas_future_poll(GeasFuture* fut, int* ready) {
     return GEAS_OK;
 }
 
-/* Blocks until the outcome exists, delivers it exactly once, and performs
- * the ref write back on this thread while the host is inside the call. The
- * write back runs under the future's mutex, which is also what a break must
- * take to forfeit this future, so the instance heap the slots live in cannot
- * be freed out from under a write back in progress. */
+/* Blocks until the outcome exists, then delivers it exactly once and
+ * performs the ref write back on this thread while the host is inside the
+ * call. The delivery takes the instance lock before the future's, the order
+ * a break takes them in, and marks the future waited before either is let
+ * go, so a break after that leaves the delivery alone and a break before it
+ * forfeited the future to GEAS_ERR_STATE. The default write backs land under
+ * the instance lock; the callbacks run after it is let go, each on its own
+ * copy of the value */
 GeasStatus geas_future_wait(GeasFuture* f, GeasValue* out) {
     if (!f || !out) return GEAS_ERR_TYPE;
+    /* A hook delivering this receipt's own events runs before its outcome
+     * is published, so waiting here would wait on this very thread */
+    if (f == t_running_future) return GEAS_ERR_STATE;
+    GeasContract* c = f->c;
     /* The lazy tick, taken and dropped before the future's own lock so the
      * order stays instance above future, and only tried: a waiter never
      * queues behind an instance. A busy lock means a body is running or
      * another caller is in, and whoever holds it ticks on its own way. */
-    if (geas_rt_trylock(f->c) == 0) {
-        geas_rt_tick(f->c);
-        geas_rt_unlock(f->c);
+    if (geas_rt_trylock(c) == 0) {
+        geas_rt_tick(c);
+        geas_rt_unlock(c);
     }
     pthread_mutex_lock(&f->mu);
     while (!__atomic_load_n(&f->done, __ATOMIC_RELAXED)) {
         pthread_cond_wait(&f->cv, &f->mu);
     }
+    pthread_mutex_unlock(&f->mu);
+    geas_rt_lock(c);
+    pthread_mutex_lock(&f->mu);
     if (f->waited) {
         pthread_mutex_unlock(&f->mu);
+        geas_rt_unlock(c);
         return GEAS_ERR_STATE;
     }
     f->waited = 1;
     GeasStatus st = f->status;
-    if (st == GEAS_OK && f->nrefs > 0 && f->ref_slots) {
-        GeasStatus wb = write_back_refs(f->refs, f->ref_slots, f->nrefs);
+    GeasValue value = f->value;
+    const GeasRef* refs = f->refs;
+    const GeasValue* slots = f->ref_slots;
+    size_t nrefs = f->nrefs;
+    pthread_mutex_unlock(&f->mu);
+    WriteBackSet set;
+    memset(&set, 0, sizeof(set));
+    if (st == GEAS_OK && nrefs > 0 && slots) {
+        GeasStatus wb = c->flow.reclaimed ? GEAS_ERR_STATE
+                                          : write_back_take(c, refs, slots, nrefs, &set);
         if (wb != GEAS_OK) {
-            pthread_mutex_unlock(&f->mu);
+            geas_rt_unlock(c);
             return wb;
         }
     }
-    *out = f->value;
-    pthread_mutex_unlock(&f->mu);
+    *out = value;
+    geas_rt_unlock(c);
+    write_back_run(c, &set);
     return st;
 }
 
 /* The reentrant path: a synchronous fulfillment started inside a thunk runs
  * whole on the current worker thread, the same validate, copy in, run,
  * latch, and write back walk the queued path performs, under the callee
- * instance's lock. No future exists because no one could wait on it; the
+ * instance's lock, a ref callback after that lock is let go. No future exists because no one could wait on it; the
  * caller is this thread. The caller's own instance lock is already held
  * above this frame, which is exactly the instance-to-instance edge the
  * header comment audits. */
@@ -3091,7 +3546,7 @@ GeasStatus geas_future_wait(GeasFuture* f, GeasValue* out) {
 static GeasStatus fulfill_locked(GeasContract* c, uint32_t pidx,
                                 const GeasValue* args, size_t nargs,
                                 const GeasRef* refs, size_t nrefs,
-                                GeasValue* out) {
+                                WriteBackSet* set, GeasValue* out) {
     GeasStatus st = geas_rt_fulfill_gate(c, pidx);
     if (st != GEAS_OK) return st;
     GeasValue* frame = NULL;
@@ -3114,7 +3569,7 @@ static GeasStatus fulfill_locked(GeasContract* c, uint32_t pidx,
     if (c->flow.reclaimed) return GEAS_ERR_STATE;
     if (st != GEAS_OK) return st;
     if (nrefs > 0 && frame) {
-        st = write_back_refs(refs, frame + nargs, nrefs);
+        st = write_back_take(c, refs, frame + nargs, nrefs, set);
         if (st != GEAS_OK) return st;
     }
     *out = res;
@@ -3126,7 +3581,12 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
                                 const GeasRef* refs, size_t nrefs,
                                 GeasValue* out) {
     GeasStatus st = GEAS_OK;
+    WriteBackSet set;
+    memset(&set, 0, sizeof(set));
     geas_rt_lock(c);
+    /* A host thread waits out another thread's delivery here; a hook, a
+     * body, or a write back keeps the refusal below */
+    geas_rt_await_delivery(c, GEAS_AWAIT_LIVE);
     geas_rt_tick(c);
     do {
         if ((nargs > 0 && !args) || (nrefs > 0 && !refs)) {
@@ -3148,13 +3608,15 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
             st = GEAS_ERR_TYPE;
             break;
         }
-        if (nargs + nrefs != p->nargs) {
+        /* Compared without the sum, which a host's counts could wrap */
+        if (nargs > p->nargs || nrefs != p->nargs - nargs) {
             st = GEAS_ERR_TYPE;
             break;
         }
-        st = fulfill_locked(c, pidx, args, nargs, refs, nrefs, out);
+        st = fulfill_locked(c, pidx, args, nargs, refs, nrefs, &set, out);
     } while (0);
     geas_rt_unlock(c);
+    write_back_run(c, &set);
     return st;
 }
 
@@ -3169,7 +3631,7 @@ static GeasStatus fulfill_inline(GeasContract* c, const char* pledge_name,
 GeasStatus geas_rt_course_fulfill(GeasContract* c, uint32_t pidx,
                                 const GeasValue* args, size_t nargs,
                                 GeasValue* out) {
-    geas_rt_course_settle(c);
+    geas_rt_settle_delivery(c);
     geas_rt_tick(c);
     if (c->flow.reclaimed) return GEAS_ERR_STATE;
     if (nargs > 0 && !args) return GEAS_ERR_TYPE;
@@ -3179,7 +3641,7 @@ GeasStatus geas_rt_course_fulfill(GeasContract* c, uint32_t pidx,
     if (nargs != c->desc->pledges[pidx].nargs) return GEAS_ERR_TYPE;
     GeasStatus st = geas_rt_retry_hold(c, pidx);
     if (st != GEAS_OK) return st;
-    return fulfill_locked(c, pidx, args, nargs, NULL, 0, out);
+    return fulfill_locked(c, pidx, args, nargs, NULL, 0, NULL, out);
 }
 
 /* The synchronous form is exactly fulfill plus wait on the same path, so
@@ -3305,35 +3767,69 @@ static const char* PARK_DDL =
     "CREATE TABLE IF NOT EXISTS geas_park ("
     "pkey TEXT PRIMARY KEY, contract TEXT, version INTEGER, "
     "shape_hash INTEGER, state INTEGER, signed_at INTEGER, "
-    "vows BLOB, latches BLOB, errs BLOB, subtxn BLOB, flow BLOB)";
+    "vows BLOB, latches BLOB, errs BLOB, subtxn BLOB, flow BLOB, gen INTEGER)";
 
-/* The flow column is the workflow state, one versioned blob flowpark.c
- * writes and reads, and it is the row format's second generation: a table
- * made before it has ten columns and rows with no workflow state at all.
- * Such a table is brought forward in place with one ADD COLUMN, after which
- * its old rows read an empty blob, the spelling flowpark.c takes for "a row
- * from before the workflow state", so nothing already parked is lost. The
- * column is looked for before it is added; the ALTER is never fired blind
- * and no error is swallowed to make it idempotent. */
-static GeasStatus park_ensure_table(GeasStore* s) {
-    GeasStatus st = geas_store_exec(s, PARK_DDL);
-    if (st != GEAS_OK) return st;
+/* Whether the park table has a column, the count query naming it read from
+ * the table's schema */
+static GeasStatus park_has_column(GeasStore* s, const char* count_sql, int* has) {
+    *has = 0;
     ParkChunk* arena = NULL;
     GeasStoreAlloc alloc = { park_arena_bytes, &arena };
     static const uint32_t cols[1] = { GEAS_TY_INT };
     GeasValue rows;
     memset(&rows, 0, sizeof(rows));
-    st = geas_store_query(s,
-        "SELECT COUNT(*) FROM pragma_table_info('geas_park') "
-        "WHERE name = 'flow'", NULL, 0, cols, NULL, 1, &alloc, &rows);
-    int has_flow = 0;
+    GeasStatus st = geas_store_query(s, count_sql, NULL, 0, cols, NULL, 1, &alloc, &rows);
     if (st == GEAS_OK && rows.as.list.len == 1) {
         const GeasValue* row = (const GeasValue*)rows.as.list.data;
-        has_flow = ((const GeasValue*)row[0].as.list.data)[0].as.i > 0;
+        *has = ((const GeasValue*)row[0].as.list.data)[0].as.i > 0;
     }
     park_arena_free(arena);
-    if (st != GEAS_OK || has_flow) return st;
-    return geas_store_exec(s, "ALTER TABLE geas_park ADD COLUMN flow BLOB");
+    return st;
+}
+
+/* Adds a column the table lacks, looked for first so the ALTER is never
+ * fired blind. Another connection, in this process or another, may add the
+ * same column between the look and the ALTER, so an ALTER that fails is
+ * followed by a second look: the column there now is success, and anything
+ * else is the ALTER's own failure, never swallowed */
+static GeasStatus park_add_column(GeasStore* s, const char* count_sql, const char* alter) {
+    int has = 0;
+    GeasStatus st = park_has_column(s, count_sql, &has);
+    if (st != GEAS_OK || has) return st;
+    GeasStatus altered = geas_store_exec(s, alter);
+    if (altered == GEAS_OK) return GEAS_OK;
+    st = park_has_column(s, count_sql, &has);
+    if (st == GEAS_OK && has) return GEAS_OK;
+    return altered;
+}
+
+/* The row format grows by tail columns, and a table made by an earlier
+ * format is brought forward in place with one ADD COLUMN per column it
+ * lacks, its rows kept as they are.
+ *
+ * flow is the workflow state, one versioned blob flowpark.c writes and
+ * reads. A row from before it reads an empty blob, the spelling flowpark.c
+ * takes for "a row from before the workflow state".
+ *
+ * gen is the write's generation, a fresh nonzero random number every park
+ * writes, which a claim's delete matches beside the row's content. A row
+ * claimed and parked again with the same bytes is a different write, so a
+ * claimer that read the earlier one takes nothing. A row from before the
+ * column reads generation 0 and is claimed by its content alone, as it
+ * always was */
+static GeasStatus park_ensure_table(GeasStore* s) {
+    GeasStatus st = geas_store_exec(s, PARK_DDL);
+    if (st == GEAS_OK) {
+        st = park_add_column(s,
+            "SELECT COUNT(*) FROM pragma_table_info('geas_park') WHERE name = 'flow'",
+            "ALTER TABLE geas_park ADD COLUMN flow BLOB");
+    }
+    if (st == GEAS_OK) {
+        st = park_add_column(s,
+            "SELECT COUNT(*) FROM pragma_table_info('geas_park') WHERE name = 'gen'",
+            "ALTER TABLE geas_park ADD COLUMN gen INTEGER");
+    }
+    return st;
 }
 
 /* Whether a stored Err payload is present: an explicit break zeroes the
@@ -3356,6 +3852,9 @@ static GeasStatus park_encode_values(const GeasValue* vals, size_t n,
          * the codec's own size protocol, so only another status is a fault. */
         GeasStatus st = geas_wire_encode_value(&vals[i], NULL, 0, &need);
         if (st != GEAS_OK && st != GEAS_ERR_OOM) return st;
+        /* No encoded value is empty: GEAS_ERR_OOM with no size is a value
+         * past the node budget, which no resume could read back */
+        if (need == 0) return GEAS_ERR_OOM;
         total += need;
     }
     uint8_t* buf = malloc(total ? total : 1);
@@ -3490,8 +3989,8 @@ GeasStatus geas_rt_park_write(GeasContract* c, const char* dsn, const char* key)
         params[10] = park_str_param(flow_buf, flow_len);
         st = geas_store_exec_params(s,
             "INSERT OR REPLACE INTO geas_park (pkey, contract, version, "
-            "shape_hash, state, signed_at, vows, latches, errs, subtxn, flow) "
-            "VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+            "shape_hash, state, signed_at, vows, latches, errs, subtxn, flow, gen) "
+            "VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,random() | 1)",
             params, 11, NULL);
     }
     geas_store_close(s);
@@ -3508,6 +4007,9 @@ GeasStatus geas_rt_park_write(GeasContract* c, const char* dsn, const char* key)
 GeasStatus geas_instance_park(GeasContract* c, const char* dsn, const char* key) {
     if (!c || !dsn || !key) return GEAS_ERR_TYPE;
     geas_rt_lock(c);
+    /* A host thread waits while the delivery refuses a park; a snapshot
+     * during another thread's remedy wait goes ahead as before */
+    geas_rt_await_delivery(c, GEAS_AWAIT_PARK);
     geas_rt_tick(c);
     GeasStatus st = geas_rt_park_ready(c);
     if (st == GEAS_OK) st = geas_rt_park_write(c, dsn, key);
@@ -3577,6 +4079,10 @@ static GeasStatus resume_plain(GeasContract* c, const GeasParkRow* row) {
             }
         }
         if (st == GEAS_OK && off != berrs.len) st = GEAS_ERR_TYPE;
+    } else if (st == GEAS_OK && (blatch.len != 0 || berrs.len != 0)) {
+        /* No pledge, so both columns hold nothing, the count the descriptor
+         * gives, as the vows do */
+        st = GEAS_ERR_TYPE;
     }
 
     /* Closed episodes stay closed after resume, with rollback preserved
@@ -3592,6 +4098,8 @@ static GeasStatus resume_plain(GeasContract* c, const GeasParkRow* row) {
                 c->sub_txn[i] = bsubtxn.ptr[i];
             }
         }
+    } else if (st == GEAS_OK && bsubtxn.len != 0) {
+        st = GEAS_ERR_TYPE;
     }
 
     if (st == GEAS_OK) st = store_sign_reconcile(c);
@@ -3654,16 +4162,17 @@ GeasStatus geas_rt_resume_read(const char* dsn, const char* key, GeasResumed* r)
     memset(&rows, 0, sizeof(rows));
     if (st == GEAS_OK) {
         GeasValue kv = park_str_param((const uint8_t*)key, strlen(key));
-        static const uint32_t cols[10] = {
+        static const uint32_t cols[11] = {
             GEAS_TY_STRING, GEAS_TY_INT, GEAS_TY_UINT, GEAS_TY_INT, GEAS_TY_INT,
             GEAS_TY_STRING, GEAS_TY_STRING, GEAS_TY_STRING, GEAS_TY_STRING,
-            GEAS_TY_STRING
+            GEAS_TY_STRING, GEAS_TY_INT
         };
         GeasStoreAlloc alloc = { park_arena_bytes, &arena };
         st = geas_store_query(s,
             "SELECT contract, version, shape_hash, state, signed_at, "
-            "vows, latches, errs, subtxn, flow FROM geas_park WHERE pkey = ?1",
-            &kv, 1, cols, NULL, 10, &alloc, &rows);
+            "vows, latches, errs, subtxn, flow, coalesce(gen, 0) "
+            "FROM geas_park WHERE pkey = ?1",
+            &kv, 1, cols, NULL, 11, &alloc, &rows);
     }
     geas_store_close(s);
     r->arena = arena;
@@ -3676,6 +4185,7 @@ GeasStatus geas_rt_resume_read(const char* dsn, const char* key, GeasResumed* r)
         .version = f[1].as.i, .shape_hash = f[2].as.u, .state = f[3].as.i,
         .signed_at = f[4].as.i, .vows = f[5].as.s, .latches = f[6].as.s,
         .errs = f[7].as.s, .subtxn = f[8].as.s, .flow = f[9].as.s,
+        .gen = f[10].as.i,
     };
     if (r->row.state < (int64_t)GEAS_SIGNED || r->row.state > (int64_t)GEAS_REMEDYING) {
         return GEAS_ERR_TYPE;
@@ -3779,16 +4289,11 @@ GeasStatus geas_rt_resume_publish(GeasResumed* r, int is_reserved) {
     GeasRuntime* rt = c->rt;
     const GeasContractDesc* desc = c->desc;
     GeasStatus st = GEAS_OK;
+    /* Read before this call takes the instance lock, which would count */
+    c->is_body_owned = (uint8_t)geas_rt_in_body_here();
     geas_rt_lock(c);
     pthread_mutex_lock(&rt->lock);
-    if (is_reserved) {
-        rt->nreserved--;
-        rt->instances[rt->ninstances++] = c;
-    } else if (rt->ninstances + rt->nreserved >= GEAS_MAX_INSTANCES) {
-        st = GEAS_ERR_OOM;
-    } else {
-        rt->instances[rt->ninstances++] = c;
-    }
+    st = geas_rt_instance_add(rt, c, is_reserved);
     pthread_mutex_unlock(&rt->lock);
     if (st == GEAS_OK) {
         /* The instance belongs to the table now and discard leaves it be */
@@ -3810,7 +4315,7 @@ GeasStatus geas_rt_resume_publish(GeasResumed* r, int is_reserved) {
 }
 
 void geas_rt_resume_discard(GeasResumed* r) {
-    if (r->c) instance_discard(r->c);
+    if (r->c) instance_free(r->c);
     r->c = NULL;
     park_arena_free((ParkChunk*)r->arena);
     r->arena = NULL;
@@ -3998,9 +4503,10 @@ GeasStatus geas_list_new(GeasContract* c, uint32_t elem_ty, uint64_t cap,
     out->ty = GEAS_TY_LIST;
     out->as.list.elem_ty = elem_ty;
     if (cap == 0) return GEAS_OK;
+    if (cap > GEAS_VALUES_MAX_COUNT) return GEAS_ERR_OOM;
     GeasValue* data = (GeasValue*)geas_bytes(c, cap * sizeof(GeasValue));
     if (!data) return GEAS_ERR_OOM;
-    memset(data, 0, cap * sizeof(GeasValue));
+    memset(data, 0, (size_t)cap * sizeof(GeasValue));
     out->as.list.data = data;
     out->as.list.cap = cap;
     return GEAS_OK;
@@ -4010,7 +4516,13 @@ GeasStatus geas_list_push(GeasContract* c, GeasValue* list, const GeasValue* ele
     if (!c || !list || !elem) return GEAS_ERR_TYPE;
     if (list->ty != GEAS_TY_LIST) return GEAS_ERR_TYPE;
     if (elem->ty != list->as.list.elem_ty) return GEAS_ERR_TYPE;
+    if (list->as.list.len > list->as.list.cap) return GEAS_ERR_TYPE;
+    if (list->as.list.len && !list->as.list.data) return GEAS_ERR_TYPE;
+    /* The list is a node of its own, so it holds at most one fewer
+     * elements than the node budget every boundary holds */
+    if (list->as.list.len >= GEAS_VALUE_MAX_NODES - 1) return GEAS_ERR_OOM;
     if (list->as.list.len == list->as.list.cap) {
+        if (list->as.list.cap > GEAS_VALUES_MAX_COUNT / 2) return GEAS_ERR_OOM;
         uint64_t cap = list->as.list.cap ? list->as.list.cap * 2 : 4;
         GeasValue* data = (GeasValue*)geas_bytes(c, cap * sizeof(GeasValue));
         if (!data) return GEAS_ERR_OOM;
@@ -4085,6 +4597,9 @@ GeasStatus geas_map_set(GeasContract* c, GeasValue* m, const GeasValue* k,
     if (!c || !m || !k || !v) return GEAS_ERR_TYPE;
     if (m->ty != GEAS_TY_MAP) return GEAS_ERR_TYPE;
     if (k->ty != m->as.list.elem_ty) return GEAS_ERR_TYPE;
+    /* A map holds whole pairs within its capacity, with data behind them */
+    if (m->as.list.len % 2 || m->as.list.len > m->as.list.cap) return GEAS_ERR_TYPE;
+    if (m->as.list.len && !m->as.list.data) return GEAS_ERR_TYPE;
     /* Both halves are deep copied before anything is committed, so an OOM
      * mid-copy leaves the map exactly as it was. */
     GeasValue vc;
@@ -4095,10 +4610,13 @@ GeasStatus geas_map_set(GeasContract* c, GeasValue* m, const GeasValue* k,
         ((GeasValue*)m->as.list.data)[hit] = vc;
         return GEAS_OK;
     }
+    /* A new pair adds two nodes, and the map is a node of its own */
+    if (m->as.list.len + 2 > GEAS_VALUE_MAX_NODES - 1) return GEAS_ERR_OOM;
     GeasValue kc;
     st = geas_value_deep_copy(c, k, &kc);
     if (st != GEAS_OK) return st;
     if (m->as.list.len + 2 > m->as.list.cap) {
+        if (m->as.list.cap > GEAS_VALUES_MAX_COUNT / 2) return GEAS_ERR_OOM;
         uint64_t cap = m->as.list.cap ? m->as.list.cap * 2 : 8;
         GeasValue* data = (GeasValue*)geas_bytes(c, cap * sizeof(GeasValue));
         if (!data) return GEAS_ERR_OOM;
@@ -4129,8 +4647,17 @@ int geas_map_get(const GeasValue* m, const GeasValue* k, const GeasValue** out) 
  * copy can reach, the compare can test. A tag mismatch reads unequal. A map
  * compares pair by pair in insertion order, keys and values both, the same
  * order semantics serialization promises, so the answer is deterministic. */
+static int eq_rec(const GeasValue* a, const GeasValue* b, uint32_t depth);
+
+/* Nesting past GEAS_COPY_MAX_DEPTH, a cyclic value among them, reads
+ * unequal: no two values the runtime can copy are that deep */
 int geas_value_eq(const GeasValue* a, const GeasValue* b) {
+    return eq_rec(a, b, 0);
+}
+
+static int eq_rec(const GeasValue* a, const GeasValue* b, uint32_t depth) {
     if (!a || !b) return 0;
+    if (depth >= GEAS_COPY_MAX_DEPTH) return 0;
     if (a->ty != b->ty) return 0;
     switch ((GeasTypeTag)a->ty) {
     case GEAS_TY_UNIT:  return 1;
@@ -4155,8 +4682,9 @@ int geas_value_eq(const GeasValue* a, const GeasValue* b) {
         if (a->as.list.len != b->as.list.len) return 0;
         const GeasValue* xa = (const GeasValue*)a->as.list.data;
         const GeasValue* xb = (const GeasValue*)b->as.list.data;
+        if (a->as.list.len && (!xa || !xb)) return xa == xb;
         for (uint64_t i = 0; i < a->as.list.len; i++) {
-            if (!geas_value_eq(&xa[i], &xb[i])) return 0;
+            if (!eq_rec(&xa[i], &xb[i], depth + 1)) return 0;
         }
         return 1;
     }
@@ -4165,8 +4693,7 @@ int geas_value_eq(const GeasValue* a, const GeasValue* b) {
         if (a->tag != b->tag) return 0;
         if (!a->as.box && !b->as.box) return 1;
         if (!a->as.box || !b->as.box) return 0;
-        return geas_value_eq((const GeasValue*)a->as.box,
-                            (const GeasValue*)b->as.box);
+        return eq_rec((const GeasValue*)a->as.box, (const GeasValue*)b->as.box, depth + 1);
     }
     case GEAS_TY_INSTANCE:
         /* An instance value is a reference handle; equality is identity. */
@@ -4182,9 +4709,10 @@ GeasStatus geas_tuple_new(GeasContract* c, uint64_t count, GeasValue* out) {
     memset(out, 0, sizeof(*out));
     out->ty = GEAS_TY_TUPLE;
     if (count == 0) return GEAS_OK;
+    if (count > GEAS_VALUES_MAX_COUNT) return GEAS_ERR_OOM;
     GeasValue* data = (GeasValue*)geas_bytes(c, count * sizeof(GeasValue));
     if (!data) return GEAS_ERR_OOM;
-    memset(data, 0, count * sizeof(GeasValue));
+    memset(data, 0, (size_t)count * sizeof(GeasValue));
     out->as.list.data = data;
     out->as.list.len = count;
     out->as.list.cap = count;
@@ -4199,19 +4727,25 @@ GeasStatus geas_tuple_new(GeasContract* c, uint64_t count, GeasValue* out) {
  *
  * The source may come straight from a host, so nothing it claims is taken on
  * faith: a length with no data behind it and a list longer than its own
- * capacity are GEAS_ERR_TYPE, an element count whose byte size overflows is
+ * capacity are GEAS_ERR_TYPE, an element count past GEAS_VALUES_MAX_COUNT is
  * GEAS_ERR_OOM, None never follows its box, and nesting past
- * GEAS_COPY_MAX_DEPTH, a cyclic value among them, is GEAS_ERR_TYPE */
+ * GEAS_COPY_MAX_DEPTH, a cyclic value among them, or a walk past
+ * GEAS_VALUE_MAX_NODES nodes, a value sharing its substructure among them,
+ * is GEAS_ERR_OOM */
 static GeasStatus copy_rec(GeasContract* c, const GeasValue* src, GeasValue* dst,
-                           uint32_t depth);
+                           uint32_t depth, uint64_t* nodes);
 
 static GeasStatus copy_arm(GeasContract* c, const GeasValue* src, GeasValue* dst,
-                           uint32_t depth) {
+                           uint32_t depth, uint64_t* nodes) {
     uint64_t n = src->as.list.len;
     const GeasValue* from = (const GeasValue*)src->as.list.data;
     if (n && !from) return GEAS_ERR_TYPE;
-    if (src->ty == GEAS_TY_LIST && n > src->as.list.cap) return GEAS_ERR_TYPE;
-    if (n > (SIZE_MAX - sizeof(GeasBlock)) / sizeof(GeasValue)) return GEAS_ERR_OOM;
+    int is_capped = src->ty == GEAS_TY_LIST || src->ty == GEAS_TY_MAP;
+    if (is_capped && n > src->as.list.cap) return GEAS_ERR_TYPE;
+    if (n > GEAS_VALUES_MAX_COUNT) return GEAS_ERR_OOM;
+    /* Every element is a node of the copy, so a count past what is left of
+     * the budget is refused before its array is allocated */
+    if (n > GEAS_VALUE_MAX_NODES - *nodes) return GEAS_ERR_OOM;
     memset(dst, 0, sizeof(*dst));
     dst->ty = src->ty;
     dst->tag = src->tag;
@@ -4222,7 +4756,7 @@ static GeasStatus copy_arm(GeasContract* c, const GeasValue* src, GeasValue* dst
     GeasValue* data = (GeasValue*)geas_bytes(c, n * sizeof(GeasValue));
     if (!data) return GEAS_ERR_OOM;
     for (uint64_t i = 0; i < n; i++) {
-        GeasStatus st = copy_rec(c, &from[i], &data[i], depth + 1);
+        GeasStatus st = copy_rec(c, &from[i], &data[i], depth + 1, nodes);
         if (st != GEAS_OK) return st;
     }
     dst->as.list.data = data;
@@ -4232,7 +4766,7 @@ static GeasStatus copy_arm(GeasContract* c, const GeasValue* src, GeasValue* dst
 /* Option follows its box for Some alone; Result for either arm that carries
  * one. A tag past the arms copies with no payload and is the walk's to refuse */
 static GeasStatus copy_boxed(GeasContract* c, const GeasValue* src, GeasValue* dst,
-                             uint32_t depth) {
+                             uint32_t depth, uint64_t* nodes) {
     memset(dst, 0, sizeof(*dst));
     dst->ty = src->ty;
     dst->tag = src->tag;
@@ -4240,15 +4774,19 @@ static GeasStatus copy_boxed(GeasContract* c, const GeasValue* src, GeasValue* d
     if (!is_followed || !src->as.box) return GEAS_OK;
     GeasValue* boxed = geas_box(c);
     if (!boxed) return GEAS_ERR_OOM;
-    GeasStatus st = copy_rec(c, (const GeasValue*)src->as.box, boxed, depth + 1);
+    GeasStatus st = copy_rec(c, (const GeasValue*)src->as.box, boxed, depth + 1, nodes);
     if (st != GEAS_OK) return st;
     dst->as.box = boxed;
     return GEAS_OK;
 }
 
 static GeasStatus copy_rec(GeasContract* c, const GeasValue* src, GeasValue* dst,
-                           uint32_t depth) {
+                           uint32_t depth, uint64_t* nodes) {
     if (depth >= GEAS_COPY_MAX_DEPTH) return GEAS_ERR_TYPE;
+    /* Shared substructure is copied once per path that reaches it, so the
+     * walk counts every node it visits and stops at the budget */
+    if (*nodes >= GEAS_VALUE_MAX_NODES) return GEAS_ERR_OOM;
+    (*nodes)++;
     switch ((GeasTypeTag)src->ty) {
     case GEAS_TY_UNIT:
     case GEAS_TY_INT:
@@ -4273,10 +4811,10 @@ static GeasStatus copy_rec(GeasContract* c, const GeasValue* src, GeasValue* dst
     case GEAS_TY_TUPLE:
     case GEAS_TY_RECORD:
     case GEAS_TY_SUM:
-        return copy_arm(c, src, dst, depth);
+        return copy_arm(c, src, dst, depth, nodes);
     case GEAS_TY_OPTION:
     case GEAS_TY_RESULT:
-        return copy_boxed(c, src, dst, depth);
+        return copy_boxed(c, src, dst, depth, nodes);
     default:
         return GEAS_ERR_TYPE;
     }
@@ -4288,7 +4826,8 @@ GeasStatus geas_value_deep_copy(GeasContract* c, const GeasValue* src,
     /* The source and the destination may be one slot, so the copy reads a
      * private image of the top value */
     GeasValue from = *src;
-    return copy_rec(c, &from, dst, 0);
+    uint64_t nodes = 0;
+    return copy_rec(c, &from, dst, 0, &nodes);
 }
 
 /* ---- the debug renderer ---- */
@@ -4326,7 +4865,17 @@ static void sink_fmt(RenderSink* s, const char* fmt, ...) {
 
 /* String bytes in the debug spelling: quote and backslash escaped, control
  * bytes as \xNN, everything else raw, UTF-8 passing through untouched. */
+/* An arm with a length and no data behind it renders as a value the
+ * renderer cannot read, never as a read through NULL */
+static int render_arm_missing(const void* data, uint64_t len) {
+    return len != 0 && data == NULL;
+}
+
 static void render_string(RenderSink* s, const GeasString* str) {
+    if (render_arm_missing(str->ptr, str->len)) {
+        sink_str(s, "<?>");
+        return;
+    }
     sink_put(s, "\"", 1);
     for (uint64_t i = 0; i < str->len; i++) {
         uint8_t b = str->ptr[i];
@@ -4347,6 +4896,10 @@ static void render_string(RenderSink* s, const GeasString* str) {
 
 /* Bytes render as hex with a bounded prefix and the full byte count */
 static void render_bytes(RenderSink* s, const GeasString* bytes) {
+    if (render_arm_missing(bytes->ptr, bytes->len)) {
+        sink_str(s, "<?>");
+        return;
+    }
     sink_str(s, "Bytes(");
     uint64_t count = bytes->len < GEAS_RENDER_BYTES ? bytes->len : GEAS_RENDER_BYTES;
     for (uint64_t i = 0; i < count; i++) {
@@ -4362,8 +4915,12 @@ static void render_value(RenderSink* s, const GeasValue* v, unsigned depth);
 
 static void render_elems(RenderSink* s, const GeasValue* v, unsigned depth,
                          const char* open, const char* close) {
-    sink_str(s, open);
     const GeasValue* xs = (const GeasValue*)v->as.list.data;
+    if (render_arm_missing(xs, v->as.list.len)) {
+        sink_str(s, "<?>");
+        return;
+    }
+    sink_str(s, open);
     for (uint64_t i = 0; i < v->as.list.len; i++) {
         if (i) sink_str(s, ", ");
         render_value(s, &xs[i], depth + 1);
@@ -4374,8 +4931,12 @@ static void render_elems(RenderSink* s, const GeasValue* v, unsigned depth,
 /* A map in its canonical spelling: {k: v, ...} pairs in insertion order,
  * which is the only order a map has. */
 static void render_map(RenderSink* s, const GeasValue* v, unsigned depth) {
-    sink_put(s, "{", 1);
     const GeasValue* xs = (const GeasValue*)v->as.list.data;
+    if (render_arm_missing(xs, v->as.list.len)) {
+        sink_str(s, "<?>");
+        return;
+    }
+    sink_put(s, "{", 1);
     for (uint64_t i = 0; i + 1 < v->as.list.len; i += 2) {
         if (i) sink_str(s, ", ");
         render_value(s, &xs[i], depth + 1);

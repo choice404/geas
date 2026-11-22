@@ -18,7 +18,7 @@ import (
 // ServiceShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const ServiceShapeHash uint64 = 0x800d8e21674a4e31
+const ServiceShapeHash uint64 = 0xeeada03b3d7b1a1d
 
 // ServiceSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

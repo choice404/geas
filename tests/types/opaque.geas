@@ -1,13 +1,14 @@
-// A name no declaration owns has no layout to spell, so every slot whose
-// type reaches it, directly or through a record field or a List, carries
-// none, and the slots beside it keep their indices
+// StoreError, the one type name the compiler brings in without a
+// declaration, has no layout to spell, so every slot whose type reaches it,
+// directly or through a record field or a List, carries none, and the slots
+// beside it keep their indices
 
 record Holder {
-    inner: Foo
+    inner: StoreError
     count: Int
 }
 
 contract Holding {
-    pledge take(raw: Foo, held: Holder, many: List<Holder>, count: Int) -> Result<Foo, String>
+    pledge take(raw: StoreError, held: Holder, many: List<Holder>, count: Int) -> Result<StoreError, String>
     pledge plain(count: Int) -> Result<Int, String>
 }

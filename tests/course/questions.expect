@@ -1,6 +1,6 @@
 Courses [
     Course "Flow" {
-        hash: 0x55bbddc11650401e,
+        hash: 0x0059467bbc26ca58,
         entry: 0,
         slots: [
             Slot(0) "$hidden0": Result<Int, Problem> (temporary),

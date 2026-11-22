@@ -41,7 +41,7 @@ static GeasStatus geas_clause12_LangGauntlet_bump(GeasContract* cc, const GeasVa
     t0.as.i = 1;
     GeasValue t1 = {0};
     t1.ty = GEAS_TY_INT;
-    t1.as.i = args[0].as.i + t0.as.i;
+    if (__builtin_add_overflow(args[0].as.i, t0.as.i, &t1.as.i)) return GEAS_ERR_TYPE;
     *out = t1;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
@@ -60,7 +60,7 @@ static GeasStatus geas_clause12_LangGauntlet_scaled(GeasContract* cc, const Geas
     t3.as.i = 2;
     GeasValue t4 = {0};
     t4.ty = GEAS_TY_INT;
-    t4.as.i = t1.as.i * t3.as.i;
+    if (__builtin_mul_overflow(t1.as.i, t3.as.i, &t4.as.i)) return GEAS_ERR_TYPE;
     *out = t4;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
@@ -79,7 +79,7 @@ static GeasStatus geas_clause12_LangGauntlet_total_of(GeasContract* cc, const Ge
         GeasValue* t4 = &t1;
         GeasValue t5 = {0};
         t5.ty = GEAS_TY_INT;
-        t5.as.i = t1.as.i + t3.as.i;
+        if (__builtin_add_overflow(t1.as.i, t3.as.i, &t5.as.i)) return GEAS_ERR_TYPE;
         *t4 = t5;
     }
     *out = t1;
@@ -88,7 +88,7 @@ static GeasStatus geas_clause12_LangGauntlet_total_of(GeasContract* cc, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_sum_list_a661d48a150559de_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_8sum_list_a661d48a150559de_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -104,7 +104,7 @@ static GeasStatus __geas_ash_LangGauntlet_sum_list_a661d48a150559de_v1(void* ctx
         GeasValue* t4 = &t1;
         GeasValue t5 = {0};
         t5.ty = GEAS_TY_INT;
-        t5.as.i = t1.as.i + t3.as.i;
+        if (__builtin_add_overflow(t1.as.i, t3.as.i, &t5.as.i)) return GEAS_ERR_TYPE;
         *t4 = t5;
     }
     GeasValue* t6 = geas_box(cc);
@@ -120,7 +120,7 @@ static GeasStatus __geas_ash_LangGauntlet_sum_list_a661d48a150559de_v1(void* ctx
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_8classify_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -184,6 +184,7 @@ static GeasStatus __geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1(void* ctx
     if (t13 != GEAS_OK) return t13;
     GeasValue t14 = t12;
     GeasValue t15 = {0};
+    (void)t15;
     GeasValue t16 = {0};
     int t17 = 0;
     do {
@@ -217,7 +218,7 @@ static GeasStatus __geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1(void* ctx
         t28.as.i = 1;
         GeasValue t29 = {0};
         t29.ty = GEAS_TY_INT;
-        t29.as.i = t27.as.i + t28.as.i;
+        if (__builtin_add_overflow(t27.as.i, t28.as.i, &t29.as.i)) return GEAS_ERR_TYPE;
         *t26 = t29;
         GeasValue t30 = ((const GeasValue*)t24.as.list.data)[1];
         GeasValue t31 = {0};
@@ -256,6 +257,7 @@ static GeasStatus __geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1(void* ctx
         return GEAS_OK;
     } else {
         GeasValue t39 = {0};
+        (void)t39;
         int t40 = 0;
         do {
             if (t14.tag != 1) break;
@@ -315,7 +317,7 @@ static GeasStatus __geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1(void* ctx
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_fizz_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_4fizz_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -331,7 +333,7 @@ static GeasStatus __geas_ash_LangGauntlet_fizz_e927eb6d4a754125_v1(void* ctx, co
     if (t1.as.b) {
         GeasValue t2 = {0};
         t2.ty = GEAS_TY_INT;
-        t2.as.i = -args[0].as.i;
+        if (__builtin_sub_overflow((int64_t)0, args[0].as.i, &t2.as.i)) return GEAS_ERR_TYPE;
         GeasValue* t3 = geas_box(cc);
         if (!t3) return GEAS_ERR_OOM;
         *t3 = t2;
@@ -362,13 +364,14 @@ static GeasStatus __geas_ash_LangGauntlet_fizz_e927eb6d4a754125_v1(void* ctx, co
         t11.as.i = 1;
         GeasValue t12 = {0};
         t12.ty = GEAS_TY_INT;
-        t12.as.i = t6.as.i + t11.as.i;
+        if (__builtin_add_overflow(t6.as.i, t11.as.i, &t12.as.i)) return GEAS_ERR_TYPE;
         *t10 = t12;
         GeasValue t13 = {0};
         t13.ty = GEAS_TY_INT;
         t13.as.i = 3;
         GeasValue t14 = {0};
         t14.ty = GEAS_TY_INT;
+        if (t13.as.i == 0 || (t13.as.i == -1 && t6.as.i == INT64_MIN)) return GEAS_ERR_TYPE;
         t14.as.i = t6.as.i % t13.as.i;
         GeasValue t15 = {0};
         t15.ty = GEAS_TY_INT;
@@ -384,34 +387,36 @@ static GeasStatus __geas_ash_LangGauntlet_fizz_e927eb6d4a754125_v1(void* ctx, co
             t18.as.s.len = 1;
             GeasValue t19 = {0};
             t19.ty = GEAS_TY_STRING;
-            if (geas_string_concat(cc, &t8, &t18, &t19) != GEAS_OK) return GEAS_ERR_OOM;
+            GeasStatus t20 = geas_string_concat(cc, &t8, &t18, &t19);
+            if (t20 != GEAS_OK) return t20;
             *t17 = t19;
             continue;
         }
-        GeasValue* t20 = &t8;
-        GeasValue t21 = {0};
-        t21.ty = GEAS_TY_STRING;
-        t21.as.s.ptr = (uint8_t*)".";
-        t21.as.s.len = 1;
+        GeasValue* t21 = &t8;
         GeasValue t22 = {0};
         t22.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t8, &t21, &t22) != GEAS_OK) return GEAS_ERR_OOM;
-        *t20 = t22;
+        t22.as.s.ptr = (uint8_t*)".";
+        t22.as.s.len = 1;
+        GeasValue t23 = {0};
+        t23.ty = GEAS_TY_STRING;
+        GeasStatus t24 = geas_string_concat(cc, &t8, &t22, &t23);
+        if (t24 != GEAS_OK) return t24;
+        *t21 = t23;
     }
-    GeasValue* t23 = geas_box(cc);
-    if (!t23) return GEAS_ERR_OOM;
-    *t23 = t8;
-    GeasValue t24 = {0};
-    t24.ty = GEAS_TY_RESULT;
-    t24.tag = 0;
-    t24.as.box = t23;
-    *out = t24;
+    GeasValue* t25 = geas_box(cc);
+    if (!t25) return GEAS_ERR_OOM;
+    *t25 = t8;
+    GeasValue t26 = {0};
+    t26.ty = GEAS_TY_RESULT;
+    t26.tag = 0;
+    t26.as.box = t25;
+    *out = t26;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_find_2cb9006c2d55788c_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_4find_2cb9006c2d55788c_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -450,7 +455,7 @@ static GeasStatus __geas_ash_LangGauntlet_find_2cb9006c2d55788c_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_pick_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_4pick_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -501,7 +506,7 @@ static GeasStatus __geas_ash_LangGauntlet_pick_a7c9229487606e8b_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_head_doubled_a4953c25fab4fe16_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_12head_doubled_a4953c25fab4fe16_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -538,7 +543,7 @@ static GeasStatus __geas_ash_LangGauntlet_head_doubled_a4953c25fab4fe16_v1(void*
     t13.as.i = 2;
     GeasValue t14 = {0};
     t14.ty = GEAS_TY_INT;
-    t14.as.i = t12.as.i * t13.as.i;
+    if (__builtin_mul_overflow(t12.as.i, t13.as.i, &t14.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t15 = geas_box(cc);
     if (!t15) return GEAS_ERR_OOM;
     *t15 = t14;
@@ -552,7 +557,7 @@ static GeasStatus __geas_ash_LangGauntlet_head_doubled_a4953c25fab4fe16_v1(void*
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_nest_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_4nest_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -625,7 +630,7 @@ static GeasStatus __geas_ash_LangGauntlet_nest_a7c9229487606e8b_v1(void* ctx, co
             t20.as.i = 10;
             GeasValue t21 = {0};
             t21.ty = GEAS_TY_INT;
-            t21.as.i = t12.as.i * t20.as.i;
+            if (__builtin_mul_overflow(t12.as.i, t20.as.i, &t21.as.i)) return GEAS_ERR_TYPE;
             t17 = t21;
         } else {
             int t22 = 0;
@@ -660,7 +665,7 @@ static GeasStatus __geas_ash_LangGauntlet_nest_a7c9229487606e8b_v1(void* ctx, co
     t28.as.i = 1;
     GeasValue t29 = {0};
     t29.ty = GEAS_TY_INT;
-    t29.as.i = t27.as.i + t28.as.i;
+    if (__builtin_add_overflow(t27.as.i, t28.as.i, &t29.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t30 = geas_box(cc);
     if (!t30) return GEAS_ERR_OOM;
     *t30 = t29;
@@ -674,7 +679,7 @@ static GeasStatus __geas_ash_LangGauntlet_nest_a7c9229487606e8b_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_deep_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_4deep_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -745,6 +750,7 @@ static GeasStatus __geas_ash_LangGauntlet_deep_a7c9229487606e8b_v1(void* ctx, co
     if (t16 != GEAS_OK) return t16;
     GeasValue t17 = t15;
     GeasValue t18 = {0};
+    (void)t18;
     GeasValue t19 = {0};
     int t20 = 0;
     do {
@@ -761,7 +767,7 @@ static GeasStatus __geas_ash_LangGauntlet_deep_a7c9229487606e8b_v1(void* ctx, co
         t23.as.i = 1;
         GeasValue t24 = {0};
         t24.ty = GEAS_TY_INT;
-        t24.as.i = t19.as.i + t23.as.i;
+        if (__builtin_add_overflow(t19.as.i, t23.as.i, &t24.as.i)) return GEAS_ERR_TYPE;
         GeasValue* t25 = geas_box(cc);
         if (!t25) return GEAS_ERR_OOM;
         *t25 = t24;
@@ -823,7 +829,7 @@ static GeasStatus __geas_ash_LangGauntlet_deep_a7c9229487606e8b_v1(void* ctx, co
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_misc_c68c66699cd1cb02_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_4misc_c68c66699cd1cb02_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -888,162 +894,172 @@ static GeasStatus __geas_ash_LangGauntlet_misc_c68c66699cd1cb02_v1(void* ctx, co
         t22.as.s.len = 1;
         GeasValue t23 = {0};
         t23.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t22, &t23) != GEAS_OK) return GEAS_ERR_OOM;
+        GeasStatus t24 = geas_string_concat(cc, &t19, &t22, &t23);
+        if (t24 != GEAS_OK) return t24;
         *t21 = t23;
     }
-    GeasValue t24 = {0};
-    t24.ty = GEAS_TY_CHAR;
-    t24.as.ch = 120;
     GeasValue t25 = {0};
-    t25.ty = GEAS_TY_BOOL;
-    t25.as.b = (t5.as.ch == t24.as.ch);
-    if (t25.as.b) {
-        GeasValue* t26 = &t19;
-        GeasValue t27 = {0};
-        t27.ty = GEAS_TY_STRING;
-        t27.as.s.ptr = (uint8_t*)"c";
-        t27.as.s.len = 1;
+    t25.ty = GEAS_TY_CHAR;
+    t25.as.ch = 120;
+    GeasValue t26 = {0};
+    t26.ty = GEAS_TY_BOOL;
+    t26.as.b = (t5.as.ch == t25.as.ch);
+    if (t26.as.b) {
+        GeasValue* t27 = &t19;
         GeasValue t28 = {0};
         t28.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t27, &t28) != GEAS_OK) return GEAS_ERR_OOM;
-        *t26 = t28;
+        t28.as.s.ptr = (uint8_t*)"c";
+        t28.as.s.len = 1;
+        GeasValue t29 = {0};
+        t29.ty = GEAS_TY_STRING;
+        GeasStatus t30 = geas_string_concat(cc, &t19, &t28, &t29);
+        if (t30 != GEAS_OK) return t30;
+        *t27 = t29;
     }
-    GeasValue t29 = {0};
-    t29.ty = GEAS_TY_BYTE;
-    t29.as.b = 7;
-    GeasValue t30 = {0};
-    t30.ty = GEAS_TY_BOOL;
-    t30.as.b = (t1.as.b == t29.as.b);
-    if (t30.as.b) {
-        GeasValue* t31 = &t19;
-        GeasValue t32 = {0};
-        t32.ty = GEAS_TY_STRING;
-        t32.as.s.ptr = (uint8_t*)"b";
-        t32.as.s.len = 1;
-        GeasValue t33 = {0};
-        t33.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t32, &t33) != GEAS_OK) return GEAS_ERR_OOM;
-        *t31 = t33;
+    GeasValue t31 = {0};
+    t31.ty = GEAS_TY_BYTE;
+    t31.as.b = 7;
+    GeasValue t32 = {0};
+    t32.ty = GEAS_TY_BOOL;
+    t32.as.b = (t1.as.b == t31.as.b);
+    if (t32.as.b) {
+        GeasValue* t33 = &t19;
+        GeasValue t34 = {0};
+        t34.ty = GEAS_TY_STRING;
+        t34.as.s.ptr = (uint8_t*)"b";
+        t34.as.s.len = 1;
+        GeasValue t35 = {0};
+        t35.ty = GEAS_TY_STRING;
+        GeasStatus t36 = geas_string_concat(cc, &t19, &t34, &t35);
+        if (t36 != GEAS_OK) return t36;
+        *t33 = t35;
     }
-    GeasValue t34 = {0};
-    t34.ty = GEAS_TY_UINT;
-    t34.as.u = 9;
-    GeasValue t35 = {0};
-    t35.ty = GEAS_TY_BOOL;
-    t35.as.b = (t3.as.u == t34.as.u);
-    if (t35.as.b) {
-        GeasValue* t36 = &t19;
-        GeasValue t37 = {0};
-        t37.ty = GEAS_TY_STRING;
-        t37.as.s.ptr = (uint8_t*)"u";
-        t37.as.s.len = 1;
-        GeasValue t38 = {0};
-        t38.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t37, &t38) != GEAS_OK) return GEAS_ERR_OOM;
-        *t36 = t38;
+    GeasValue t37 = {0};
+    t37.ty = GEAS_TY_UINT;
+    t37.as.u = 9;
+    GeasValue t38 = {0};
+    t38.ty = GEAS_TY_BOOL;
+    t38.as.b = (t3.as.u == t37.as.u);
+    if (t38.as.b) {
+        GeasValue* t39 = &t19;
+        GeasValue t40 = {0};
+        t40.ty = GEAS_TY_STRING;
+        t40.as.s.ptr = (uint8_t*)"u";
+        t40.as.s.len = 1;
+        GeasValue t41 = {0};
+        t41.ty = GEAS_TY_STRING;
+        GeasStatus t42 = geas_string_concat(cc, &t19, &t40, &t41);
+        if (t42 != GEAS_OK) return t42;
+        *t39 = t41;
     }
-    GeasValue t39 = {0};
-    t39.ty = GEAS_TY_SUM;
-    t39.tag = 2;
-    GeasValue t40 = {0};
-    GeasStatus t41 = geas_value_deep_copy(cc, &t39, &t40);
-    if (t41 != GEAS_OK) return t41;
-    GeasValue t42 = t40;
     GeasValue t43 = {0};
     t43.ty = GEAS_TY_SUM;
     t43.tag = 2;
     GeasValue t44 = {0};
-    t44.ty = GEAS_TY_BOOL;
-    t44.as.b = geas_value_eq(&t42, &t43);
-    if (t44.as.b) {
-        GeasValue* t45 = &t19;
-        GeasValue t46 = {0};
-        t46.ty = GEAS_TY_STRING;
-        t46.as.s.ptr = (uint8_t*)"s";
-        t46.as.s.len = 1;
-        GeasValue t47 = {0};
-        t47.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t46, &t47) != GEAS_OK) return GEAS_ERR_OOM;
-        *t45 = t47;
-    }
-    for (;;) {
-        GeasValue t48 = {0};
-        t48.ty = GEAS_TY_BOOL;
-        t48.as.b = 0;
-        if (!t48.as.b) break;
+    GeasStatus t45 = geas_value_deep_copy(cc, &t43, &t44);
+    if (t45 != GEAS_OK) return t45;
+    GeasValue t46 = t44;
+    GeasValue t47 = {0};
+    t47.ty = GEAS_TY_SUM;
+    t47.tag = 2;
+    GeasValue t48 = {0};
+    t48.ty = GEAS_TY_BOOL;
+    t48.as.b = geas_value_eq(&t46, &t47);
+    if (t48.as.b) {
         GeasValue* t49 = &t19;
         GeasValue t50 = {0};
         t50.ty = GEAS_TY_STRING;
-        t50.as.s.ptr = (uint8_t*)"never";
-        t50.as.s.len = 5;
+        t50.as.s.ptr = (uint8_t*)"s";
+        t50.as.s.len = 1;
         GeasValue t51 = {0};
         t51.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t50, &t51) != GEAS_OK) return GEAS_ERR_OOM;
+        GeasStatus t52 = geas_string_concat(cc, &t19, &t50, &t51);
+        if (t52 != GEAS_OK) return t52;
         *t49 = t51;
     }
-    GeasValue t52 = {0};
-    if (geas_list_new(cc, GEAS_TY_INT, 0, &t52) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t53 = {0};
-    GeasStatus t54 = geas_value_deep_copy(cc, &t52, &t53);
-    if (t54 != GEAS_OK) return t54;
-    GeasValue t55 = t53;
-    for (uint64_t t56 = 0; t56 < t55.as.list.len; t56++) {
-        GeasValue t57 = ((const GeasValue*)t55.as.list.data)[t56];
-        GeasValue* t58 = &t19;
-        GeasValue t59 = {0};
-        t59.ty = GEAS_TY_STRING;
-        t59.as.s.ptr = (uint8_t*)"never";
-        t59.as.s.len = 5;
-        GeasValue t60 = {0};
-        t60.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t19, &t59, &t60) != GEAS_OK) return GEAS_ERR_OOM;
-        *t58 = t60;
+    for (;;) {
+        GeasValue t53 = {0};
+        t53.ty = GEAS_TY_BOOL;
+        t53.as.b = 0;
+        if (!t53.as.b) break;
+        GeasValue* t54 = &t19;
+        GeasValue t55 = {0};
+        t55.ty = GEAS_TY_STRING;
+        t55.as.s.ptr = (uint8_t*)"never";
+        t55.as.s.len = 5;
+        GeasValue t56 = {0};
+        t56.ty = GEAS_TY_STRING;
+        GeasStatus t57 = geas_string_concat(cc, &t19, &t55, &t56);
+        if (t57 != GEAS_OK) return t57;
+        *t54 = t56;
     }
-    GeasValue t61 = {0};
-    t61.ty = GEAS_TY_BOOL;
-    t61.as.b = !args[0].as.b;
-    if (t61.as.b) {
-        GeasValue t62 = {0};
-        t62.ty = GEAS_TY_INT;
-        t62.as.i = 2;
-        GeasValue* t63 = geas_box(cc);
-        if (!t63) return GEAS_ERR_OOM;
-        *t63 = t62;
-        GeasValue t64 = {0};
-        t64.ty = GEAS_TY_RESULT;
-        t64.tag = 1;
-        t64.as.box = t63;
-        *out = t64;
+    GeasValue t58 = {0};
+    if (geas_list_new(cc, GEAS_TY_INT, 0, &t58) != GEAS_OK) return GEAS_ERR_OOM;
+    GeasValue t59 = {0};
+    GeasStatus t60 = geas_value_deep_copy(cc, &t58, &t59);
+    if (t60 != GEAS_OK) return t60;
+    GeasValue t61 = t59;
+    for (uint64_t t62 = 0; t62 < t61.as.list.len; t62++) {
+        GeasValue t63 = ((const GeasValue*)t61.as.list.data)[t62];
+        (void)t63;
+        GeasValue* t64 = &t19;
+        GeasValue t65 = {0};
+        t65.ty = GEAS_TY_STRING;
+        t65.as.s.ptr = (uint8_t*)"never";
+        t65.as.s.len = 5;
+        GeasValue t66 = {0};
+        t66.ty = GEAS_TY_STRING;
+        GeasStatus t67 = geas_string_concat(cc, &t19, &t65, &t66);
+        if (t67 != GEAS_OK) return t67;
+        *t64 = t66;
+    }
+    GeasValue t68 = {0};
+    t68.ty = GEAS_TY_BOOL;
+    t68.as.b = !args[0].as.b;
+    if (t68.as.b) {
+        GeasValue t69 = {0};
+        t69.ty = GEAS_TY_INT;
+        t69.as.i = 2;
+        GeasValue* t70 = geas_box(cc);
+        if (!t70) return GEAS_ERR_OOM;
+        *t70 = t69;
+        GeasValue t71 = {0};
+        t71.ty = GEAS_TY_RESULT;
+        t71.tag = 1;
+        t71.as.box = t70;
+        *out = t71;
         return GEAS_OK;
     }
-    const GeasValue* t65 = geas_vow_ref(cc, "greeting");
-    if (!t65) return GEAS_ERR_NAME;
-    GeasValue t66 = *t65;
-    GeasValue t67 = t66;
-    GeasValue t68 = {0};
-    t68.ty = GEAS_TY_STRING;
-    t68.as.s.ptr = (uint8_t*)":";
-    t68.as.s.len = 1;
-    GeasValue t69 = {0};
-    t69.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t67, &t68, &t69) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t70 = {0};
-    t70.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t69, &t19, &t70) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue* t71 = geas_box(cc);
-    if (!t71) return GEAS_ERR_OOM;
-    *t71 = t70;
-    GeasValue t72 = {0};
-    t72.ty = GEAS_TY_RESULT;
-    t72.tag = 0;
-    t72.as.box = t71;
-    *out = t72;
+    const GeasValue* t72 = geas_vow_ref(cc, "greeting");
+    if (!t72) return GEAS_ERR_NAME;
+    GeasValue t73 = *t72;
+    GeasValue t74 = t73;
+    GeasValue t75 = {0};
+    t75.ty = GEAS_TY_STRING;
+    t75.as.s.ptr = (uint8_t*)":";
+    t75.as.s.len = 1;
+    GeasValue t76 = {0};
+    t76.ty = GEAS_TY_STRING;
+    GeasStatus t77 = geas_string_concat(cc, &t74, &t75, &t76);
+    if (t77 != GEAS_OK) return t77;
+    GeasValue t78 = {0};
+    t78.ty = GEAS_TY_STRING;
+    GeasStatus t79 = geas_string_concat(cc, &t76, &t19, &t78);
+    if (t79 != GEAS_OK) return t79;
+    GeasValue* t80 = geas_box(cc);
+    if (!t80) return GEAS_ERR_OOM;
+    *t80 = t78;
+    GeasValue t81 = {0};
+    t81.ty = GEAS_TY_RESULT;
+    t81.tag = 0;
+    t81.as.box = t80;
+    *out = t81;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_guard_2cb9006c2d55788c_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_5guard_2cb9006c2d55788c_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1097,7 +1113,7 @@ static GeasStatus __geas_ash_LangGauntlet_guard_2cb9006c2d55788c_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_orguard_2cb9006c2d55788c_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_7orguard_2cb9006c2d55788c_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1139,7 +1155,7 @@ static GeasStatus __geas_ash_LangGauntlet_orguard_2cb9006c2d55788c_v1(void* ctx,
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_rec_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_8rec_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1180,11 +1196,11 @@ static GeasStatus __geas_ash_LangGauntlet_rec_copy_dbdcc6825b35f1ec_v1(void* ctx
     t14.as.i = 100;
     GeasValue t15 = {0};
     t15.ty = GEAS_TY_INT;
-    t15.as.i = t13.as.i * t14.as.i;
+    if (__builtin_mul_overflow(t13.as.i, t14.as.i, &t15.as.i)) return GEAS_ERR_TYPE;
     GeasValue t16 = ((const GeasValue*)t9.as.list.data)[0];
     GeasValue t17 = {0};
     t17.ty = GEAS_TY_INT;
-    t17.as.i = t15.as.i + t16.as.i;
+    if (__builtin_add_overflow(t15.as.i, t16.as.i, &t17.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t18 = geas_box(cc);
     if (!t18) return GEAS_ERR_OOM;
     *t18 = t17;
@@ -1198,7 +1214,7 @@ static GeasStatus __geas_ash_LangGauntlet_rec_copy_dbdcc6825b35f1ec_v1(void* ctx
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_list_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_9list_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1247,7 +1263,7 @@ static GeasStatus __geas_ash_LangGauntlet_list_copy_dbdcc6825b35f1ec_v1(void* ct
     t17.as.i = 100;
     GeasValue t18 = {0};
     t18.ty = GEAS_TY_INT;
-    t18.as.i = t16.as.i * t17.as.i;
+    if (__builtin_mul_overflow(t16.as.i, t17.as.i, &t18.as.i)) return GEAS_ERR_TYPE;
     GeasValue t19 = {0};
     t19.ty = GEAS_TY_INT;
     t19.as.i = 0;
@@ -1256,7 +1272,7 @@ static GeasStatus __geas_ash_LangGauntlet_list_copy_dbdcc6825b35f1ec_v1(void* ct
     GeasValue t21 = *t20;
     GeasValue t22 = {0};
     t22.ty = GEAS_TY_INT;
-    t22.as.i = t18.as.i + t21.as.i;
+    if (__builtin_add_overflow(t18.as.i, t21.as.i, &t22.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t23 = geas_box(cc);
     if (!t23) return GEAS_ERR_OOM;
     *t23 = t22;
@@ -1270,7 +1286,7 @@ static GeasStatus __geas_ash_LangGauntlet_list_copy_dbdcc6825b35f1ec_v1(void* ct
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_nested_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_11nested_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1351,7 +1367,7 @@ static GeasStatus __geas_ash_LangGauntlet_nested_copy_dbdcc6825b35f1ec_v1(void* 
     t33.as.i = 100;
     GeasValue t34 = {0};
     t34.ty = GEAS_TY_INT;
-    t34.as.i = t32.as.i * t33.as.i;
+    if (__builtin_mul_overflow(t32.as.i, t33.as.i, &t34.as.i)) return GEAS_ERR_TYPE;
     GeasValue t35 = {0};
     t35.ty = GEAS_TY_INT;
     t35.as.i = 0;
@@ -1360,7 +1376,7 @@ static GeasStatus __geas_ash_LangGauntlet_nested_copy_dbdcc6825b35f1ec_v1(void* 
     GeasValue t37 = *t36;
     GeasValue t38 = {0};
     t38.ty = GEAS_TY_INT;
-    t38.as.i = t34.as.i + t37.as.i;
+    if (__builtin_add_overflow(t34.as.i, t37.as.i, &t38.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t39 = geas_box(cc);
     if (!t39) return GEAS_ERR_OOM;
     *t39 = t38;
@@ -1374,7 +1390,7 @@ static GeasStatus __geas_ash_LangGauntlet_nested_copy_dbdcc6825b35f1ec_v1(void* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_map_probe_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_9map_probe_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1429,6 +1445,7 @@ static GeasStatus __geas_ash_LangGauntlet_map_probe_029bb8b0d37e9f59_v1(void* ct
         t18.as.box = t19;
     }
     GeasValue t21 = {0};
+    (void)t21;
     GeasValue t22 = {0};
     int t23 = 0;
     do {
@@ -1484,7 +1501,7 @@ static GeasStatus __geas_ash_LangGauntlet_map_probe_029bb8b0d37e9f59_v1(void* ct
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_map_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_8map_copy_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1536,6 +1553,7 @@ static GeasStatus __geas_ash_LangGauntlet_map_copy_dbdcc6825b35f1ec_v1(void* ctx
         t18.as.box = t19;
     }
     GeasValue t21 = {0};
+    (void)t21;
     GeasValue t22 = {0};
     int t23 = 0;
     do {
@@ -1576,10 +1594,10 @@ static GeasStatus __geas_ash_LangGauntlet_map_copy_dbdcc6825b35f1ec_v1(void* ctx
             t35.as.i = 100;
             GeasValue t36 = {0};
             t36.ty = GEAS_TY_INT;
-            t36.as.i = t22.as.i * t35.as.i;
+            if (__builtin_mul_overflow(t22.as.i, t35.as.i, &t36.as.i)) return GEAS_ERR_TYPE;
             GeasValue t37 = {0};
             t37.ty = GEAS_TY_INT;
-            t37.as.i = t36.as.i + t32.as.i;
+            if (__builtin_add_overflow(t36.as.i, t32.as.i, &t37.as.i)) return GEAS_ERR_TYPE;
             GeasValue* t38 = geas_box(cc);
             if (!t38) return GEAS_ERR_OOM;
             *t38 = t37;
@@ -1648,7 +1666,7 @@ static GeasStatus __geas_ash_LangGauntlet_map_copy_dbdcc6825b35f1ec_v1(void* ctx
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_tally_count_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_11tally_count_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1718,6 +1736,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_count_029bb8b0d37e9f59_v1(void* 
         t26.as.box = t27;
     }
     GeasValue t29 = {0};
+    (void)t29;
     GeasValue t30 = {0};
     int t31 = 0;
     do {
@@ -1773,7 +1792,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_count_029bb8b0d37e9f59_v1(void* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_map_int_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_7map_int_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1818,6 +1837,7 @@ static GeasStatus __geas_ash_LangGauntlet_map_int_e927eb6d4a754125_v1(void* ctx,
         t14.as.box = t15;
     }
     GeasValue t17 = {0};
+    (void)t17;
     GeasValue t18 = {0};
     int t19 = 0;
     do {
@@ -1873,7 +1893,7 @@ static GeasStatus __geas_ash_LangGauntlet_map_int_e927eb6d4a754125_v1(void* ctx,
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_snapshot_04ae3fb8168d80c7_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_8snapshot_04ae3fb8168d80c7_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1927,7 +1947,7 @@ static GeasStatus __geas_ash_LangGauntlet_snapshot_04ae3fb8168d80c7_v1(void* ctx
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_tally_f33b080171a9babb_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_5tally_f33b080171a9babb_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -1954,6 +1974,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_f33b080171a9babb_v1(void* ctx, c
             t8.as.box = t9;
         }
         GeasValue t11 = {0};
+        (void)t11;
         GeasValue t12 = {0};
         int t13 = 0;
         do {
@@ -1969,7 +1990,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_f33b080171a9babb_v1(void* ctx, c
             t16.as.i = 1;
             GeasValue t17 = {0};
             t17.ty = GEAS_TY_INT;
-            t17.as.i = t12.as.i + t16.as.i;
+            if (__builtin_add_overflow(t12.as.i, t16.as.i, &t17.as.i)) return GEAS_ERR_TYPE;
             GeasStatus t18 = geas_map_set(cc, t15, &t5, &t17);
             if (t18 != GEAS_OK) return t18;
         } else {
@@ -2001,7 +2022,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_f33b080171a9babb_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_12merge_counts_6290c549c09174d6_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2029,6 +2050,7 @@ static GeasStatus __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1(void*
             t7.as.box = t8;
         }
         GeasValue t10 = {0};
+        (void)t10;
         GeasValue t11 = {0};
         int t12 = 0;
         do {
@@ -2041,7 +2063,7 @@ static GeasStatus __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1(void*
             GeasValue* t14 = &t1;
             GeasValue t15 = {0};
             t15.ty = GEAS_TY_INT;
-            t15.as.i = t1.as.i + t11.as.i;
+            if (__builtin_add_overflow(t1.as.i, t11.as.i, &t15.as.i)) return GEAS_ERR_TYPE;
             *t14 = t15;
         } else {
             int t16 = 0;
@@ -2081,6 +2103,7 @@ static GeasStatus __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1(void*
             t25.as.box = t26;
         }
         GeasValue t28 = {0};
+        (void)t28;
         GeasValue t29 = {0};
         int t30 = 0;
         do {
@@ -2093,7 +2116,7 @@ static GeasStatus __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1(void*
             GeasValue* t32 = &t1;
             GeasValue t33 = {0};
             t33.ty = GEAS_TY_INT;
-            t33.as.i = t1.as.i + t29.as.i;
+            if (__builtin_add_overflow(t1.as.i, t29.as.i, &t33.as.i)) return GEAS_ERR_TYPE;
             *t32 = t33;
         } else {
             int t34 = 0;
@@ -2130,7 +2153,7 @@ static GeasStatus __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1(void*
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_coords_ca2b3ec3ebf3875c_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_6coords_ca2b3ec3ebf3875c_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2164,7 +2187,7 @@ static GeasStatus __geas_ash_LangGauntlet_coords_ca2b3ec3ebf3875c_v1(void* ctx, 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_board_write_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_11board_write_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2230,7 +2253,7 @@ static GeasStatus __geas_ash_LangGauntlet_board_write_a7c9229487606e8b_v1(void* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_tally_write_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_11tally_write_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2305,6 +2328,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_write_029bb8b0d37e9f59_v1(void* 
         t27.as.box = t28;
     }
     GeasValue t30 = {0};
+    (void)t30;
     GeasValue t31 = {0};
     int t32 = 0;
     do {
@@ -2360,7 +2384,7 @@ static GeasStatus __geas_ash_LangGauntlet_tally_write_029bb8b0d37e9f59_v1(void* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_deep_write_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_10deep_write_029bb8b0d37e9f59_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2437,6 +2461,7 @@ static GeasStatus __geas_ash_LangGauntlet_deep_write_029bb8b0d37e9f59_v1(void* c
         t24.as.box = t25;
     }
     GeasValue t27 = {0};
+    (void)t27;
     GeasValue t28 = {0};
     int t29 = 0;
     do {
@@ -2502,7 +2527,7 @@ static GeasStatus __geas_ash_LangGauntlet_deep_write_029bb8b0d37e9f59_v1(void* c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_label_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_5label_e927eb6d4a754125_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2520,31 +2545,33 @@ static GeasStatus __geas_ash_LangGauntlet_label_e927eb6d4a754125_v1(void* ctx, c
     t4.as.s.len = 1;
     GeasValue t5 = {0};
     t5.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t3, &t4, &t5) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue t6 = {0};
-    t6.ty = GEAS_TY_INT;
-    t6.as.i = 0;
-    GeasValue t7[1] = { t6 };
-    GeasValue t8 = {0};
-    GeasStatus t9 = geas_clause12_LangGauntlet_suffix_for(cc, t7, &t8);
-    if (t9 != GEAS_OK) return t9;
-    GeasValue t10 = {0};
-    t10.ty = GEAS_TY_STRING;
-    if (geas_string_concat(cc, &t5, &t8, &t10) != GEAS_OK) return GEAS_ERR_OOM;
-    GeasValue* t11 = geas_box(cc);
-    if (!t11) return GEAS_ERR_OOM;
-    *t11 = t10;
-    GeasValue t12 = {0};
-    t12.ty = GEAS_TY_RESULT;
-    t12.tag = 0;
-    t12.as.box = t11;
-    *out = t12;
+    GeasStatus t6 = geas_string_concat(cc, &t3, &t4, &t5);
+    if (t6 != GEAS_OK) return t6;
+    GeasValue t7 = {0};
+    t7.ty = GEAS_TY_INT;
+    t7.as.i = 0;
+    GeasValue t8[1] = { t7 };
+    GeasValue t9 = {0};
+    GeasStatus t10 = geas_clause12_LangGauntlet_suffix_for(cc, t8, &t9);
+    if (t10 != GEAS_OK) return t10;
+    GeasValue t11 = {0};
+    t11.ty = GEAS_TY_STRING;
+    GeasStatus t12 = geas_string_concat(cc, &t5, &t9, &t11);
+    if (t12 != GEAS_OK) return t12;
+    GeasValue* t13 = geas_box(cc);
+    if (!t13) return GEAS_ERR_OOM;
+    *t13 = t11;
+    GeasValue t14 = {0};
+    t14.ty = GEAS_TY_RESULT;
+    t14.tag = 0;
+    t14.as.box = t13;
+    *out = t14;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_scale_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_5scale_a7c9229487606e8b_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2568,7 +2595,7 @@ static GeasStatus __geas_ash_LangGauntlet_scale_a7c9229487606e8b_v1(void* ctx, c
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_total_twice_a661d48a150559de_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_11total_twice_a661d48a150559de_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2585,7 +2612,7 @@ static GeasStatus __geas_ash_LangGauntlet_total_twice_a661d48a150559de_v1(void* 
     if (t5 != GEAS_OK) return t5;
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_INT;
-    t6.as.i = t1.as.i + t4.as.i;
+    if (__builtin_add_overflow(t1.as.i, t4.as.i, &t6.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t7 = geas_box(cc);
     if (!t7) return GEAS_ERR_OOM;
     *t7 = t6;
@@ -2599,7 +2626,7 @@ static GeasStatus __geas_ash_LangGauntlet_total_twice_a661d48a150559de_v1(void* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_ordered_keys_69ed26b4d4c6574a_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_12ordered_keys_69ed26b4d4c6574a_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2651,44 +2678,45 @@ static GeasStatus __geas_ash_LangGauntlet_ordered_keys_69ed26b4d4c6574a_v1(void*
         GeasValue* t21 = &t17;
         GeasValue t22 = {0};
         t22.ty = GEAS_TY_STRING;
-        if (geas_string_concat(cc, &t17, &t20, &t22) != GEAS_OK) return GEAS_ERR_OOM;
+        GeasStatus t23 = geas_string_concat(cc, &t17, &t20, &t22);
+        if (t23 != GEAS_OK) return t23;
         *t21 = t22;
     }
-    GeasValue t23 = {0};
-    t23.ty = GEAS_TY_STRING;
-    t23.as.s.ptr = (uint8_t*)"bac";
-    t23.as.s.len = 3;
     GeasValue t24 = {0};
-    t24.ty = GEAS_TY_BOOL;
-    t24.as.b = geas_string_eq(&t17, &t23);
-    if (t24.as.b) {
-        GeasValue* t25 = geas_box(cc);
-        if (!t25) return GEAS_ERR_OOM;
-        *t25 = t17;
-        GeasValue t26 = {0};
-        t26.ty = GEAS_TY_RESULT;
-        t26.tag = 0;
-        t26.as.box = t25;
-        *out = t26;
+    t24.ty = GEAS_TY_STRING;
+    t24.as.s.ptr = (uint8_t*)"bac";
+    t24.as.s.len = 3;
+    GeasValue t25 = {0};
+    t25.ty = GEAS_TY_BOOL;
+    t25.as.b = geas_string_eq(&t17, &t24);
+    if (t25.as.b) {
+        GeasValue* t26 = geas_box(cc);
+        if (!t26) return GEAS_ERR_OOM;
+        *t26 = t17;
+        GeasValue t27 = {0};
+        t27.ty = GEAS_TY_RESULT;
+        t27.tag = 0;
+        t27.as.box = t26;
+        *out = t27;
         return GEAS_OK;
     }
-    GeasValue t27 = {0};
-    t27.ty = GEAS_TY_INT;
-    t27.as.i = 11;
-    GeasValue* t28 = geas_box(cc);
-    if (!t28) return GEAS_ERR_OOM;
-    *t28 = t27;
-    GeasValue t29 = {0};
-    t29.ty = GEAS_TY_RESULT;
-    t29.tag = 1;
-    t29.as.box = t28;
-    *out = t29;
+    GeasValue t28 = {0};
+    t28.ty = GEAS_TY_INT;
+    t28.as.i = 11;
+    GeasValue* t29 = geas_box(cc);
+    if (!t29) return GEAS_ERR_OOM;
+    *t29 = t28;
+    GeasValue t30 = {0};
+    t30.ty = GEAS_TY_RESULT;
+    t30.tag = 1;
+    t30.as.box = t29;
+    *out = t30;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_LangGauntlet_sizes_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12LangGauntlet_5sizes_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -2745,7 +2773,7 @@ static GeasStatus __geas_ash_LangGauntlet_sizes_dbdcc6825b35f1ec_v1(void* ctx, c
     t20.as.i = (int64_t)(t10.as.list.len / 2);
     GeasValue t21 = {0};
     t21.ty = GEAS_TY_INT;
-    t21.as.i = t19.as.i + t20.as.i;
+    if (__builtin_add_overflow(t19.as.i, t20.as.i, &t21.as.i)) return GEAS_ERR_TYPE;
     GeasValue t22 = t21;
     GeasValue t23 = {0};
     t23.ty = GEAS_TY_INT;
@@ -2785,36 +2813,36 @@ static const GeasVowDesc k12_LangGauntlet_vows[] = {
 };
 
 static const GeasPledgeDesc k12_LangGauntlet_pledges[] = {
-    { "sum_list", "__geas_ash_LangGauntlet_sum_list_a661d48a150559de_v1", 1, __geas_ash_LangGauntlet_sum_list_a661d48a150559de_v1, -1 },
-    { "classify", "__geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1", 1, __geas_ash_LangGauntlet_classify_e927eb6d4a754125_v1, -1 },
-    { "fizz", "__geas_ash_LangGauntlet_fizz_e927eb6d4a754125_v1", 1, __geas_ash_LangGauntlet_fizz_e927eb6d4a754125_v1, -1 },
-    { "find", "__geas_ash_LangGauntlet_find_2cb9006c2d55788c_v1", 2, __geas_ash_LangGauntlet_find_2cb9006c2d55788c_v1, -1 },
-    { "pick", "__geas_ash_LangGauntlet_pick_a7c9229487606e8b_v1", 1, __geas_ash_LangGauntlet_pick_a7c9229487606e8b_v1, -1 },
-    { "head_doubled", "__geas_ash_LangGauntlet_head_doubled_a4953c25fab4fe16_v1", 1, __geas_ash_LangGauntlet_head_doubled_a4953c25fab4fe16_v1, -1 },
-    { "nest", "__geas_ash_LangGauntlet_nest_a7c9229487606e8b_v1", 1, __geas_ash_LangGauntlet_nest_a7c9229487606e8b_v1, -1 },
-    { "deep", "__geas_ash_LangGauntlet_deep_a7c9229487606e8b_v1", 1, __geas_ash_LangGauntlet_deep_a7c9229487606e8b_v1, -1 },
-    { "misc", "__geas_ash_LangGauntlet_misc_c68c66699cd1cb02_v1", 1, __geas_ash_LangGauntlet_misc_c68c66699cd1cb02_v1, -1 },
-    { "guard", "__geas_ash_LangGauntlet_guard_2cb9006c2d55788c_v1", 2, __geas_ash_LangGauntlet_guard_2cb9006c2d55788c_v1, -1 },
-    { "orguard", "__geas_ash_LangGauntlet_orguard_2cb9006c2d55788c_v1", 2, __geas_ash_LangGauntlet_orguard_2cb9006c2d55788c_v1, -1 },
-    { "rec_copy", "__geas_ash_LangGauntlet_rec_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_LangGauntlet_rec_copy_dbdcc6825b35f1ec_v1, -1 },
-    { "list_copy", "__geas_ash_LangGauntlet_list_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_LangGauntlet_list_copy_dbdcc6825b35f1ec_v1, -1 },
-    { "nested_copy", "__geas_ash_LangGauntlet_nested_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_LangGauntlet_nested_copy_dbdcc6825b35f1ec_v1, -1 },
-    { "map_probe", "__geas_ash_LangGauntlet_map_probe_029bb8b0d37e9f59_v1", 1, __geas_ash_LangGauntlet_map_probe_029bb8b0d37e9f59_v1, -1 },
-    { "map_copy", "__geas_ash_LangGauntlet_map_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_LangGauntlet_map_copy_dbdcc6825b35f1ec_v1, -1 },
-    { "tally_count", "__geas_ash_LangGauntlet_tally_count_029bb8b0d37e9f59_v1", 1, __geas_ash_LangGauntlet_tally_count_029bb8b0d37e9f59_v1, -1 },
-    { "map_int", "__geas_ash_LangGauntlet_map_int_e927eb6d4a754125_v1", 1, __geas_ash_LangGauntlet_map_int_e927eb6d4a754125_v1, -1 },
-    { "snapshot", "__geas_ash_LangGauntlet_snapshot_04ae3fb8168d80c7_v1", 0, __geas_ash_LangGauntlet_snapshot_04ae3fb8168d80c7_v1, -1 },
-    { "tally", "__geas_ash_LangGauntlet_tally_f33b080171a9babb_v1", 1, __geas_ash_LangGauntlet_tally_f33b080171a9babb_v1, -1 },
-    { "merge_counts", "__geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1", 2, __geas_ash_LangGauntlet_merge_counts_6290c549c09174d6_v1, -1 },
-    { "coords", "__geas_ash_LangGauntlet_coords_ca2b3ec3ebf3875c_v1", 0, __geas_ash_LangGauntlet_coords_ca2b3ec3ebf3875c_v1, -1 },
-    { "board_write", "__geas_ash_LangGauntlet_board_write_a7c9229487606e8b_v1", 1, __geas_ash_LangGauntlet_board_write_a7c9229487606e8b_v1, -1 },
-    { "tally_write", "__geas_ash_LangGauntlet_tally_write_029bb8b0d37e9f59_v1", 1, __geas_ash_LangGauntlet_tally_write_029bb8b0d37e9f59_v1, -1 },
-    { "deep_write", "__geas_ash_LangGauntlet_deep_write_029bb8b0d37e9f59_v1", 1, __geas_ash_LangGauntlet_deep_write_029bb8b0d37e9f59_v1, -1 },
-    { "label", "__geas_ash_LangGauntlet_label_e927eb6d4a754125_v1", 1, __geas_ash_LangGauntlet_label_e927eb6d4a754125_v1, -1 },
-    { "scale", "__geas_ash_LangGauntlet_scale_a7c9229487606e8b_v1", 1, __geas_ash_LangGauntlet_scale_a7c9229487606e8b_v1, -1 },
-    { "total_twice", "__geas_ash_LangGauntlet_total_twice_a661d48a150559de_v1", 1, __geas_ash_LangGauntlet_total_twice_a661d48a150559de_v1, -1 },
-    { "ordered_keys", "__geas_ash_LangGauntlet_ordered_keys_69ed26b4d4c6574a_v1", 0, __geas_ash_LangGauntlet_ordered_keys_69ed26b4d4c6574a_v1, -1 },
-    { "sizes", "__geas_ash_LangGauntlet_sizes_dbdcc6825b35f1ec_v1", 0, __geas_ash_LangGauntlet_sizes_dbdcc6825b35f1ec_v1, -1 },
+    { "sum_list", "__geas_ash_12LangGauntlet_8sum_list_a661d48a150559de_v1", 1, __geas_ash_12LangGauntlet_8sum_list_a661d48a150559de_v1, -1 },
+    { "classify", "__geas_ash_12LangGauntlet_8classify_e927eb6d4a754125_v1", 1, __geas_ash_12LangGauntlet_8classify_e927eb6d4a754125_v1, -1 },
+    { "fizz", "__geas_ash_12LangGauntlet_4fizz_e927eb6d4a754125_v1", 1, __geas_ash_12LangGauntlet_4fizz_e927eb6d4a754125_v1, -1 },
+    { "find", "__geas_ash_12LangGauntlet_4find_2cb9006c2d55788c_v1", 2, __geas_ash_12LangGauntlet_4find_2cb9006c2d55788c_v1, -1 },
+    { "pick", "__geas_ash_12LangGauntlet_4pick_a7c9229487606e8b_v1", 1, __geas_ash_12LangGauntlet_4pick_a7c9229487606e8b_v1, -1 },
+    { "head_doubled", "__geas_ash_12LangGauntlet_12head_doubled_a4953c25fab4fe16_v1", 1, __geas_ash_12LangGauntlet_12head_doubled_a4953c25fab4fe16_v1, -1 },
+    { "nest", "__geas_ash_12LangGauntlet_4nest_a7c9229487606e8b_v1", 1, __geas_ash_12LangGauntlet_4nest_a7c9229487606e8b_v1, -1 },
+    { "deep", "__geas_ash_12LangGauntlet_4deep_a7c9229487606e8b_v1", 1, __geas_ash_12LangGauntlet_4deep_a7c9229487606e8b_v1, -1 },
+    { "misc", "__geas_ash_12LangGauntlet_4misc_c68c66699cd1cb02_v1", 1, __geas_ash_12LangGauntlet_4misc_c68c66699cd1cb02_v1, -1 },
+    { "guard", "__geas_ash_12LangGauntlet_5guard_2cb9006c2d55788c_v1", 2, __geas_ash_12LangGauntlet_5guard_2cb9006c2d55788c_v1, -1 },
+    { "orguard", "__geas_ash_12LangGauntlet_7orguard_2cb9006c2d55788c_v1", 2, __geas_ash_12LangGauntlet_7orguard_2cb9006c2d55788c_v1, -1 },
+    { "rec_copy", "__geas_ash_12LangGauntlet_8rec_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_12LangGauntlet_8rec_copy_dbdcc6825b35f1ec_v1, -1 },
+    { "list_copy", "__geas_ash_12LangGauntlet_9list_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_12LangGauntlet_9list_copy_dbdcc6825b35f1ec_v1, -1 },
+    { "nested_copy", "__geas_ash_12LangGauntlet_11nested_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_12LangGauntlet_11nested_copy_dbdcc6825b35f1ec_v1, -1 },
+    { "map_probe", "__geas_ash_12LangGauntlet_9map_probe_029bb8b0d37e9f59_v1", 1, __geas_ash_12LangGauntlet_9map_probe_029bb8b0d37e9f59_v1, -1 },
+    { "map_copy", "__geas_ash_12LangGauntlet_8map_copy_dbdcc6825b35f1ec_v1", 0, __geas_ash_12LangGauntlet_8map_copy_dbdcc6825b35f1ec_v1, -1 },
+    { "tally_count", "__geas_ash_12LangGauntlet_11tally_count_029bb8b0d37e9f59_v1", 1, __geas_ash_12LangGauntlet_11tally_count_029bb8b0d37e9f59_v1, -1 },
+    { "map_int", "__geas_ash_12LangGauntlet_7map_int_e927eb6d4a754125_v1", 1, __geas_ash_12LangGauntlet_7map_int_e927eb6d4a754125_v1, -1 },
+    { "snapshot", "__geas_ash_12LangGauntlet_8snapshot_04ae3fb8168d80c7_v1", 0, __geas_ash_12LangGauntlet_8snapshot_04ae3fb8168d80c7_v1, -1 },
+    { "tally", "__geas_ash_12LangGauntlet_5tally_f33b080171a9babb_v1", 1, __geas_ash_12LangGauntlet_5tally_f33b080171a9babb_v1, -1 },
+    { "merge_counts", "__geas_ash_12LangGauntlet_12merge_counts_6290c549c09174d6_v1", 2, __geas_ash_12LangGauntlet_12merge_counts_6290c549c09174d6_v1, -1 },
+    { "coords", "__geas_ash_12LangGauntlet_6coords_ca2b3ec3ebf3875c_v1", 0, __geas_ash_12LangGauntlet_6coords_ca2b3ec3ebf3875c_v1, -1 },
+    { "board_write", "__geas_ash_12LangGauntlet_11board_write_a7c9229487606e8b_v1", 1, __geas_ash_12LangGauntlet_11board_write_a7c9229487606e8b_v1, -1 },
+    { "tally_write", "__geas_ash_12LangGauntlet_11tally_write_029bb8b0d37e9f59_v1", 1, __geas_ash_12LangGauntlet_11tally_write_029bb8b0d37e9f59_v1, -1 },
+    { "deep_write", "__geas_ash_12LangGauntlet_10deep_write_029bb8b0d37e9f59_v1", 1, __geas_ash_12LangGauntlet_10deep_write_029bb8b0d37e9f59_v1, -1 },
+    { "label", "__geas_ash_12LangGauntlet_5label_e927eb6d4a754125_v1", 1, __geas_ash_12LangGauntlet_5label_e927eb6d4a754125_v1, -1 },
+    { "scale", "__geas_ash_12LangGauntlet_5scale_a7c9229487606e8b_v1", 1, __geas_ash_12LangGauntlet_5scale_a7c9229487606e8b_v1, -1 },
+    { "total_twice", "__geas_ash_12LangGauntlet_11total_twice_a661d48a150559de_v1", 1, __geas_ash_12LangGauntlet_11total_twice_a661d48a150559de_v1, -1 },
+    { "ordered_keys", "__geas_ash_12LangGauntlet_12ordered_keys_69ed26b4d4c6574a_v1", 0, __geas_ash_12LangGauntlet_12ordered_keys_69ed26b4d4c6574a_v1, -1 },
+    { "sizes", "__geas_ash_12LangGauntlet_5sizes_dbdcc6825b35f1ec_v1", 0, __geas_ash_12LangGauntlet_5sizes_dbdcc6825b35f1ec_v1, -1 },
 };
 
 static const GeasReqAtom k12_LangGauntlet_atoms[] = {

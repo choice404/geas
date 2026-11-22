@@ -29,15 +29,17 @@ from .values import decode
 class Runtime(_ValueEncoder):
     """One loaded libgeasrt and its worker pool.
 
-    The library is opened with RTLD_GLOBAL on purpose: a compiled module
-    carries undefined references to the runtime's exports and no library
-    dependency of its own, so whoever maps libgeasrt must put its symbols in
-    the global scope the runtime's dlopen resolves against. docs/abi.md,
-    Loading the runtime dynamically.
+    The library is opened with RTLD_LOCAL, so neither its exports nor the
+    SQLite build linked into it enter the process's global symbol scope,
+    where they would stand in for the same names in any library Python
+    loads after it. A compiled module names libgeasrt.so.0 as a dependency
+    of its own, and the loader matches that soname against the copy already
+    mapped here, so the module binds to this one runtime and no second copy
+    is loaded.
     """
 
     def __init__(self, lib_path, max_threads=0, handshake_ms=0):
-        self._lib = C.CDLL(str(lib_path), mode=C.RTLD_GLOBAL)
+        self._lib = C.CDLL(str(lib_path), mode=C.RTLD_LOCAL)
         self._declare(self._lib)
         # Python-made pledge trampolines the runtime holds raw pointers to.
         # The anchor list keeps them alive for the life of the runtime, the
@@ -64,9 +66,13 @@ class Runtime(_ValueEncoder):
         """Observes transitions on their delivery thread, None clears the hook.
 
         Reads on event.instance do not tick during delivery. Fulfill, signal,
-        break and park on that instance raise GEAS_ERR_STATE. Captured callbacks
-        can finish after replacement, so their trampolines live until shutdown.
-        Callback exceptions are printed and delivery continues.
+        break, park and release on that instance from inside the callback
+        raise GEAS_ERR_STATE. The same calls from another thread wait until
+        the delivery ends and then run, so a thread must not hold a lock the
+        callback takes while it makes them. A fulfill_sync or a wait returns
+        after the events its fulfillment recorded were delivered. Captured
+        callbacks can finish after replacement, so their trampolines live
+        until shutdown. Callback exceptions are printed and delivery continues.
         """
         def event_tramp(user, pointer):
             try:

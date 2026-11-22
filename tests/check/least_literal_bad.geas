@@ -1,0 +1,10 @@
+// The least Int negated once more leaves the Int range, so it is no
+// constant a vow can hold, and the least Int is an Int wherever it sits,
+// never a UInt
+contract Least {
+    vow least: Int = - -9223372036854775808
+    vow wide: UInt = -9223372036854775808
+    pledge go() -> Result<Unit, String> {
+        return Ok(Unit)
+    }
+}

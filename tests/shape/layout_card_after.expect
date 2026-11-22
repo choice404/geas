@@ -1,3 +1,3 @@
 // shape C v1: contract C;pledge pay:(NCard)->R(V,I);type Card{number:S,expiry:I};
 #define GEAS_HASH_C 0x0ececa53e3519946ULL
-#define GEAS_MANGLED_C_pay "__geas_ash_C_pay_989f13dc2fd1a31e_v1"
+#define GEAS_MANGLED_C_pay "__geas_ash_1C_3pay_989f13dc2fd1a31e_v1"

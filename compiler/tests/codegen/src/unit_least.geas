@@ -1,0 +1,35 @@
+// Unit equality, which always holds, alone and inside a composite, the
+// least Int as a literal in an expression, a pattern, and a vow default,
+// and the highest version a descriptor carries
+
+record Tagged {
+    tag: Unit
+    n: Int
+}
+
+contract Edges [version: 4294967295] {
+    vow floor: Int = -9223372036854775808
+
+    clause same(a: Unit, b: Unit) -> Bool {
+        return a == b && !(a != Unit)
+    }
+
+    clause wrapped(a: Option<Unit>, t: Tagged) -> Bool {
+        return a == Some(Unit) && t == Tagged { tag: Unit, n: 1 } && [Unit] != [Unit, Unit]
+    }
+
+    clause bucket(x: Int) -> Int {
+        return match x {
+            -9223372036854775808 -> 1
+            _ -> 0
+        }
+    }
+
+    pledge least() -> Result<Int, String> {
+        return Ok(-9223372036854775808 + bucket(floor))
+    }
+
+    pledge span() -> Result<Duration, String> {
+        return Ok(-9223372036854775808ms)
+    }
+}

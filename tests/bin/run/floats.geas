@@ -1,0 +1,32 @@
+// Float literals by their value: underscore separators, an exponent, and a
+// fraction with no exact binary form, in an expression, a pattern, and a
+// vow default. With no arguments every value reads back as the double it
+// spells and the program exits 7
+E is either Bad
+
+contract Main {
+    vow wide: Float = 1_000.5
+    vow round: Float = 1.0e3
+
+    clause bucket(x: Float) -> Int {
+        return match x {
+            1_000.5 -> 1
+            1.0e3 -> 2
+            0.1 -> 3
+            _ -> 0
+        }
+    }
+
+    pledge run(args: List<String>) -> Result<Int, E> {
+        let isWide = 1_000.5 == 1000.0 + 0.5 && wide == 1000.5 && 1_000.5 - 1000.0 == 0.5
+        let isRound = 1.0e3 == 1000.0 && round == 1_000.0 && 2.5e-3 * 1.0e3 == 2.5
+        let isTenth = 0.1 + 0.2 != 0.3 && 0.1 * 3.0 != 0.3 && 0.1 + 0.1 == 0.2
+        let isLarge = 12_345.678_9 == 12345.6789 && 1.797_693_134_862_315_7e308 > 1.0e308
+        let isBucketed = bucket(1000.5) == 1 && bucket(1000.0) == 2 && bucket(0.1) == 3
+        let isOther = bucket(0.2) == 0 && bucket(wide) == 1 && bucket(round) == 2
+        if isWide && isRound && isTenth && isLarge && isBucketed && isOther {
+            return Ok(7)
+        }
+        return Ok(1)
+    }
+}

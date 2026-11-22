@@ -248,23 +248,53 @@ void Checker::checkAmendName(const ContractDecl& contract, const AmendsDecl& ame
     }
 }
 
-// A pledge seeded fulfilled has latched with no Ok value, so a remedy for it
-// that takes the Ok value would have nothing to be handed when it runs
+// The type of the value an item hands whatever reads it once it is
+// fulfilled: a pledge's Ok value, the payload of an Option, or a bare
+// buffer, and a signal's payload. Unset when the item carries none
+TyId Checker::seededValueType(const MemberEntry& entry) {
+    if (entry.kind() == MemberKind::Signal) {
+        const TyId payload = signalPayload(*entry.signal());
+        return kindOf(payload) == TyKind::Unit ? TyId{} : payload;
+    }
+    if (entry.kind() != MemberKind::Pledge) {
+        return TyId{};
+    }
+    const TyNode yielded = types_.node(pledgeSig(*entry.pledge()).ret);
+    if (yielded.kind == TyKind::Bytes) {
+        return scalar(TyKind::Bytes);
+    }
+    const bool isWrapped = yielded.kind == TyKind::Result || yielded.kind == TyKind::Option;
+    if (!isWrapped || kindOf(yielded.args[0]) == TyKind::Unit ||
+        kindOf(yielded.args[0]) == TyKind::Unknown) {
+        return TyId{};
+    }
+    return yielded.args[0];
+}
+
+// A seed of fulfilled latches an item with no value, so it is refused for
+// an item that carries one: a course awaiting the signal or reading the
+// pledge, or a remedy taking the pledge's Ok value, would have nothing to
+// be handed. Such an item starts pending instead
 void Checker::checkFulfilledSeed(const ContractDecl& contract, const AmendsDecl& amends,
                                  const AmendLatch& latch) {
     if (latch.state != LatchState::Fulfilled) {
         return;
     }
-    for (const Member& member : contract.members) {
-        const auto* remedy = std::get_if<RemedyDecl>(&member);
-        if (remedy == nullptr || remedy->target != latch.name || !remedy->param.has_value()) {
-            continue;
-        }
-        emit(amends.lo, amends.hi,
-             "latch " + latch.name + " as fulfilled seeds no Ok value, but remedy " +
-                 quoted(remedy->name) + " for " + quoted(latch.name) + " takes one; latch " +
-                 quoted(latch.name) + " as pending, or let the remedy take no parameter");
+    const MemberEntry* entry = resolved_.reachable(&contract, latch.name);
+    if (entry == nullptr) {
+        return;
     }
+    const TyId value = seededValueType(*entry);
+    if (!value.isSet()) {
+        return;
+    }
+    const std::string carries = entry->kind() == MemberKind::Signal
+                                    ? "signal " + quoted(latch.name) + " carries a payload of type "
+                                    : "pledge " + quoted(latch.name) + " yields a value of type ";
+    emit(amends.lo, amends.hi,
+         "latch " + latch.name + " as fulfilled seeds no value, but " + carries +
+             quoted(types_.render(value)) + " that whatever reads it later needs; latch " +
+             quoted(latch.name) + " as pending");
 }
 
 // Whether a member access reads through prior: the bare name prior inside an

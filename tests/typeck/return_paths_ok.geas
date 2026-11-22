@@ -1,0 +1,46 @@
+// Every path of these bodies ends in a return: an if whose two branches
+// return, a match whose every arm returns, a let over such a match, a while
+// true no break leaves, even with a break inside a loop nested in it, and a
+// Unit body, which may fall off its end
+contract A {
+    clause sign(x: Int) -> Int {
+        if x > 0 {
+            return 1
+        } else if x < 0 {
+            return -1
+        } else {
+            return 0
+        }
+    }
+    clause unwrap(x: Option<Int>) -> Int {
+        match x {
+            Some(n) -> { return n }
+            None -> { return 0 }
+        }
+    }
+    clause bound(x: Option<Int>) -> Int {
+        let y = match x {
+            Some(n) -> { return n }
+            None -> { return 0 }
+        }
+    }
+    clause spin(xs: List<Int>) -> Int {
+        while true {
+            for x in xs {
+                if x > 3 {
+                    break
+                }
+            }
+            while false {
+                break
+            }
+        }
+    }
+    clause early(x: Int) -> Int {
+        return x
+        let unreachable = 1
+    }
+    clause nothing(x: Int) -> Unit {
+        let y = x
+    }
+}

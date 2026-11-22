@@ -1,8 +1,8 @@
-geas shape 2
+geas shape 3
 contract CourseFlow
 version 2
 hash 0x9fb217616a51c67b
-course 0xb2b1948a9046f314
+course 0x55ec60db20c08801
 shape contract CourseFlow;vow target:I;pledge first:(I)->R(I,S);pledge second:(I)->R(I,S);signal ready:(S)->V;course;
 vow target I
 pledge first (I)->R(I,S) I

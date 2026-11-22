@@ -1,0 +1,13 @@
+// Contract A with the pledge b_c beside contract A_b with the pledge c. The
+// two pledges share a signature, and the length prefixes keep their mangled
+// names apart, __geas_ash_1A_3b_c_... and __geas_ash_3A_b_1c_..., so the
+// module builds and both register. The header macro names join contract and
+// pledge with an underscore, so both would be GEAS_MANGLED_A_b_c, and
+// emit-header refuses the module naming both items
+contract A {
+    pledge b_c(x: Int) -> Option<Int> { return Some(x) }
+}
+
+contract A_b {
+    pledge c(x: Int) -> Option<Int> { return Some(x + 1) }
+}

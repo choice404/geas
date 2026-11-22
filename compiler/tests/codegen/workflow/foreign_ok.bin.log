@@ -1,0 +1,4 @@
+exit 1
+tests/check/foreign_ok.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // The foreign binding: a pledge with no body, one inside a subcontract, and
+  ^

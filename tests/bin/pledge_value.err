@@ -1,1 +1,1 @@
-codegen: not yet supported: a first class pledge value in a pledge body
+pledge values are not part of this version of the language; call 'ping' instead

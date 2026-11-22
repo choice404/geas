@@ -1,0 +1,73 @@
+// Integer arithmetic faults at run time: an Int, UInt, Byte, or Duration
+// sum, difference, product, or negation that leaves its type's range, a
+// division or remainder by zero, and the least Int over minus one each end
+// Main.run with the status an index out of range reports. The argument
+// count picks the case, and with no arguments every edge that stays in
+// range computes and the program exits 7
+E is either Bad
+
+contract Main {
+    pledge run(args: List<String>) -> Result<Int, E> {
+        let n = len(args)
+        let big = 9223372036854775807
+        let least = -9223372036854775807 - 1
+        let small: UInt = 1
+        let none: UInt = 0
+        let wide: Byte = 200
+        if n == 0 {
+            let edges = big - 1 + 1 == big && least + 1 - 1 == least && least / 1 == least
+            let rest = least % 2 == 0 && -big == least + 1 && 7 / -2 == -3 && 7 % -2 == 1
+            if edges && rest && small - small == none {
+                return Ok(7)
+            }
+            return Ok(1)
+        }
+        if n == 1 {
+            return Ok(big + n)
+        }
+        if n == 2 {
+            return Ok(least - (n - 1))
+        }
+        if n == 3 {
+            return Ok(big * n)
+        }
+        if n == 4 {
+            return Ok(10 / (n - 4))
+        }
+        if n == 5 {
+            return Ok(10 % (n - 5))
+        }
+        if n == 6 {
+            return Ok(least / (5 - n))
+        }
+        if n == 7 {
+            return Ok(least % (6 - n))
+        }
+        if n == 8 {
+            return Ok(-(least + n - 8))
+        }
+        if n == 9 {
+            let under = none - small
+            return Ok(0)
+        }
+        if n == 10 {
+            let over = wide + wide
+            return Ok(0)
+        }
+        if n == 11 {
+            let zero: Byte = 0
+            let cut = wide / zero
+            return Ok(0)
+        }
+        if n == 12 {
+            let span = 1h * (big / 2)
+            return Ok(0)
+        }
+        if n == 13 {
+            let ups = small / none
+            return Ok(0)
+        }
+        let xs = List<Int>(1, 2)
+        return Ok(xs[n])
+    }
+}

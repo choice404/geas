@@ -90,12 +90,12 @@ std::string CEmitter::vowDefaultText(const VowDecl& vow, TyId type) const {
     } else if (kindOf(type) == TyKind::Float) {
         const auto* number = std::get_if<FloatLiteral>(&literal->kind);
         const std::string spelling =
-            number == nullptr ? decimal(literalNumber(*literal)) : number->spelling;
+            number == nullptr ? decimal(literalNumber(*literal)) : cFloat(number->spelling);
         value = joined(".f = ", isNegated ? "-" : "", spelling);
     } else {
         const std::int64_t number = literalNumber(*literal);
         value =
-            joined(".", lookup_.unionFieldOf(type), " = ", decimal(isNegated ? -number : number));
+            joined(".", lookup_.unionFieldOf(type), " = ", cInteger(isNegated ? -number : number));
     }
     return joined("{ .ty = ", lookup_.tagOf(type), ", .tag = 0, .as = { ", value, " } }");
 }
@@ -212,12 +212,23 @@ std::string ownerTag(AttrTarget target) {
     return "GEAS_ATTR_CONTRACT";
 }
 
-std::string floatDigits(std::string_view spelling) {
-    std::string digits;
-    for (const char digit : spelling) {
-        if (digit != '_') digits.push_back(digit);
+// The symbol attribute of a declaration, null when it names none
+const Attr* symbolAttr(const std::vector<Attr>& attrs) {
+    for (const Attr& attr : attrs) {
+        if (attr.key == "symbol") {
+            return &attr;
+        }
     }
-    return digits;
+    return nullptr;
+}
+
+bool hasAnySymbol(const std::vector<const Attr*>& rows) {
+    for (const Attr* row : rows) {
+        if (row != nullptr) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace
@@ -231,12 +242,12 @@ std::string CEmitter::attrValueText(ExprId value) const {
     std::string tag = "GEAS_TY_INT";
     std::string arm;
     if (const auto* integer = std::get_if<IntLiteral>(&literal->kind)) {
-        arm = joined(".i = ", sign, decimal(integer->value));
+        arm = joined(".i = ", sign, cInteger(integer->value));
     } else if (const auto* duration = std::get_if<DurationLiteral>(&literal->kind)) {
-        arm = joined(".i = ", sign, decimal(duration->milliseconds));
+        arm = joined(".i = ", sign, cInteger(duration->milliseconds));
     } else if (const auto* number = std::get_if<FloatLiteral>(&literal->kind)) {
         tag = "GEAS_TY_FLOAT";
-        arm = joined(".f = ", sign, floatDigits(number->spelling));
+        arm = joined(".f = ", sign, cFloat(number->spelling));
     } else if (const auto* boolean = std::get_if<BoolLiteral>(&literal->kind)) {
         tag = "GEAS_TY_BOOL";
         arm = joined(".b = ", boolean->value ? "1" : "0");
@@ -282,6 +293,55 @@ void CEmitter::emitAttrTail(const ContractShape& shape, std::vector<std::string>
     top("");
     tail.push_back(joined("    .nattrs = ", decimal(static_cast<std::int64_t>(entries.size())),
                           ", .attrs = ", symbol, ","));
+}
+
+/**
+ * Emits one foreign symbol table, a C string per row naming the function the
+ * host exports and NULL for a row that names none.
+ * @params symbol - the table's symbol, rows - one symbol attribute or null per row
+ * @returns {std::string} - the table's symbol, NULL when no row names a symbol
+ */
+std::string CEmitter::emitSymbolTable(std::string_view symbol, const std::vector<const Attr*>& rows) {
+    if (!hasAnySymbol(rows)) {
+        return "NULL";
+    }
+    top(joined("static const char* const ", symbol, "[] = {"));
+    for (const Attr* row : rows) {
+        const auto* text = row == nullptr ? nullptr
+                                          : std::get_if<StringLiteral>(&ast().expr(row->value).kind);
+        top(text == nullptr ? std::string{"    NULL,"}
+                            : joined("    ", cString(text->body).literal, ","));
+    }
+    top("};");
+    top("");
+    return std::string{symbol};
+}
+
+/**
+ * Emits the foreign symbol tables of one contract: one row per pledges table
+ * row, signals included and always NULL, and one per remedy, each naming the
+ * symbol its abi and symbol attributes bind it to.
+ * @params shape - the contract
+ * @returns {std::string} - the descriptor line naming the tables, empty when no pledge and no
+ * remedy names a symbol
+ */
+std::string CEmitter::emitForeignSymbols(const ContractShape& shape) {
+    std::vector<const Attr*> pledges;
+    for (const PledgeShape& pledge : shape.pledges) {
+        pledges.push_back(pledge.decl->body ? nullptr : symbolAttr(pledge.decl->attrs));
+    }
+    pledges.resize(shape.pledges.size() + shape.signals.size(), nullptr);
+    std::vector<const Attr*> remedies;
+    for (const RemedyShape& remedy : shape.remedies) {
+        remedies.push_back(remedy.decl->body ? nullptr : symbolAttr(remedy.decl->attrs));
+    }
+    if (!hasAnySymbol(pledges) && !hasAnySymbol(remedies)) {
+        return "";
+    }
+    const std::string stem = contractStem(shape.decl->name);
+    const std::string pledgeTable = emitSymbolTable(joined(stem, "_pledge_symbols"), pledges);
+    const std::string remedyTable = emitSymbolTable(joined(stem, "_remedy_symbols"), remedies);
+    return joined("    .pledge_symbols = ", pledgeTable, ", .remedy_symbols = ", remedyTable, ",");
 }
 
 }  // namespace geas

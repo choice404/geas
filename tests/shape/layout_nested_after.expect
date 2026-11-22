@@ -1,3 +1,3 @@
 // shape Orders v1: contract Orders;pledge place:(NOrder)->R(S,I);type Card{number:S,expiry:I};type Order{id:S,card:NCard};
 #define GEAS_HASH_Orders 0x01ee8d8fb0e784fdULL
-#define GEAS_MANGLED_Orders_place "__geas_ash_Orders_place_465d528e92534a10_v1"
+#define GEAS_MANGLED_Orders_place "__geas_ash_6Orders_5place_465d528e92534a10_v1"

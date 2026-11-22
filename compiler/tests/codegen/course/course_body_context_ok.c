@@ -15,7 +15,7 @@ static GeasStatus geas_clause4_Flow_ordinary(GeasContract* cc, const GeasValue* 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Flow_step_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_4Flow_4step_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -27,7 +27,7 @@ static GeasStatus __geas_ash_Flow_step_0e2ba22315b89a85_v1(void* ctx, const Geas
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Flow_undo_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_4Flow_4undo_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -70,7 +70,7 @@ step_1:
 }
 
 static const GeasPledgeDesc k4_Flow_pledges[] = {
-    { "step", "__geas_ash_Flow_step_0e2ba22315b89a85_v1", 0, __geas_ash_Flow_step_0e2ba22315b89a85_v1, -1 },
+    { "step", "__geas_ash_4Flow_4step_0e2ba22315b89a85_v1", 0, __geas_ash_4Flow_4step_0e2ba22315b89a85_v1, -1 },
 };
 
 static const GeasReqAtom k4_Flow_atoms[] = {
@@ -87,7 +87,7 @@ static const GeasReqOp k4_Flow_rb[] = {
 };
 
 static const GeasRemedyDesc k4_Flow_remedies[] = {
-    { "undo", "__geas_ash_Flow_undo_0e2ba22315b89a85_v1", 0, 0, __geas_ash_Flow_undo_0e2ba22315b89a85_v1, { 0 } },
+    { "undo", "__geas_ash_4Flow_4undo_0e2ba22315b89a85_v1", 0, 0, __geas_ash_4Flow_4undo_0e2ba22315b89a85_v1, { 0 } },
 };
 
 static const GeasTypeNode k4_Flow_types[] = {
@@ -102,6 +102,8 @@ static const GeasItemTypes k4_Flow_remedy_types[] = {
     { 0, NULL, 0 },
 };
 
+static const uint32_t k4_Flow_course_slot_types[] = { 0 };
+
 static const GeasContractDesc k4_Flow = {
     "Flow", 0xc993d0dc196dbf77ULL,
     1, 1, k4_Flow_pledges,
@@ -115,10 +117,11 @@ static const GeasContractDesc k4_Flow = {
     NULL, NULL, NULL,
     1, k4_Flow_remedies,
     0,
-    .course_fn = k4_Flow_course, .course_nslots = 1, .course_hash = 0x7d6c5b5c69124961ULL,
+    .course_fn = k4_Flow_course, .course_nslots = 1, .course_hash = 0x77d65025810d80acULL,
     .ntypes = 1, .types = k4_Flow_types,
     .item_types = k4_Flow_item_types, .vow_types = NULL,
     .remedy_types = k4_Flow_remedy_types,
+    .course_slot_types = k4_Flow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

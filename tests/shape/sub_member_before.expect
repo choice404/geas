@@ -1,0 +1,4 @@
+// shape C v1: contract C;pledge charge:(I)->R(V,I);pledge settle:()->R(V,I);sub Payment:charge;
+#define GEAS_HASH_C 0x688edc939389bb80ULL
+#define GEAS_MANGLED_C_charge "__geas_ash_1C_6charge_c796594399fcc0bc_v1"
+#define GEAS_MANGLED_C_settle "__geas_ash_1C_6settle_b9b210de0ddf9d5b_v1"

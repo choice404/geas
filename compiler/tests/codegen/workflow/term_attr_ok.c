@@ -2,7 +2,7 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k4_Saga_pledges[] = {
-    { "ship", "__geas_ash_Saga_ship_0e2ba22315b89a85_v2", 0, NULL, -1 },
+    { "ship", "__geas_ash_4Saga_4ship_0e2ba22315b89a85_v2", 0, NULL, -1 },
 };
 
 static const GeasReqAtom k4_Saga_atoms[] = {
@@ -26,6 +26,10 @@ static const GeasItemTypes k4_Saga_item_types[] = {
     { 0, NULL, 0 },
 };
 
+static const char* const k4_Saga_pledge_symbols[] = {
+    "ship_it",
+};
+
 static const GeasContractDesc k4_Saga = {
     "Saga", 0xf07b4b97ee4e14ddULL,
     2, 1, k4_Saga_pledges,
@@ -42,6 +46,7 @@ static const GeasContractDesc k4_Saga = {
     .ntypes = 1, .types = k4_Saga_types,
     .item_types = k4_Saga_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .pledge_symbols = k4_Saga_pledge_symbols, .remedy_symbols = NULL,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

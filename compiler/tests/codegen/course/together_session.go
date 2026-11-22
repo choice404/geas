@@ -18,7 +18,7 @@ import (
 // FlowShapeHash is the contract's shape hash, the same value the
 // compiled module registers. A SignRequest carrying it pins the wire to
 // this build; 0 skips the check.
-const FlowShapeHash uint64 = 0x52942299fc5472bd
+const FlowShapeHash uint64 = 0xd7026eb54688c109
 
 // FlowSession holds a signed instance open. The instance lives
 // exactly as long as this handle: Close ends the stream, and the server

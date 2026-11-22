@@ -78,23 +78,11 @@ def saga_runtime(host, kinds):
     return rt
 
 
-def settled(call):
-    """Runs call, retrying while a worker still delivers the last events"""
-    deadline = time.monotonic() + WAIT_SECONDS
-    while True:
-        try:
-            return call()
-        except GeasError as error:
-            if error.status != GEAS_ERR_STATE or time.monotonic() > deadline:
-                raise
-            time.sleep(0.001)
-
-
 def through_reserve(saga):
     auth = saga.fulfill_sync("authorize", Record("4111"))
     receipt = saga.fulfill_sync("capture", Record(*auth.value))
     check(isinstance(receipt, Ok), f"capture lands, got {receipt}")
-    res = settled(lambda: saga.fulfill_sync("reserve", "sku-1", 3_600_000))
+    res = saga.fulfill_sync("reserve", "sku-1", 3_600_000)
     check(isinstance(res, Ok), f"reserve lands, got {res}")
     check(saga.state() == GEAS_PARTIAL, "Payment alone is partial")
     return res.value
@@ -105,7 +93,7 @@ def request_while_shipping(saga, host, res):
     host.is_holding_ship = True
     outcome = []
     shipper = Thread(target=lambda: outcome.append(
-        settled(lambda: saga.fulfill_sync("ship", Record(*res)))))
+        saga.fulfill_sync("ship", Record(*res))))
     shipper.start()
     check(host.ship_started.wait(WAIT_SECONDS), "ship started")
     saga.request_cancel()
@@ -122,8 +110,8 @@ def give(host, kinds):
     saga = rt.sign("OrderSaga")
     res = through_reserve(saga)
     request_while_shipping(saga, host, res)
-    settled(lambda: saga.park(DSN, KEY))
-    settled(saga.release)
+    saga.park(DSN, KEY)
+    saga.release()
     check(kinds.count(GEAS_EVENT_RELEASED) == 1, "one released event")
     check(GEAS_EVENT_REMEDY_STARTED not in kinds, "no remedy started")
     check(host.refunds == [], "no refund ran")

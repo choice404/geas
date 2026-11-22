@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/mangle_split.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Contract A with the pledge b_c beside contract A_b with the pledge c. The
+  ^

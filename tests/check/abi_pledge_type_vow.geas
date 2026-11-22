@@ -1,4 +1,5 @@
-// A vow of pledge type: vows cross the boundary at sign time.
+// A vow of pledge type, refused: pledge values are not part of this version
+// of the language.
 
 contract Gate {
     vow step: pledge(Int) -> Unit

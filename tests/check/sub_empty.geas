@@ -1,0 +1,11 @@
+// A subcontract is fulfilled when every pledge and signal in it is, so one
+// that holds neither is refused, named or not
+PayError is either Declined
+
+contract Shop {
+    subcontract Billing {
+    }
+    subcontract {
+    }
+    pledge pay() -> Result<Unit, PayError>
+}

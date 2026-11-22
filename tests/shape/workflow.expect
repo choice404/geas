@@ -1,10 +1,10 @@
-// shape Saga v2: contract Saga;vow grace:D;pledge capture:(W)->R(NReceipt,NPayError);pledge audit:()->V;pledge ship:()->V;signal delivered:(S,I)->V;signal cancelled:()->V;remedy refund:capture:(NReceipt)->R(V,NPayError);remedy recall:ship:()->V;terms pledge capture:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout;terms pledge ship:after=Payment;terms subcontract Payment:within=600000;terms subcontract #1:after=capture;terms signal delivered:after=ship,within=1209600000;terms remedy refund:retry=10/every=60000;course;term 604800000;type PayError=Declined(reason:S)|Timeout;type Receipt{id:S};
-#define GEAS_HASH_Saga 0xb24be960a73043fbULL
-#define GEAS_MANGLED_Saga_capture "__geas_ash_Saga_capture_1c32b0f29194b85d_v2"
-#define GEAS_MANGLED_Saga_audit "__geas_ash_Saga_audit_0e2ba22315b89a85_v2"
-#define GEAS_MANGLED_Saga_ship "__geas_ash_Saga_ship_0e2ba22315b89a85_v2"
-#define GEAS_MANGLED_Saga_refund "__geas_ash_Saga_refund_5af95a2eebc07fe2_v2"
-#define GEAS_MANGLED_Saga_recall "__geas_ash_Saga_recall_0e2ba22315b89a85_v2"
+// shape Saga v2: contract Saga;vow grace:D;pledge capture:(W)->R(NReceipt,NPayError);pledge audit:()->V;pledge ship:()->V;signal delivered:(S,I)->V;signal cancelled:()->V;remedy refund:capture:(NReceipt)->R(V,NPayError);remedy recall:ship:()->V;terms pledge capture:within=30000,retry=3/every=2000/backoff=2/cap=30000/on=Timeout;terms pledge ship:after=Payment;terms subcontract Payment:within=600000;terms subcontract #1:after=capture;terms signal delivered:after=ship,within=1209600000;terms remedy refund:retry=10/every=60000;course;term 604800000;sub Payment:capture;sub #1:audit;type PayError=Declined(reason:S)|Timeout;type Receipt{id:S};
+#define GEAS_HASH_Saga 0x255edc463f2878beULL
+#define GEAS_MANGLED_Saga_capture "__geas_ash_4Saga_7capture_1c32b0f29194b85d_v2"
+#define GEAS_MANGLED_Saga_audit "__geas_ash_4Saga_5audit_0e2ba22315b89a85_v2"
+#define GEAS_MANGLED_Saga_ship "__geas_ash_4Saga_4ship_0e2ba22315b89a85_v2"
+#define GEAS_MANGLED_Saga_refund "__geas_ash_4Saga_6refund_5af95a2eebc07fe2_v2"
+#define GEAS_MANGLED_Saga_recall "__geas_ash_4Saga_6recall_0e2ba22315b89a85_v2"
 // shape Plain v1: contract Plain;pledge ship:()->V;
 #define GEAS_HASH_Plain 0x8afcc85ac86bf6c6ULL
-#define GEAS_MANGLED_Plain_ship "__geas_ash_Plain_ship_0e2ba22315b89a85_v1"
+#define GEAS_MANGLED_Plain_ship "__geas_ash_5Plain_4ship_0e2ba22315b89a85_v1"

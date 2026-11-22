@@ -12,7 +12,7 @@ package geas.bridge;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/bridgepb";
 
-// contract Shop, version 2, shape 0x0eeff175659afd33.
+// contract Shop, version 2, shape 0xdc887e059ba35a81.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message ShopSignRequest {
@@ -240,7 +240,7 @@ message ShopAuditRequest {
   StringBoolMap flags = 2;
 }
 
-// contract Depot, version 1, shape 0x6738cc8f56d8db33.
+// contract Depot, version 1, shape 0x52671c50f69e7a52.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message DepotSignRequest {

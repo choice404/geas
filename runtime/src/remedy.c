@@ -40,6 +40,7 @@ GeasStatus geas_rt_resolve_remedies(const GeasRuntime* rt,
     for (uint32_t i = 0; i < desc->nremedies; i++) {
         GeasPledgeFn fn = geas_rt_find_binding(rt, &desc->remedies[i]);
         if (!fn) fn = desc->remedies[i].fn;
+        if (!fn) fn = geas_rt_foreign_remedy(desc, i);
         if (!fn) {
             free(fns);
             return GEAS_ERR_UNBOUND;
@@ -127,13 +128,12 @@ static void remedy_fail(GeasContract* c, uint32_t r, GeasStatus st,
 static int remedy_wait(GeasContract* c, const GeasTermDesc* t, int64_t started,
                        uint32_t attempt) {
     uint64_t delay = geas_rt_retry_delay(t, attempt);
-    int64_t at = INT64_MAX;
-    if (t->within_ms > 0 && t->within_ms < (uint64_t)(INT64_MAX - started)) {
-        at = started + (int64_t)t->within_ms;
-    }
-    int64_t left = at - geas_rt_now(c->rt);
-    if (left <= 0) return 0;
-    if ((uint64_t)left < delay) delay = (uint64_t)left;
+    int64_t at = t->within_ms > 0 ? geas_rt_ms_after(started, t->within_ms) : INT64_MAX;
+    /* Saturating, so a clock below zero or at either end of time reads the
+     * time left as it is */
+    uint64_t left = geas_rt_ms_until(at, geas_rt_now(c->rt));
+    if (left == 0) return 0;
+    if (left < delay) delay = left;
     if (delay > 0) {
         geas_rt_unlock(c);
         geas_rt_sleep(c->rt, delay);
@@ -216,6 +216,13 @@ static void run_remedy(GeasContract* c, uint32_t r) {
 
 /* ---- the pass ---- */
 
+/* The instance whose pass this thread runs, NULL elsewhere */
+static __thread const GeasContract* t_pass;
+
+int geas_rt_remedy_pass_here(const GeasContract* c) {
+    return t_pass == c;
+}
+
 /* Runs every remedy still owed, then latches Broken, performs the reclaim a
  * host break left pending, and wakes whoever waits on the pass. Entered
  * only when the contract is Remedying and no thread owns the pass: a tick or
@@ -250,6 +257,10 @@ void geas_rt_remedy_drive(GeasContract* c) {
     }
     f->remedy_active = 1;
     f->remedy_owner = pthread_self();
+    /* A host call waiting out a delivery stops at another thread's pass */
+    geas_rt_delivery_wake(c);
+    const GeasContract* outer_pass = t_pass;
+    t_pass = c;
     for (;;) {
         int32_t r = next_remedy(c);
         if (r < 0) break;
@@ -260,11 +271,13 @@ void geas_rt_remedy_drive(GeasContract* c) {
         geas_rt_unlock(c);
         geas_rt_lock(c);
     }
+    t_pass = outer_pass;
     f->remedy_active = 0;
     geas_rt_set_state(c, GEAS_BROKEN);
     if (f->break_pending) geas_rt_reclaim(c);
     else if (f->release_pending) geas_rt_release_carry(c);
     pthread_cond_broadcast(&f->remedy_cv);
+    geas_rt_delivery_wake(c);
 }
 
 /* The host's break. A contract still Signed or Partial breaks like any

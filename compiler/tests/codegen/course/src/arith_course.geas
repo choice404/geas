@@ -1,0 +1,15 @@
+// Checked arithmetic inside a course: a failed check records the status in
+// the frame and stops the course, through the same exit every runtime
+// helper takes there
+E is either Bad
+
+contract Tally {
+    pledge count() -> Result<Int, E>
+    pledge keep(total: Int) -> Result<Unit, E>
+    course {
+        let n = count()?
+        let doubled = n * 2 + n / (n - 1) - -n % 3
+        sleep 1s * n
+        keep(doubled)?
+    }
+}

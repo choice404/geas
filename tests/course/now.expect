@@ -1,6 +1,6 @@
 Courses [
     Course "Flow" {
-        hash: 0x2eb447dea37a4ad3,
+        hash: 0x75539dd1756aa46f,
         entry: 0,
         slots: [
             Slot(0) "started": Time (local),

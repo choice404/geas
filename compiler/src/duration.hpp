@@ -36,6 +36,15 @@ bool isDurationUnitLead(int c);
 std::expected<std::int64_t, DurationError> parseDuration(std::string_view literal);
 
 /**
+ * Decodes a whole duration literal into its count of milliseconds as a
+ * magnitude, which reaches one past the greatest Int: the magnitude of the
+ * least Int, a value only a literal right after a unary minus may spell.
+ * @params literal - the literal text, starting with a digit
+ * @returns {std::expected<std::uint64_t, DurationError>} - the milliseconds, or why it was refused
+ */
+std::expected<std::uint64_t, DurationError> parseDurationMagnitude(std::string_view literal);
+
+/**
  * The diagnostic message for a refused duration.
  * @params error - the refusal to name
  * @returns {std::string_view} - a static message

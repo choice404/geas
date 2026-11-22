@@ -1,0 +1,14 @@
+// The transactional pair for a subcontract, see
+// sub_transactional_before.geas: Move is transactional
+contract Bank {
+    vow dsn: String = "file:bank.db"
+
+    schema Accounts {
+        id: Int
+        balance: Float
+    }
+
+    subcontract Move transactional {
+        pledge debit(id: Int) -> Result<Unit, Int>
+    }
+}

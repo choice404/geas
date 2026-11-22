@@ -1,0 +1,4 @@
+// shape C v1: contract C;pledge charge:(I)->R(V,I);pledge ship:()->R(V,I);requirements fulfill=charge,partial=ship,break=!charge;
+#define GEAS_HASH_C 0x35b65c152c627759ULL
+#define GEAS_MANGLED_C_charge "__geas_ash_1C_6charge_c796594399fcc0bc_v1"
+#define GEAS_MANGLED_C_ship "__geas_ash_1C_4ship_b9b210de0ddf9d5b_v1"

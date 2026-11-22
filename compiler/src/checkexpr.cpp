@@ -16,6 +16,10 @@ namespace {
 
 constexpr std::int64_t byteMaximum = 255;
 
+// The name of the Unit value, read as one wherever no binding or
+// declaration claims it first
+constexpr std::string_view unitValueName = "Unit";
+
 std::string_view operatorText(BinaryOp op) {
     switch (op) {
         case BinaryOp::Add: return "+";
@@ -102,9 +106,11 @@ bool Checker::isTemporal(TyId type) const {
 
 // An integer literal types as Int unless the expected type is UInt, or Byte
 // with the value in range. The lexer already refused values above the Int
-// maximum, so a literal always fits UInt
+// maximum, so a literal always fits UInt, and the least Int, which the
+// parser folds out of a unary minus, is the one negative literal
 TyId Checker::inferInt(const Expr& expr, const IntLiteral& literal, TyId want) {
-    if (!want.isSet()) {
+    // The least Int, the one literal that is negative, is an Int wherever it sits
+    if (!want.isSet() || literal.value < 0) {
         return scalar(TyKind::Int);
     }
     const TyKind wanted = kindOf(want);
@@ -152,9 +158,13 @@ TyId Checker::inferMemberIdent(const Expr& expr, const std::string& name,
     return unknown();
 }
 
-// A bare name nothing declares. Inside an amends value prior stands for the
-// older instance, read one vow at a time as prior.NAME and never whole
+// A bare name nothing declares. Unit is the one value of type Unit, and
+// inside an amends value prior stands for the older instance, read one vow
+// at a time as prior.NAME and never whole
 TyId Checker::inferUndeclaredIdent(const Expr& expr, const std::string& name) {
+    if (name == unitValueName) {
+        return scalar(TyKind::Unit);
+    }
     if (isInAmends_ && name == "prior") {
         markUse(expr, ExprUse::PriorInstance);
         emitAt(expr, "prior is the instance of the amended version, not a value; read one of its "
@@ -338,7 +348,13 @@ TyId Checker::inferArithmetic(const Expr& expr, const BinaryExpr& binary, TyId w
                                   left, " and ", right));
         return unknown();
     }
-    return kindOf(left) == TyKind::Unknown ? right : left;
+    const TyId operand = kindOf(left) == TyKind::Unknown ? right : left;
+    // The remainder is an integer operation, Float has none
+    if (binary.op == BinaryOp::Mod && kindOf(operand) == TyKind::Float) {
+        emitAt(expr, "operator '%' does not apply to 'Float'");
+        return unknown();
+    }
+    return operand;
 }
 
 TyId Checker::inferBinary(const Expr& expr, const BinaryExpr& binary, TyId want) {

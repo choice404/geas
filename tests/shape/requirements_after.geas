@@ -1,0 +1,11 @@
+// The requirements pair, see requirements_before.geas: the block asks only
+// for charge to fulfill the contract
+contract C {
+    pledge charge(amount: Int) -> Result<Unit, Int>
+    pledge ship() -> Result<Unit, Int>
+    requirements {
+        fulfill: charge
+        partial: ship
+        break: !charge
+    }
+}

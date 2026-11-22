@@ -23,7 +23,7 @@ export interface SessionStream {
 // AmendSeedRemedyShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const AmendSeedRemedyShapeHash: bigint = 0xec16f4d1753ce765n;
+export const AmendSeedRemedyShapeHash: bigint = 0xaad096debfee8a1en;
 
 export interface AmendSeedRemedySignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins
@@ -101,6 +101,21 @@ export function resumeAmendSeedRemedySession(
     });
     stream.on("error", (err) => {
       if (!opened) { reject(err); }
+    });
+  });
+}
+
+// signalAmendSeedRemedyReady hands the ready signal to the session's instance. The
+// promise settles once the server answered, and a refused delivery, an
+// early one or one past its deadline, rejects with the call's error.
+export function signalAmendSeedRemedyReady(
+  client: { SignalReady(req: object, done: (err: Error | null) => void): unknown },
+  session: AmendSeedRemedySession,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = { instance_id: session.signed.instance_id };
+    client.SignalReady(req, (err) => {
+      if (err) { reject(err); } else { resolve(); }
     });
   });
 }

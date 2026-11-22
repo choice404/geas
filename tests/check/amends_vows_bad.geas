@@ -7,6 +7,7 @@ contract AmendVows [version: 2] {
     vow address: Int
     vow items: List<String>
     vow note: String
+    vow span: Duration
 
     amends 1 {
         rename url -> address
@@ -15,5 +16,7 @@ contract AmendVows [version: 2] {
         vow note = prior.missing
         vow note = prior
         rename ghost -> keep
+        vow span = prior.stamp
+        rename stamp -> span
     }
 }

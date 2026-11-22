@@ -1,0 +1,11 @@
+// A foreign symbol never takes a name the runtime owns: every name that
+// starts with geas_, __geas_, or GEAS_ belongs to the runtime and the code
+// geas emits, while a name that only holds geas further in is the host's
+contract Foreign {
+    pledge breaks() -> Unit [abi: "c", symbol: "geas_contract_break"]
+    pledge mangled() -> Unit [abi: "c", symbol: "__geas_ash_1F_2go"]
+    pledge shouted() -> Unit [abi: "c", symbol: "GEAS_HASH_Foreign"]
+    pledge hosted() -> Unit [abi: "c", symbol: "host_geas_fn"]
+    pledge undone() -> Result<Int, Int>
+    remedy undo for undone(value: Int) -> Unit [abi: "c", symbol: "geas_undo"]
+}

@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/course/src/arith_course.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Checked arithmetic inside a course: a failed check records the status in
+  ^

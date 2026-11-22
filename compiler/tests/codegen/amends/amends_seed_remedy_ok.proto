@@ -12,7 +12,7 @@ package geas.amends_seed_remedy_ok;
 // lays its module out differently overrides this with protoc's M flags.
 option go_package = "geasbridge/amends_seed_remedy_okpb";
 
-// contract AmendSeedRemedy, version 2, shape 0xec16f4d1753ce765.
+// contract AmendSeedRemedy, version 2, shape 0xaad096debfee8a1e.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message SignRequest {
@@ -54,11 +54,14 @@ message IntStringResult {
   }
 }
 
-// Result<String, String>: the contract's own Err is a value, not a
+// The Ok of a pledge that answers with nothing; the message is the value.
+message Unit {}
+
+// Result<Unit, String>: the contract's own Err is a value, not a
 // transport error.
-message StringStringResult {
+message UnitStringResult {
   oneof result {
-    string ok = 1;
+    Unit ok = 1;
     string err = 2;
   }
 }
@@ -72,6 +75,11 @@ message NotifyRequest {
 }
 
 message AuditRequest {
+  uint64 instance_id = 1;
+}
+
+// signal ready, delivered into a live instance.
+message SignalReadyRequest {
   uint64 instance_id = 1;
 }
 
@@ -105,6 +113,10 @@ message PartialReply {
 message BreakRequest { uint64 instance_id = 1; }
 message BreakReply {}
 
+// The answer of every signal rpc: the delivery landed, or a repeat of one
+// that already had, which changes nothing. A refusal is the call's status.
+message SignalReply {}
+
 service AmendSeedRemedy {
   // Signs, then holds. The first event carries the signature; the stream
   // then stays open and empty for as long as the instance lives. Ending the
@@ -114,8 +126,11 @@ service AmendSeedRemedy {
   // instance's life, and its first event carries the signature.
   rpc Resume(ResumeRequest) returns (stream SessionEvent);
   rpc Ship(ShipRequest) returns (IntStringResult);
-  rpc Notify(NotifyRequest) returns (StringStringResult);
+  rpc Notify(NotifyRequest) returns (UnitStringResult);
   rpc Audit(AuditRequest) returns (IntStringResult);
+  // A signal is an outside event the host delivers: no body runs, the
+  // first delivery wins, and a refused delivery is the call's status.
+  rpc SignalReady(SignalReadyRequest) returns (SignalReply);
   rpc GetPartial(PartialRequest) returns (PartialReply);
   rpc Break(BreakRequest) returns (BreakReply);
 }

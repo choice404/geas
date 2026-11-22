@@ -110,7 +110,7 @@ export function resumeCounterSession(
 // DuoShapeHash is the contract's shape hash, the same value the
 // compiled module registers. Sending its decimal spelling as expected_hash
 // pins the wire to this build; leaving the field unset skips the check.
-export const DuoShapeHash: bigint = 0x546940363d4d6668n;
+export const DuoShapeHash: bigint = 0xa3a37e10b477117bn;
 
 export interface DuoSignRequest {
   expected_hash?: string;  // a decimal uint64; the shape hash's toString() pins

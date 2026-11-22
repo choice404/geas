@@ -1,0 +1,9 @@
+// The course calls another clause of the same signature
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    clause one(value: Int) -> Int { return value + 1 }
+    clause two(value: Int) -> Int { return value + 2 }
+    course {
+        visit(two(1))?
+    }
+}

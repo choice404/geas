@@ -1,0 +1,6 @@
+// The Unit value has type Unit and takes part in no arithmetic
+contract U {
+    clause bad() -> Int {
+        return Unit + 1
+    }
+}

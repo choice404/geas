@@ -44,7 +44,7 @@ static GeasStatus signal_gate(GeasContract* c, const char* name, size_t nargs,
     uint32_t i = (uint32_t)(p - c->desc->pledges);
     if (!geas_rt_is_signal(c->desc, i)) return GEAS_ERR_TYPE;
     if (nargs != p->nargs) return GEAS_ERR_TYPE;
-    if (c->flow.pledge_eligible_ms[i] < 0) return GEAS_ERR_STATE;
+    if (c->flow.pledge_eligible_ms[i] == GEAS_NOT_ELIGIBLE) return GEAS_ERR_STATE;
     if (c->flow.pledge_lapsed[i]) return GEAS_ERR_STATE;
     *pidx = i;
     return GEAS_OK;
@@ -55,6 +55,9 @@ GeasStatus geas_signal(GeasContract* c, const char* name,
     if (!c || !name) return GEAS_ERR_TYPE;
     if (nargs > 0 && !args) return GEAS_ERR_TYPE;
     geas_rt_lock(c);
+    /* A host thread waits out another thread's delivery; a hook, a body, or
+     * a write back keeps the gate's refusal */
+    geas_rt_await_delivery(c, GEAS_AWAIT_LIVE);
     geas_rt_tick(c);
     uint32_t pidx = 0;
     GeasStatus st = signal_gate(c, name, nargs, &pidx);

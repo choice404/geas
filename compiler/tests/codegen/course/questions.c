@@ -161,10 +161,10 @@ step_5:
     {
         GeasValue t36 = {0};
         t36.ty = GEAS_TY_INT;
-        t36.as.i = f->slots[1].as.i + f->slots[8].as.i;
+        if (__builtin_add_overflow(f->slots[1].as.i, f->slots[8].as.i, &t36.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         GeasValue t37 = {0};
         t37.ty = GEAS_TY_INT;
-        t37.as.i = t36.as.i + f->slots[11].as.i;
+        if (__builtin_add_overflow(t36.as.i, f->slots[11].as.i, &t37.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         f->slots[12] = t37;
     }
     return GEAS_COURSE_DONE;
@@ -172,7 +172,7 @@ step_5:
 }
 
 static const GeasPledgeDesc k4_Flow_pledges[] = {
-    { "value", "__geas_ash_Flow_value_bb9b2465b4ec69ea_v1", 0, NULL, -1 },
+    { "value", "__geas_ash_4Flow_5value_bb9b2465b4ec69ea_v1", 0, NULL, -1 },
     { "ready", NULL, 1, NULL, -1 },
 };
 
@@ -201,6 +201,7 @@ static const uint8_t k4_Flow_kinds[] = {
 };
 
 static const uint32_t k4_Flow_type_kids_0[] = { 1, 2 };
+static const uint32_t k4_Flow_type_kids_3[] = { 1 };
 
 static const GeasTypeVariant k4_Flow_type_variants_2[] = {
     { "Failed", 0, NULL },
@@ -210,6 +211,7 @@ static const GeasTypeNode k4_Flow_types[] = {
     { GEAS_TY_RESULT, 2, k4_Flow_type_kids_0, NULL, 0, NULL },
     { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
     { GEAS_TY_SUM, 0, NULL, "Problem", 1, k4_Flow_type_variants_2 },
+    { GEAS_TY_OPTION, 1, k4_Flow_type_kids_3, NULL, 0, NULL },
 };
 
 static const uint32_t k4_Flow_item_params_1[] = { 1 };
@@ -218,6 +220,8 @@ static const GeasItemTypes k4_Flow_item_types[] = {
     { 0, NULL, 0 },
     { 1, k4_Flow_item_params_1, GEAS_NO_TYPE },
 };
+
+static const uint32_t k4_Flow_course_slot_types[] = { 0, 1, 3, 0, 1, 1, 3, 1, 1, 0, 0, 1, 1 };
 
 static const GeasContractDesc k4_Flow = {
     "Flow", 0xa52a98e6eef86695ULL,
@@ -232,10 +236,11 @@ static const GeasContractDesc k4_Flow = {
     k4_Flow_kinds, NULL, NULL,
     0, NULL,
     0,
-    .course_fn = k4_Flow_course, .course_nslots = 13, .course_hash = 0x55bbddc11650401eULL,
-    .ntypes = 3, .types = k4_Flow_types,
+    .course_fn = k4_Flow_course, .course_nslots = 13, .course_hash = 0x0059467bbc26ca58ULL,
+    .ntypes = 4, .types = k4_Flow_types,
     .item_types = k4_Flow_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .course_slot_types = k4_Flow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

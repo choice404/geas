@@ -5,13 +5,22 @@
 // with its hash, and the mangled name of every pledge and remedy.
 //
 // The shape string spells the contract name, then each vow, pledge, and
-// schema, so a contract that uses none of the workflow surface hashes
-// exactly as it always has. Signals, remedies, terms, the course, and the
-// term attribute each append a segment of their own, and only when the
-// contract has one. Last come the layouts of the declared records and sums
-// the boundary reaches, see layout.hpp, so a contract that reaches none keeps
-// its string. A pledge's or remedy's signature hash is taken over its
-// signature spelling followed by the layouts that signature alone reaches
+// schema. Signals, remedies, terms, the course, and the term attribute each
+// append a segment of their own, and only when the contract has one. Then
+// comes one segment per subcontract, its name, its transactional flag, and
+// its members, and a segment for the requirements block when the source
+// wrote one, its three lines in canonical spelling:
+//
+//   sub NAME:member,member;                 a subcontract, #ordinal when anonymous
+//   sub NAME:transactional:member,member;   a transactional one
+//   requirements fulfill=(S&U),partial=-,break=!S;
+//
+// An atom is its name, ! negates the operand after it, every & and | sits
+// inside its own parentheses, and - is a line the block did not write.
+// Last come the layouts of the declared records and sums the boundary
+// reaches, see layout.hpp. A pledge's or remedy's signature hash is taken
+// over its signature spelling followed by the layouts that signature alone
+// reaches
 #pragma once
 
 #include <cstdint>
@@ -69,6 +78,14 @@ struct ContractShape {
     std::string shape;
     std::uint64_t shapeHash;
 };
+
+/**
+ * The shape string segment of one schema, schema NAME:column:code,...; with
+ * the columns in declaration order.
+ * @params sigs - the lowered signatures, types - the arena, schema - the schema
+ * @returns {std::string} - the segment
+ */
+std::string schemaSegment(const Sigs& sigs, const TypeArena& types, const SchemaDecl& schema);
 
 /**
  * The contract's version attribute, 1 when it carries none.

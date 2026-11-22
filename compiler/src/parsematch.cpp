@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "magnitude.hpp"
+
 namespace geas {
 
 // match CondExpr "{" { Pattern "->" ArmBody NL } "}"
@@ -116,9 +118,14 @@ PatternId Parser::parsePatternInner() {
     return ast_.addPattern(WildcardPattern{});
 }
 
-// "-" ( INT | SIZE | FLOAT | DURATION ), kept as a negated literal
+// "-" ( INT | SIZE | FLOAT | DURATION ), kept as a negated literal, or as
+// the least value itself when the literal is the least Int's magnitude
 PatternId Parser::parseNegativePattern() {
     const std::int64_t lo = current().lo;
+    if (isLeastMagnitude(text_, lookahead())) {
+        bump();
+        return ast_.addPattern(LiteralPattern{parseLeastLiteral(lo)});
+    }
     bump();
     const bool isNumber =
         at(TokenKind::Int) || at(TokenKind::Size) || at(TokenKind::Float) || at(TokenKind::Duration);

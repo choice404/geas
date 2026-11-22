@@ -8,7 +8,7 @@ static GeasStatus geas_clause4_Flow_add(GeasContract* cc, const GeasValue* args,
     (void)args;
     GeasValue t0 = {0};
     t0.ty = GEAS_TY_INT;
-    t0.as.i = args[0].as.i + args[1].as.i;
+    if (__builtin_add_overflow(args[0].as.i, args[1].as.i, &t0.as.i)) return GEAS_ERR_TYPE;
     *out = t0;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
@@ -419,8 +419,8 @@ label_3:
 }
 
 static const GeasPledgeDesc k4_Flow_pledges[] = {
-    { "value", "__geas_ash_Flow_value_1da73ef4d721fbeb_v1", 1, NULL, -1 },
-    { "flag", "__geas_ash_Flow_flag_a69749ba617797cf_v1", 0, NULL, -1 },
+    { "value", "__geas_ash_4Flow_5value_1da73ef4d721fbeb_v1", 1, NULL, -1 },
+    { "flag", "__geas_ash_4Flow_4flag_a69749ba617797cf_v1", 0, NULL, -1 },
     { "ready", NULL, 1, NULL, -1 },
 };
 
@@ -457,12 +457,16 @@ static const uint8_t k4_Flow_kinds[] = {
 
 static const uint32_t k4_Flow_type_kids_1[] = { 0 };
 static const uint32_t k4_Flow_type_kids_2[] = { 3 };
+static const uint32_t k4_Flow_type_kids_4[] = { 0, 0 };
+static const uint32_t k4_Flow_type_kids_5[] = { 0 };
 
 static const GeasTypeNode k4_Flow_types[] = {
     { GEAS_TY_INT, 0, NULL, NULL, 0, NULL },
     { GEAS_TY_OPTION, 1, k4_Flow_type_kids_1, NULL, 0, NULL },
     { GEAS_TY_OPTION, 1, k4_Flow_type_kids_2, NULL, 0, NULL },
     { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_RECORD, 2, k4_Flow_type_kids_4, "Pair", 0, NULL },
+    { GEAS_TY_LIST, 1, k4_Flow_type_kids_5, NULL, 0, NULL },
 };
 
 static const uint32_t k4_Flow_item_params_0[] = { 0 };
@@ -473,6 +477,8 @@ static const GeasItemTypes k4_Flow_item_types[] = {
     { 0, NULL, 2 },
     { 1, k4_Flow_item_params_2, GEAS_NO_TYPE },
 };
+
+static const uint32_t k4_Flow_course_slot_types[] = { 1, 0, 0, 0, 1, 0, 1, 4, 1, 0, 1, 5, 2, 3, 2, 3, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0 };
 
 static const GeasContractDesc k4_Flow = {
     "Flow", 0xd18339eb8215935aULL,
@@ -487,10 +493,11 @@ static const GeasContractDesc k4_Flow = {
     k4_Flow_kinds, NULL, NULL,
     0, NULL,
     0,
-    .course_fn = k4_Flow_course, .course_nslots = 32, .course_hash = 0x0b8fb4f02c0df01cULL,
-    .ntypes = 4, .types = k4_Flow_types,
+    .course_fn = k4_Flow_course, .course_nslots = 32, .course_hash = 0xbfa8422b732ec0feULL,
+    .ntypes = 6, .types = k4_Flow_types,
     .item_types = k4_Flow_item_types, .vow_types = NULL,
     .remedy_types = NULL,
+    .course_slot_types = k4_Flow_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

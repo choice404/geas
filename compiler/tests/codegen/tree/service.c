@@ -11,7 +11,7 @@ static const GeasSchemaDesc k7_Service_schemas[] = {
     { "Runs", 3, k7_Service_Runs_cols },
 };
 
-static GeasStatus __geas_ash_Service_finish_5edc7ff9541138c3_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7Service_6finish_5edc7ff9541138c3_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -93,7 +93,7 @@ static GeasStatus __geas_ash_Service_finish_5edc7ff9541138c3_v1(void* ctx, const
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Service_crashes_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_7Service_7crashes_dbdcc6825b35f1ec_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -153,10 +153,10 @@ static const GeasVowDesc k7_Service_vows[] = {
 };
 
 static const GeasPledgeDesc k7_Service_pledges[] = {
-    { "start", "__geas_ash_Service_start_dbdcc6825b35f1ec_v1", 0, NULL, -1 },
-    { "ready", "__geas_ash_Service_ready_0bb31837c8de3b5f_v1", 0, NULL, -1 },
-    { "finish", "__geas_ash_Service_finish_5edc7ff9541138c3_v1", 3, __geas_ash_Service_finish_5edc7ff9541138c3_v1, -1 },
-    { "crashes", "__geas_ash_Service_crashes_dbdcc6825b35f1ec_v1", 0, __geas_ash_Service_crashes_dbdcc6825b35f1ec_v1, -1 },
+    { "start", "__geas_ash_7Service_5start_dbdcc6825b35f1ec_v1", 0, NULL, -1 },
+    { "ready", "__geas_ash_7Service_5ready_0bb31837c8de3b5f_v1", 0, NULL, -1 },
+    { "finish", "__geas_ash_7Service_6finish_5edc7ff9541138c3_v1", 3, __geas_ash_7Service_6finish_5edc7ff9541138c3_v1, -1 },
+    { "crashes", "__geas_ash_7Service_7crashes_dbdcc6825b35f1ec_v1", 0, __geas_ash_7Service_7crashes_dbdcc6825b35f1ec_v1, -1 },
 };
 
 static const GeasReqAtom k7_Service_atoms[] = {
@@ -210,7 +210,7 @@ static const GeasItemTypes k7_Service_item_types[] = {
 static const uint32_t k7_Service_vow_types[] = { 0, 0, 0 };
 
 static const GeasContractDesc k7_Service = {
-    "Service", 0x800d8e21674a4e31ULL,
+    "Service", 0xeeada03b3d7b1a1dULL,
     1, 4, k7_Service_pledges,
     3, k7_Service_vows,
     0, NULL, 3,

@@ -2,6 +2,19 @@
 // grouping and negation, plus an anonymous subcontract whose pledge joins the
 // contract pledge namespace and stays out of the policy.
 
+record Order {
+    id: Int
+}
+
+record Receipt {
+    id: String
+}
+
+PackError is either Unpacked
+ShipError is either Lost
+AuditError is either Unrecorded
+BillError is either Unbilled
+
 contract Shipping {
     subcontract Packing {
         pledge pack(order: Order) -> Result<Bool, PackError>

@@ -1,4 +1,4 @@
 exit 1
 skeleton/ledger.geas: 1:1: error: a --bin build needs exactly one Main contract
-  // The Layer 3 walking skeleton: a store-backed Ledger signed against a SQLite
+  // The store walking skeleton: a store-backed Ledger signed against a SQLite
   ^

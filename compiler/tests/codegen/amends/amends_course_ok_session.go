@@ -370,3 +370,225 @@ func ResumeAmendCourseNoneSession(ctx context.Context, c AmendCourseNoneClient, 
 
 // Close ends the session; the server breaks the instance and drops it.
 func (s *AmendCourseNoneSession) Close() { s.cancel() }
+
+// AmendCourseRetypedShapeHash is the contract's shape hash, the same value the
+// compiled module registers. A SignRequest carrying it pins the wire to
+// this build; 0 skips the check.
+const AmendCourseRetypedShapeHash uint64 = 0x30c0220593fe83b7
+
+// AmendCourseRetypedSession holds a signed instance open. The instance lives
+// exactly as long as this handle: Close ends the stream, and the server
+// breaks and drops the instance.
+type AmendCourseRetypedSession struct {
+	Signed *AmendCourseRetypedSigned
+	cancel context.CancelFunc
+	stream grpc.ServerStreamingClient[AmendCourseRetypedSessionEvent]
+}
+
+// OpenAmendCourseRetypedSession signs the contract and holds the session stream.
+// The signature is read off the stream before this returns, so the caller
+// holds a live, addressable instance or an error, never a maybe.
+func OpenAmendCourseRetypedSession(ctx context.Context, c AmendCourseRetypedClient, req *AmendCourseRetypedSignRequest) (
+	*AmendCourseRetypedSession, error,
+) {
+	sctx, cancel := context.WithCancel(ctx)
+	stream, err := c.Session(sctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	ev, err := stream.Recv()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	signed := ev.GetSigned()
+	if signed == nil {
+		cancel()
+		return nil, fmt.Errorf("the session stream opened with %v, not the signature", ev)
+	}
+	return &AmendCourseRetypedSession{Signed: signed, cancel: cancel, stream: stream}, nil
+}
+
+// ResumeAmendCourseRetypedSession stands a parked instance back up and holds its new
+// session stream, the same handle open answers: the signature is read off
+// the stream before this returns, and Close is once again the ending.
+func ResumeAmendCourseRetypedSession(ctx context.Context, c AmendCourseRetypedClient, req *AmendCourseRetypedResumeRequest) (
+	*AmendCourseRetypedSession, error,
+) {
+	sctx, cancel := context.WithCancel(ctx)
+	stream, err := c.Resume(sctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	ev, err := stream.Recv()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	signed := ev.GetSigned()
+	if signed == nil {
+		cancel()
+		return nil, fmt.Errorf("the session stream opened with %v, not the signature", ev)
+	}
+	return &AmendCourseRetypedSession{Signed: signed, cancel: cancel, stream: stream}, nil
+}
+
+// Close ends the session; the server breaks the instance and drops it.
+func (s *AmendCourseRetypedSession) Close() { s.cancel() }
+
+// GetCourse reads where this session's instance's course stands, the
+// request's instance id set from the signature. It never waits on the
+// course; poll it, or watch the signals and the partial surface.
+func (s *AmendCourseRetypedSession) GetCourse(ctx context.Context, c AmendCourseRetypedClient) (*CourseReply, error) {
+	return c.GetCourse(ctx, &CourseRequest{InstanceId: s.Signed.InstanceId})
+}
+
+// AmendCourseLiteralShapeHash is the contract's shape hash, the same value the
+// compiled module registers. A SignRequest carrying it pins the wire to
+// this build; 0 skips the check.
+const AmendCourseLiteralShapeHash uint64 = 0xbd9d3c638ac3a5a7
+
+// AmendCourseLiteralSession holds a signed instance open. The instance lives
+// exactly as long as this handle: Close ends the stream, and the server
+// breaks and drops the instance.
+type AmendCourseLiteralSession struct {
+	Signed *AmendCourseLiteralSigned
+	cancel context.CancelFunc
+	stream grpc.ServerStreamingClient[AmendCourseLiteralSessionEvent]
+}
+
+// OpenAmendCourseLiteralSession signs the contract and holds the session stream.
+// The signature is read off the stream before this returns, so the caller
+// holds a live, addressable instance or an error, never a maybe.
+func OpenAmendCourseLiteralSession(ctx context.Context, c AmendCourseLiteralClient, req *AmendCourseLiteralSignRequest) (
+	*AmendCourseLiteralSession, error,
+) {
+	sctx, cancel := context.WithCancel(ctx)
+	stream, err := c.Session(sctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	ev, err := stream.Recv()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	signed := ev.GetSigned()
+	if signed == nil {
+		cancel()
+		return nil, fmt.Errorf("the session stream opened with %v, not the signature", ev)
+	}
+	return &AmendCourseLiteralSession{Signed: signed, cancel: cancel, stream: stream}, nil
+}
+
+// ResumeAmendCourseLiteralSession stands a parked instance back up and holds its new
+// session stream, the same handle open answers: the signature is read off
+// the stream before this returns, and Close is once again the ending.
+func ResumeAmendCourseLiteralSession(ctx context.Context, c AmendCourseLiteralClient, req *AmendCourseLiteralResumeRequest) (
+	*AmendCourseLiteralSession, error,
+) {
+	sctx, cancel := context.WithCancel(ctx)
+	stream, err := c.Resume(sctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	ev, err := stream.Recv()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	signed := ev.GetSigned()
+	if signed == nil {
+		cancel()
+		return nil, fmt.Errorf("the session stream opened with %v, not the signature", ev)
+	}
+	return &AmendCourseLiteralSession{Signed: signed, cancel: cancel, stream: stream}, nil
+}
+
+// Close ends the session; the server breaks the instance and drops it.
+func (s *AmendCourseLiteralSession) Close() { s.cancel() }
+
+// GetCourse reads where this session's instance's course stands, the
+// request's instance id set from the signature. It never waits on the
+// course; poll it, or watch the signals and the partial surface.
+func (s *AmendCourseLiteralSession) GetCourse(ctx context.Context, c AmendCourseLiteralClient) (*CourseReply, error) {
+	return c.GetCourse(ctx, &CourseRequest{InstanceId: s.Signed.InstanceId})
+}
+
+// AmendCourseCommentShapeHash is the contract's shape hash, the same value the
+// compiled module registers. A SignRequest carrying it pins the wire to
+// this build; 0 skips the check.
+const AmendCourseCommentShapeHash uint64 = 0x9bc9227ad7cc7895
+
+// AmendCourseCommentSession holds a signed instance open. The instance lives
+// exactly as long as this handle: Close ends the stream, and the server
+// breaks and drops the instance.
+type AmendCourseCommentSession struct {
+	Signed *AmendCourseCommentSigned
+	cancel context.CancelFunc
+	stream grpc.ServerStreamingClient[AmendCourseCommentSessionEvent]
+}
+
+// OpenAmendCourseCommentSession signs the contract and holds the session stream.
+// The signature is read off the stream before this returns, so the caller
+// holds a live, addressable instance or an error, never a maybe.
+func OpenAmendCourseCommentSession(ctx context.Context, c AmendCourseCommentClient, req *AmendCourseCommentSignRequest) (
+	*AmendCourseCommentSession, error,
+) {
+	sctx, cancel := context.WithCancel(ctx)
+	stream, err := c.Session(sctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	ev, err := stream.Recv()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	signed := ev.GetSigned()
+	if signed == nil {
+		cancel()
+		return nil, fmt.Errorf("the session stream opened with %v, not the signature", ev)
+	}
+	return &AmendCourseCommentSession{Signed: signed, cancel: cancel, stream: stream}, nil
+}
+
+// ResumeAmendCourseCommentSession stands a parked instance back up and holds its new
+// session stream, the same handle open answers: the signature is read off
+// the stream before this returns, and Close is once again the ending.
+func ResumeAmendCourseCommentSession(ctx context.Context, c AmendCourseCommentClient, req *AmendCourseCommentResumeRequest) (
+	*AmendCourseCommentSession, error,
+) {
+	sctx, cancel := context.WithCancel(ctx)
+	stream, err := c.Resume(sctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	ev, err := stream.Recv()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	signed := ev.GetSigned()
+	if signed == nil {
+		cancel()
+		return nil, fmt.Errorf("the session stream opened with %v, not the signature", ev)
+	}
+	return &AmendCourseCommentSession{Signed: signed, cancel: cancel, stream: stream}, nil
+}
+
+// Close ends the session; the server breaks the instance and drops it.
+func (s *AmendCourseCommentSession) Close() { s.cancel() }
+
+// GetCourse reads where this session's instance's course stands, the
+// request's instance id set from the signature. It never waits on the
+// course; poll it, or watch the signals and the partial surface.
+func (s *AmendCourseCommentSession) GetCourse(ctx context.Context, c AmendCourseCommentClient) (*CourseReply, error) {
+	return c.GetCourse(ctx, &CourseRequest{InstanceId: s.Signed.InstanceId})
+}

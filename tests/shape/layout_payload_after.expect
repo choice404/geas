@@ -1,3 +1,3 @@
 // shape Shipping v1: contract Shipping;vow last:O(NShipError);pledge ship:()->V;type ShipError=NoCarrier|Refused(reason:I);
 #define GEAS_HASH_Shipping 0xb7a3b221ea926f96ULL
-#define GEAS_MANGLED_Shipping_ship "__geas_ash_Shipping_ship_0e2ba22315b89a85_v1"
+#define GEAS_MANGLED_Shipping_ship "__geas_ash_8Shipping_4ship_0e2ba22315b89a85_v1"

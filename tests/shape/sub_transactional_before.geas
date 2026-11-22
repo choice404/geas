@@ -1,0 +1,16 @@
+// The transactional pair for a subcontract: Move is plain here and
+// transactional in sub_transactional_after.geas, which only the sub segment
+// spells. A schema binds a table, so the modifier has a database to be
+// durable against
+contract Bank {
+    vow dsn: String = "file:bank.db"
+
+    schema Accounts {
+        id: Int
+        balance: Float
+    }
+
+    subcontract Move {
+        pledge debit(id: Int) -> Result<Unit, Int>
+    }
+}

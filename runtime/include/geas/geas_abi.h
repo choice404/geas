@@ -218,9 +218,13 @@ typedef struct GeasVowDesc {
  * geas_future_wait or before geas_pledge_fulfill_sync returns, on the caller's
  * thread, each slot's final value is written back: through write_back when
  * the host supplied one, with user passed through untouched, or by the
- * default otherwise. cap declares the byte capacity at host_ptr; the default
- * write back does not use it, a callback that honors a capacity reaches its
- * own bookkeeping through user. The default writes scalars in place and
+ * default otherwise. A write_back callback runs after the default write
+ * backs of the same call with the instance's lock let go, and with no
+ * runtime lock at all on a host thread, so it may call into the runtime,
+ * the same instance included; the value it is handed is a copy, string
+ * bytes included, that stays valid until it returns. cap declares the byte
+ * capacity at host_ptr; the default write back does not use it, a callback
+ * that honors a capacity reaches its own bookkeeping through user. The default writes scalars in place and
  * writes a whole GeasString struct for String or Bytes, whose bytes are instance
  * owned and die at break; a host that wants the bytes to outlive the
  * instance supplies a write_back that copies them out. */
@@ -495,6 +499,36 @@ typedef struct GeasAmendDesc {
  * always be parked and read back */
 #define GEAS_VALUE_MAX_DEPTH 256u
 
+/* The most nodes one value may hold and still cross a boundary, every value
+ * inside it counted once per path that reaches it, so a value sharing its
+ * substructure counts as the tree it unfolds to. It is a limit on resources,
+ * not on types: a value past it is GEAS_ERR_OOM wherever the runtime meets
+ * it, at the check every boundary holds, in geas_value_deep_copy, and in the
+ * wire encoder that writes park rows, which refuses it before measuring a
+ * size, so a value the runtime parks always resumes. geas_list_push and
+ * geas_map_set answer GEAS_ERR_OOM for an element that would take a
+ * container past it, the container counting as one node of its own */
+#define GEAS_VALUE_MAX_NODES (1ull << 24)
+
+/* The most nodes the smallest value of a course slot's type may hold. A
+ * slot starts at the smallest value of its type, built every time an
+ * instance signs, so the registrar counts that value's nodes for every slot
+ * type and refuses the contract with GEAS_ERR_TYPE when one needs more.
+ *
+ * The smallest value follows the height of each type, the fewest levels any
+ * finite value of it nests: 1 for a scalar, a List, a Map, and an Option,
+ * whose smallest values are empty or None; one more than the deepest kid for
+ * a Tuple and a record; one more than the lower of its two arms for a
+ * Result, Ok on a tie; one more than the variant whose deepest field nests
+ * least for a sum, a variant with no field counting 0, the first such
+ * variant on a tie. Its node count is 1 for a scalar, a List, a Map, and an
+ * Option, and 1 plus the counts of the kids it carries otherwise: every kid
+ * of a Tuple or a record, every field of the chosen variant of a sum, and
+ * the chosen arm of a Result, a Unit arm counting 1. The compiler holds the
+ * same line, counted the same way, and refuses such a slot when it builds
+ * the contract */
+#define GEAS_SLOT_MIN_NODES_MAX 4096u
+
 /* One variant of a sum, its payload fields in declaration order */
 typedef struct GeasTypeVariant {
     const char*      name;
@@ -613,6 +647,23 @@ typedef struct GeasContractDesc {
     const GeasItemTypes*  item_types;
     const uint32_t*       vow_types;
     const GeasItemTypes*  remedy_types;
+    /* The course slot types, one types table index per slot of the course
+     * frame, course_nslots of them, GEAS_NO_TYPE for a slot the table has no
+     * spelling for. NULL when the contract has no course or no type table;
+     * then a slot a park row brings back is held to the structural facts
+     * when the contract carries a type table, and to the wire decoder's own
+     * checks when it carries none. With the table, every slot starts at the smallest value
+     * of its type and every slot a resume, a claim, or an amend brings back
+     * is held to its type */
+    const uint32_t*       course_slot_types;
+    /* The foreign symbols, one entry per pledges table entry and one per
+     * remedy, each the name of the function the host exports for an
+     * abstract pledge or remedy declared with abi: "c" and a symbol, NULL for
+     * an entry that names none. Each table is NULL when no entry of it names
+     * a symbol. At sign the runtime resolves an abstract entry no host bind
+     * covers through dlsym(RTLD_DEFAULT, symbol), see geas.h */
+    const char* const*    pledge_symbols;
+    const char* const*    remedy_symbols;
 } GeasContractDesc;
 
 /* The byte size of the descriptor every module built before the workflow
@@ -636,6 +687,14 @@ typedef struct GeasContractDesc {
 /* The descriptor with the amends blocks and no type table */
 #define GEAS_CONTRACT_DESC_V5_SIZE \
     (offsetof(GeasContractDesc, amends) + sizeof(const GeasAmendDesc*))
+
+/* The descriptor with the type table and no course slot types */
+#define GEAS_CONTRACT_DESC_V6_SIZE \
+    (offsetof(GeasContractDesc, remedy_types) + sizeof(const GeasItemTypes*))
+
+/* The whole descriptor: the course slot types and the foreign symbols */
+#define GEAS_CONTRACT_DESC_V7_SIZE \
+    (offsetof(GeasContractDesc, remedy_symbols) + sizeof(const char* const*))
 
 /* A vow override a host supplies at sign. The value is copied onto the
  * instance, string bytes included; the runtime keeps nothing the host owns. */

@@ -1,0 +1,11 @@
+// A Float is hashed by its value, so every spelling of one value, trailing
+// zeros, an exponent, and underscores among them, keeps the hash, and so do
+// the other literal spellings of one value
+contract Flow {
+    pledge p(x: Float, y: Float, z: Float) -> Option<Int>
+    pledge q(n: Int, d: Duration, c: Char) -> Option<Int>
+    course {
+        p(1.00, 25.0e-1, 1_000.000)?
+        q(0x10, 1m, '\u{41}')?
+    }
+}

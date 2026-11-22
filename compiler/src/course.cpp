@@ -1,8 +1,11 @@
 // Course slots, resume points, and the checked program integration
 #include "coursebuilder.hpp"
 
+#include <set>
+
+#include "coursedumper.hpp"
 #include "hash.hpp"
-#include "lexer.hpp"
+#include "layout.hpp"
 
 namespace geas {
 
@@ -193,27 +196,40 @@ TyId CourseBuilder::signalPayload(std::uint32_t signal) {
     return checked_.types.tuple(params);
 }
 
+/**
+ * The course hash: FNV-1a 64 over the canonical text of the lowered course,
+ * its slots with their kinds and type codes, its steps, and its lowered
+ * statements with every expression spelled by structure, followed by the
+ * layout of every declared record and sum a slot type reaches and the
+ * columns of every schema the contract declares. Comments and spacing never
+ * reach the lowered form, and the canonical text spells no local or binding
+ * name and no literal the way the source wrote it, see coursedumper.hpp, so
+ * only a change to what a frame holds or how the course reads it moves the
+ * hash.
+ * @returns {std::uint64_t} - the hash a park row carries beside the frame
+ */
 std::uint64_t CourseBuilder::hashCourse() const {
-    const CourseDecl& declaration = *contract_.course;
-    const std::string_view text = std::string_view{checked_.program.text}.substr(
-        static_cast<std::size_t>(declaration.lo),
-        static_cast<std::size_t>(declaration.hi - declaration.lo));
-    const LexResult tokens = lex(text);
-    std::string normalized;
-    // Skip the declaration keyword and retain every token of the block
-    for (std::size_t i = 1; i < tokens.tokens.size(); ++i) {
-        const Token& token = tokens.tokens[i];
-        if (token.kind == TokenKind::Eof) {
-            continue;
-        }
-        if (!normalized.empty()) {
-            normalized.push_back(' ');
-        }
-        normalized.append(text.substr(static_cast<std::size_t>(token.lo),
-                                      static_cast<std::size_t>(token.hi - token.lo)));
+    std::vector<std::string> members;
+    for (const PledgeShape& pledge : contract_.pledges) {
+        members.push_back(pledge.decl->name);
     }
-    return fnv1a64("steps=" + std::to_string(course_.steps.size()) + "\nslots=" +
-                   std::to_string(course_.slots.size()) + "\n" + normalized);
+    for (const SignalShape& signal : contract_.signals) {
+        members.push_back(signal.decl->name);
+    }
+    std::string text =
+        CourseDumper{course_, checked_.types, CourseDumpMode::Canonical, std::move(members),
+                     &checked_.sigs}
+            .canonical();
+    const LayoutIndex layouts{checked_.program.ast, checked_.sigs, checked_.types};
+    std::set<std::string> names;
+    for (const CourseSlot& slot : course_.slots) {
+        layouts.reach(slot.type, names);
+    }
+    text.append(layoutSegments(layouts.layoutsOf(names)));
+    for (const SchemaDecl* schema : contract_.schemas) {
+        text.append(schemaSegment(checked_.sigs, checked_.types, *schema));
+    }
+    return fnv1a64(text);
 }
 
 std::expected<void, std::string> lowerCourses(CheckedProgram& checked) {

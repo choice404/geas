@@ -1,6 +1,20 @@
-// The README taste of the language, verbatim: a provisional clause and the
+// The README taste of the language: a provisional clause and the
 // PaymentService contract with an incorporate, a vow, two named subcontracts,
-// a loose pledge, a requirements block, and a clause body.
+// a loose pledge, a requirements block, and a clause body, over the records
+// and error sums it names.
+
+record Card {
+    number: String
+}
+
+record Receipt {
+    id: String
+}
+
+LogError is either LogFailed
+ValidationError is either Invalid
+PaymentError is either Declined
+NotifyError is either Unreachable
 
 provisional clause Loggable {
     clause log(message: String) -> Result<Unit, LogError>
@@ -30,5 +44,6 @@ contract PaymentService {
 
     clause log(message: String) -> Result<Unit, LogError> {
         // log implementation
+        return Ok(Unit)
     }
 }

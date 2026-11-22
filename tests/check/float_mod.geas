@@ -1,0 +1,10 @@
+// The remainder is an integer operation: '%' on Float is refused, every
+// other arithmetic operator applies
+contract Calc {
+    clause rem(a: Float, b: Float) -> Float {
+        return a % b
+    }
+    clause quotient(a: Float, b: Float) -> Float {
+        return a / b - a * b + a
+    }
+}

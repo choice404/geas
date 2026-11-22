@@ -1,0 +1,2 @@
+this assignment to 'values' assigns 'values' again while its right side or target index is evaluated; bind that value with 'let' first
+this assignment to 'n' assigns 'n' again while its right side or target index is evaluated; bind that value with 'let' first

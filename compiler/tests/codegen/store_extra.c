@@ -19,7 +19,7 @@ static const GeasSchemaDesc k5_Stock_schemas[] = {
     { "Bins", 2, k5_Stock_Bins_cols },
 };
 
-static GeasStatus __geas_ash_Stock_drop_086b9865436e8354_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_4drop_086b9865436e8354_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -35,7 +35,7 @@ static GeasStatus __geas_ash_Stock_drop_086b9865436e8354_v1(void* ctx, const Gea
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_named_ff4d3881e24a055f_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_5named_ff4d3881e24a055f_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -51,7 +51,7 @@ static GeasStatus __geas_ash_Stock_named_ff4d3881e24a055f_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_outside_c9d4193eb41c1ed2_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_7outside_c9d4193eb41c1ed2_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -70,7 +70,7 @@ static GeasStatus __geas_ash_Stock_outside_c9d4193eb41c1ed2_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_top_ec419be0725565e5_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_3top_ec419be0725565e5_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -96,7 +96,7 @@ static GeasStatus __geas_ash_Stock_top_ec419be0725565e5_v1(void* ctx, const Geas
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_not_not_bb5ae22fe5c45b75_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_7not_not_bb5ae22fe5c45b75_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -120,7 +120,7 @@ static GeasStatus __geas_ash_Stock_not_not_bb5ae22fe5c45b75_v1(void* ctx, const 
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_de_morgan_b1f5d4195cfe726a_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_9de_morgan_b1f5d4195cfe726a_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -142,7 +142,7 @@ static GeasStatus __geas_ash_Stock_de_morgan_b1f5d4195cfe726a_v1(void* ctx, cons
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_total_3502ebeb325635a4_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_5total_3502ebeb325635a4_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -163,7 +163,7 @@ static GeasStatus __geas_ash_Stock_total_3502ebeb325635a4_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_edges_e28a4f09665253eb_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_5edges_e28a4f09665253eb_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -184,6 +184,7 @@ static GeasStatus __geas_ash_Stock_edges_e28a4f09665253eb_v1(void* ctx, const Ge
     GeasStatus t7 = geas_value_deep_copy(cc, &t5, &t6);
     if (t7 != GEAS_OK) return t7;
     GeasValue t8 = t6;
+    (void)t8;
     GeasValue t9 = {0};
     GeasValue t11 = {0};
     t11.ty = GEAS_TY_BOOL;
@@ -198,7 +199,7 @@ static GeasStatus __geas_ash_Stock_edges_e28a4f09665253eb_v1(void* ctx, const Ge
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_mean_aa4c2a4d75a51b88_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_4mean_aa4c2a4d75a51b88_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -216,7 +217,7 @@ static GeasStatus __geas_ash_Stock_mean_aa4c2a4d75a51b88_v1(void* ctx, const Gea
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Stock_bin_61958e4906370bd5_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Stock_3bin_61958e4906370bd5_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -239,6 +240,7 @@ static GeasStatus __geas_ash_Stock_bin_61958e4906370bd5_v1(void* ctx, const Geas
     if (t0.tag == 1) { *out = t0; return GEAS_OK; }
     GeasValue t4 = *(const GeasValue*)t0.as.box;
     GeasValue t5 = t4;
+    (void)t5;
     GeasValue t6 = {0};
     GeasStatus t7 = geas_store_find(cc, &k5_Stock_schemas[1], &args[0], &t6);
     if (t7 != GEAS_OK) return t7;
@@ -248,6 +250,7 @@ static GeasStatus __geas_ash_Stock_bin_61958e4906370bd5_v1(void* ctx, const Geas
     GeasStatus t10 = geas_value_deep_copy(cc, &t8, &t9);
     if (t10 != GEAS_OK) return t10;
     GeasValue t11 = t9;
+    (void)t11;
     GeasValue t12 = {0};
     GeasValue* t14 = (GeasValue*)geas_bytes(cc, 2 * sizeof(GeasValue));
     if (!t14) return GEAS_ERR_OOM;
@@ -257,7 +260,7 @@ static GeasStatus __geas_ash_Stock_bin_61958e4906370bd5_v1(void* ctx, const Geas
     t15.as.i = 1;
     GeasValue t16 = {0};
     t16.ty = GEAS_TY_INT;
-    t16.as.i = args[1].as.i + t15.as.i;
+    if (__builtin_add_overflow(args[1].as.i, t15.as.i, &t16.as.i)) return GEAS_ERR_TYPE;
     t14[1] = t16;
     GeasValue t17 = {0};
     t17.ty = GEAS_TY_RECORD;
@@ -277,16 +280,16 @@ static const GeasVowDesc k5_Stock_vows[] = {
 };
 
 static const GeasPledgeDesc k5_Stock_pledges[] = {
-    { "drop", "__geas_ash_Stock_drop_086b9865436e8354_v1", 1, __geas_ash_Stock_drop_086b9865436e8354_v1, -1 },
-    { "named", "__geas_ash_Stock_named_ff4d3881e24a055f_v1", 1, __geas_ash_Stock_named_ff4d3881e24a055f_v1, -1 },
-    { "outside", "__geas_ash_Stock_outside_c9d4193eb41c1ed2_v1", 2, __geas_ash_Stock_outside_c9d4193eb41c1ed2_v1, -1 },
-    { "top", "__geas_ash_Stock_top_ec419be0725565e5_v1", 3, __geas_ash_Stock_top_ec419be0725565e5_v1, -1 },
-    { "not_not", "__geas_ash_Stock_not_not_bb5ae22fe5c45b75_v1", 1, __geas_ash_Stock_not_not_bb5ae22fe5c45b75_v1, -1 },
-    { "de_morgan", "__geas_ash_Stock_de_morgan_b1f5d4195cfe726a_v1", 2, __geas_ash_Stock_de_morgan_b1f5d4195cfe726a_v1, -1 },
-    { "total", "__geas_ash_Stock_total_3502ebeb325635a4_v1", 1, __geas_ash_Stock_total_3502ebeb325635a4_v1, -1 },
-    { "edges", "__geas_ash_Stock_edges_e28a4f09665253eb_v1", 1, __geas_ash_Stock_edges_e28a4f09665253eb_v1, -1 },
-    { "mean", "__geas_ash_Stock_mean_aa4c2a4d75a51b88_v1", 1, __geas_ash_Stock_mean_aa4c2a4d75a51b88_v1, -1 },
-    { "bin", "__geas_ash_Stock_bin_61958e4906370bd5_v1", 2, __geas_ash_Stock_bin_61958e4906370bd5_v1, -1 },
+    { "drop", "__geas_ash_5Stock_4drop_086b9865436e8354_v1", 1, __geas_ash_5Stock_4drop_086b9865436e8354_v1, -1 },
+    { "named", "__geas_ash_5Stock_5named_ff4d3881e24a055f_v1", 1, __geas_ash_5Stock_5named_ff4d3881e24a055f_v1, -1 },
+    { "outside", "__geas_ash_5Stock_7outside_c9d4193eb41c1ed2_v1", 2, __geas_ash_5Stock_7outside_c9d4193eb41c1ed2_v1, -1 },
+    { "top", "__geas_ash_5Stock_3top_ec419be0725565e5_v1", 3, __geas_ash_5Stock_3top_ec419be0725565e5_v1, -1 },
+    { "not_not", "__geas_ash_5Stock_7not_not_bb5ae22fe5c45b75_v1", 1, __geas_ash_5Stock_7not_not_bb5ae22fe5c45b75_v1, -1 },
+    { "de_morgan", "__geas_ash_5Stock_9de_morgan_b1f5d4195cfe726a_v1", 2, __geas_ash_5Stock_9de_morgan_b1f5d4195cfe726a_v1, -1 },
+    { "total", "__geas_ash_5Stock_5total_3502ebeb325635a4_v1", 1, __geas_ash_5Stock_5total_3502ebeb325635a4_v1, -1 },
+    { "edges", "__geas_ash_5Stock_5edges_e28a4f09665253eb_v1", 1, __geas_ash_5Stock_5edges_e28a4f09665253eb_v1, -1 },
+    { "mean", "__geas_ash_5Stock_4mean_aa4c2a4d75a51b88_v1", 1, __geas_ash_5Stock_4mean_aa4c2a4d75a51b88_v1, -1 },
+    { "bin", "__geas_ash_5Stock_3bin_61958e4906370bd5_v1", 2, __geas_ash_5Stock_3bin_61958e4906370bd5_v1, -1 },
 };
 
 static const GeasReqAtom k5_Stock_atoms[] = {

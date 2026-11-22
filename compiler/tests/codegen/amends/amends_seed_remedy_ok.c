@@ -2,18 +2,21 @@
 #include <geas/geas.h>
 
 static const GeasPledgeDesc k15_AmendSeedRemedy_pledges[] = {
-    { "ship", "__geas_ash_AmendSeedRemedy_ship_db846a825aeadfc2_v2", 0, NULL, -1 },
-    { "notify", "__geas_ash_AmendSeedRemedy_notify_69a2a2b4d4873e84_v2", 0, NULL, -1 },
-    { "audit", "__geas_ash_AmendSeedRemedy_audit_db846a825aeadfc2_v2", 0, NULL, -1 },
+    { "ship", "__geas_ash_15AmendSeedRemedy_4ship_db846a825aeadfc2_v2", 0, NULL, -1 },
+    { "notify", "__geas_ash_15AmendSeedRemedy_6notify_b99d9cde0dce2f35_v2", 0, NULL, -1 },
+    { "audit", "__geas_ash_15AmendSeedRemedy_5audit_db846a825aeadfc2_v2", 0, NULL, -1 },
+    { "ready", NULL, 0, NULL, -1 },
 };
 
 static const GeasReqAtom k15_AmendSeedRemedy_atoms[] = {
     { "ship", GEAS_ATOM_FULFILLED, -1, 0 },
     { "notify", GEAS_ATOM_FULFILLED, -1, 1 },
     { "audit", GEAS_ATOM_FULFILLED, -1, 2 },
+    { "ready", GEAS_ATOM_FULFILLED, -1, 3 },
     { "ship", GEAS_ATOM_BROKEN, -1, 0 },
     { "notify", GEAS_ATOM_BROKEN, -1, 1 },
     { "audit", GEAS_ATOM_BROKEN, -1, 2 },
+    { "ready", GEAS_ATOM_BROKEN, -1, 3 },
 };
 
 static const GeasReqOp k15_AmendSeedRemedy_rf[] = {
@@ -22,19 +25,30 @@ static const GeasReqOp k15_AmendSeedRemedy_rf[] = {
     { GEAS_REQ_AND, 0 },
     { GEAS_REQ_ATOM, 2 },
     { GEAS_REQ_AND, 0 },
+    { GEAS_REQ_ATOM, 3 },
+    { GEAS_REQ_AND, 0 },
 };
 
 static const GeasReqOp k15_AmendSeedRemedy_rb[] = {
-    { GEAS_REQ_ATOM, 3 },
     { GEAS_REQ_ATOM, 4 },
-    { GEAS_REQ_AND, 0 },
     { GEAS_REQ_ATOM, 5 },
+    { GEAS_REQ_AND, 0 },
+    { GEAS_REQ_ATOM, 6 },
+    { GEAS_REQ_AND, 0 },
+    { GEAS_REQ_ATOM, 7 },
     { GEAS_REQ_AND, 0 },
 };
 
+static const uint8_t k15_AmendSeedRemedy_kinds[] = {
+    GEAS_KIND_PLEDGE,
+    GEAS_KIND_PLEDGE,
+    GEAS_KIND_PLEDGE,
+    GEAS_KIND_SIGNAL,
+};
+
 static const GeasRemedyDesc k15_AmendSeedRemedy_remedies[] = {
-    { "recall", "__geas_ash_AmendSeedRemedy_recall_0e2ba22315b89a85_v2", 1, 0, NULL, { 0 } },
-    { "undo", "__geas_ash_AmendSeedRemedy_undo_38a3aab7fdf5db00_v2", 2, 1, NULL, { 0 } },
+    { "recall", "__geas_ash_15AmendSeedRemedy_6recall_0e2ba22315b89a85_v2", 1, 0, NULL, { 0 } },
+    { "undo", "__geas_ash_15AmendSeedRemedy_4undo_38a3aab7fdf5db00_v2", 2, 1, NULL, { 0 } },
 };
 
 static const char* const k15_AmendSeedRemedy_amend1_old_items[] = {
@@ -47,6 +61,7 @@ static const int32_t k15_AmendSeedRemedy_amend1_item_map[] = {
 
 static const GeasAmendLatch k15_AmendSeedRemedy_amend1_latches[] = {
     { 1, GEAS_AMEND_FULFILLED },
+    { 3, GEAS_AMEND_FULFILLED },
     { 2, GEAS_AMEND_PENDING },
 };
 
@@ -60,13 +75,13 @@ static const GeasAmendDesc k15_AmendSeedRemedy_amends[] = {
         .nold_remedies = 0, .old_remedies = NULL,
         .vow_map = NULL, .item_map = k15_AmendSeedRemedy_amend1_item_map,
         .sub_map = NULL, .remedy_map = NULL,
-        .nlatches = 2, .latches = k15_AmendSeedRemedy_amend1_latches,
+        .nlatches = 3, .latches = k15_AmendSeedRemedy_amend1_latches,
         .vows_fn = NULL,
     },
 };
 
 static const uint32_t k15_AmendSeedRemedy_type_kids_0[] = { 1, 2 };
-static const uint32_t k15_AmendSeedRemedy_type_kids_3[] = { 2, 2 };
+static const uint32_t k15_AmendSeedRemedy_type_kids_3[] = { 4, 2 };
 
 static const GeasTypeNode k15_AmendSeedRemedy_types[] = {
     { GEAS_TY_RESULT, 2, k15_AmendSeedRemedy_type_kids_0, NULL, 0, NULL },
@@ -80,6 +95,7 @@ static const GeasItemTypes k15_AmendSeedRemedy_item_types[] = {
     { 0, NULL, 0 },
     { 0, NULL, 3 },
     { 0, NULL, 0 },
+    { 0, NULL, GEAS_NO_TYPE },
 };
 
 static const uint32_t k15_AmendSeedRemedy_remedy_params_1[] = { 1 };
@@ -90,16 +106,16 @@ static const GeasItemTypes k15_AmendSeedRemedy_remedy_types[] = {
 };
 
 static const GeasContractDesc k15_AmendSeedRemedy = {
-    "AmendSeedRemedy", 0xec16f4d1753ce765ULL,
-    2, 3, k15_AmendSeedRemedy_pledges,
+    "AmendSeedRemedy", 0xaad096debfee8a1eULL,
+    2, 4, k15_AmendSeedRemedy_pledges,
     0, NULL,
-    0, NULL, 6,
+    0, NULL, 8,
     k15_AmendSeedRemedy_atoms, 0,
-    5, 0, 5,
+    7, 0, 7,
     k15_AmendSeedRemedy_rf, NULL, k15_AmendSeedRemedy_rb,
     0, NULL,
     NULL,
-    NULL, NULL, NULL,
+    k15_AmendSeedRemedy_kinds, NULL, NULL,
     2, k15_AmendSeedRemedy_remedies,
     0,
     .namends = 1, .amends = k15_AmendSeedRemedy_amends,

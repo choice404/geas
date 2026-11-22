@@ -10,7 +10,7 @@ static GeasStatus geas_clause5_Clock_elapsed(GeasContract* cc, const GeasValue* 
     (void)args;
     GeasValue t0 = {0};
     t0.ty = GEAS_TY_INT;
-    t0.as.i = args[1].as.i - args[0].as.i;
+    if (__builtin_sub_overflow(args[1].as.i, args[0].as.i, &t0.as.i)) return GEAS_ERR_TYPE;
     *out = t0;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
@@ -25,13 +25,13 @@ static GeasStatus geas_clause5_Clock_deadline(GeasContract* cc, const GeasValue*
     GeasValue t1 = *t0;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_INT;
-    t2.as.i = args[0].as.i + t1.as.i;
+    if (__builtin_add_overflow(args[0].as.i, t1.as.i, &t2.as.i)) return GEAS_ERR_TYPE;
     GeasValue t3 = {0};
     t3.ty = GEAS_TY_INT;
     t3.as.i = 500;
     GeasValue t4 = {0};
     t4.ty = GEAS_TY_INT;
-    t4.as.i = t2.as.i - t3.as.i;
+    if (__builtin_sub_overflow(t2.as.i, t3.as.i, &t4.as.i)) return GEAS_ERR_TYPE;
     *out = t4;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
@@ -49,7 +49,7 @@ static GeasStatus geas_clause5_Clock_isLate(GeasContract* cc, const GeasValue* a
     GeasValue t3 = *t2;
     GeasValue t4 = {0};
     t4.ty = GEAS_TY_INT;
-    t4.as.i = t1.as.i + t3.as.i;
+    if (__builtin_add_overflow(t1.as.i, t3.as.i, &t4.as.i)) return GEAS_ERR_TYPE;
     GeasValue t5 = {0};
     t5.ty = GEAS_TY_BOOL;
     t5.as.b = (args[0].as.i >= t4.as.i);
@@ -59,7 +59,7 @@ static GeasStatus geas_clause5_Clock_isLate(GeasContract* cc, const GeasValue* a
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Clock_wait_f6016148724d055a_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_5Clock_4wait_f6016148724d055a_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -71,20 +71,20 @@ static GeasStatus __geas_ash_Clock_wait_f6016148724d055a_v1(void* ctx, const Gea
     t0.as.i = 2;
     GeasValue t1 = {0};
     t1.ty = GEAS_TY_INT;
-    t1.as.i = args[0].as.i * t0.as.i;
+    if (__builtin_mul_overflow(args[0].as.i, t0.as.i, &t1.as.i)) return GEAS_ERR_TYPE;
     GeasValue t2 = t1;
     const GeasValue* t3 = geas_vow_ref(cc, "grace");
     if (!t3) return GEAS_ERR_NAME;
     GeasValue t4 = *t3;
     GeasValue t5 = {0};
     t5.ty = GEAS_TY_INT;
-    t5.as.i = t2.as.i + t4.as.i;
+    if (__builtin_add_overflow(t2.as.i, t4.as.i, &t5.as.i)) return GEAS_ERR_TYPE;
     GeasValue t6 = {0};
     t6.ty = GEAS_TY_INT;
     t6.as.i = 1000;
     GeasValue t7 = {0};
     t7.ty = GEAS_TY_INT;
-    t7.as.i = t5.as.i - t6.as.i;
+    if (__builtin_sub_overflow(t5.as.i, t6.as.i, &t7.as.i)) return GEAS_ERR_TYPE;
     GeasValue t8 = t7;
     GeasValue t9 = {0};
     t9.ty = GEAS_TY_INT;
@@ -117,7 +117,7 @@ static GeasStatus __geas_ash_Clock_wait_f6016148724d055a_v1(void* ctx, const Gea
     }
     GeasValue t16 = {0};
     t16.ty = GEAS_TY_INT;
-    t16.as.i = -args[0].as.i;
+    if (__builtin_sub_overflow((int64_t)0, args[0].as.i, &t16.as.i)) return GEAS_ERR_TYPE;
     GeasValue* t17 = geas_box(cc);
     if (!t17) return GEAS_ERR_OOM;
     *t17 = t16;
@@ -152,7 +152,7 @@ static uint32_t k5_Clock_course(void* ctx, GeasCourseFrame* f) {
         t1.as.i = geas_course_now(ctx);
         GeasValue t2 = {0};
         t2.ty = GEAS_TY_INT;
-        t2.as.i = t1.as.i - f->slots[0].as.i;
+        if (__builtin_sub_overflow(t1.as.i, f->slots[0].as.i, &t2.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         f->slots[1] = t2;
     }
     {
@@ -161,7 +161,7 @@ static uint32_t k5_Clock_course(void* ctx, GeasCourseFrame* f) {
         t3.as.i = 1000;
         GeasValue t4 = {0};
         t4.ty = GEAS_TY_INT;
-        t4.as.i = f->slots[1].as.i + t3.as.i;
+        if (__builtin_add_overflow(f->slots[1].as.i, t3.as.i, &t4.as.i)) { f->status = GEAS_ERR_TYPE; return GEAS_COURSE_STOPPED; }
         f->slots[2] = t4;
     }
     f->step = 1;
@@ -210,7 +210,7 @@ static const GeasVowDesc k5_Clock_vows[] = {
 };
 
 static const GeasPledgeDesc k5_Clock_pledges[] = {
-    { "wait", "__geas_ash_Clock_wait_f6016148724d055a_v1", 1, __geas_ash_Clock_wait_f6016148724d055a_v1, -1 },
+    { "wait", "__geas_ash_5Clock_4wait_f6016148724d055a_v1", 1, __geas_ash_5Clock_4wait_f6016148724d055a_v1, -1 },
     { "tick", NULL, 1, NULL, -1 },
 };
 
@@ -253,6 +253,7 @@ static const GeasTypeNode k5_Clock_types[] = {
     { GEAS_TY_RESULT, 2, k5_Clock_type_kids_1, NULL, 0, NULL },
     { GEAS_TY_SUM, 0, NULL, "PayError", 3, k5_Clock_type_variants_2 },
     { GEAS_TY_STRING, 0, NULL, NULL, 0, NULL },
+    { GEAS_TY_BOOL, 0, NULL, NULL, 0, NULL },
 };
 
 static const uint32_t k5_Clock_item_params_0[] = { 0 };
@@ -264,6 +265,8 @@ static const GeasItemTypes k5_Clock_item_types[] = {
 };
 
 static const uint32_t k5_Clock_vow_types[] = { 0, 0 };
+
+static const uint32_t k5_Clock_course_slot_types[] = { 0, 0, 0, 0, 0, 4 };
 
 static const GeasContractDesc k5_Clock = {
     "Clock", 0xdad59f3912ecbc45ULL,
@@ -278,10 +281,11 @@ static const GeasContractDesc k5_Clock = {
     k5_Clock_kinds, NULL, NULL,
     0, NULL,
     0,
-    .course_fn = k5_Clock_course, .course_nslots = 6, .course_hash = 0x956a4a029a3eed9cULL,
-    .ntypes = 4, .types = k5_Clock_types,
+    .course_fn = k5_Clock_course, .course_nslots = 6, .course_hash = 0x3a16a37ce3f1dbe9ULL,
+    .ntypes = 5, .types = k5_Clock_types,
     .item_types = k5_Clock_item_types, .vow_types = k5_Clock_vow_types,
     .remedy_types = NULL,
+    .course_slot_types = k5_Clock_course_slot_types,
 };
 
 GeasStatus geas_module_register(GeasRuntime* rt) {

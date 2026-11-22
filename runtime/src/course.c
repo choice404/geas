@@ -28,8 +28,8 @@
  * Deliveries. Another thread delivering this instance's events never stops
  * a course. An entry that finds one pending defers to the redrive that ends
  * it; inside a run, every operation, a call's gate and the end of its retry
- * delay, a checkpoint, and an armed autopark's landing wait it out on
- * join_cv, giving the instance lock up for the wait, and go on with the
+ * delay, a checkpoint, and an armed autopark's landing wait it out on the
+ * instance's delivery_cv, giving the instance lock up for the wait, and go on with the
  * instance as it stands after it, a break meanwhile being the cut.
  *
  * Locks. The instance lock covers the engine state and the frame. Readers
@@ -65,24 +65,39 @@ static int64_t due_after(int64_t start, int64_t ms) {
 }
 
 /* An absolute CLOCK_MONOTONIC time ms from now, for a condition variable
- * built on that clock */
-static struct timespec monotonic_after(int64_t ms) {
+ * built on that clock. A negative ms is now */
+struct timespec geas_rt_monotonic_after(int64_t ms) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    ts.tv_sec += (time_t)(ms / 1000);
+    if (ms < 0) ms = 0;
+    /* A wait past the far end of time_t waits until that end instead */
+    int64_t secs = ms / 1000;
+    if (secs > INT64_MAX - 1 - (int64_t)ts.tv_sec) {
+        ts.tv_sec = (time_t)(INT64_MAX - 1);
+        return ts;
+    }
+    ts.tv_sec += (time_t)secs;
     ts.tv_nsec += (long)(ms % 1000) * 1000000L;
     ts.tv_sec += ts.tv_nsec / 1000000000L;
     ts.tv_nsec %= 1000000000L;
     return ts;
 }
 
-static int cond_init_monotonic(pthread_cond_t* cv) {
+int geas_rt_cond_init_monotonic(pthread_cond_t* cv) {
     pthread_condattr_t attr;
     if (pthread_condattr_init(&attr) != 0) return -1;
-    pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
-    int rc = pthread_cond_init(cv, &attr);
+    int rc = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+    if (rc == 0) rc = pthread_cond_init(cv, &attr);
     pthread_condattr_destroy(&attr);
     return rc;
+}
+
+static struct timespec monotonic_after(int64_t ms) {
+    return geas_rt_monotonic_after(ms);
+}
+
+static int cond_init_monotonic(pthread_cond_t* cv) {
+    return geas_rt_cond_init_monotonic(cv);
 }
 
 /* ---- publication ---- */
@@ -209,18 +224,11 @@ GeasStatus geas_rt_course_init(GeasContract* c) {
         free(k);
         return GEAS_ERR_OOM;
     }
-    if (pthread_cond_init(&k->join_cv, NULL) != 0) {
-        pthread_cond_destroy(&k->cv);
-        pthread_mutex_destroy(&k->mu);
-        free(k);
-        return GEAS_ERR_OOM;
-    }
     /* The slots live on the instance heap and die with it */
     if (d->course_nslots > 0) {
         uint64_t bytes = (uint64_t)d->course_nslots * sizeof(GeasValue);
         k->frame.slots = (GeasValue*)geas_bytes(c, bytes);
         if (!k->frame.slots) {
-            pthread_cond_destroy(&k->join_cv);
             pthread_cond_destroy(&k->cv);
             pthread_mutex_destroy(&k->mu);
             free(k);
@@ -229,6 +237,15 @@ GeasStatus geas_rt_course_init(GeasContract* c) {
         memset(k->frame.slots, 0, bytes);
     }
     k->frame.nslots = d->course_nslots;
+    /* Every slot starts at the smallest value of its type, so a slot no
+     * instruction wrote yet conforms as much as one that was */
+    GeasStatus zeroed = geas_rt_course_slots_zero(c, k->frame.slots, k->frame.nslots);
+    if (zeroed != GEAS_OK) {
+        pthread_cond_destroy(&k->cv);
+        pthread_mutex_destroy(&k->mu);
+        free(k);
+        return zeroed;
+    }
     k->task.c = c;
     k->task.is_course = COURSE_NODE_ENTRY;
     k->pub.size = sizeof(GeasCourseInfo);
@@ -296,9 +313,7 @@ void geas_rt_course_reclaimed(GeasContract* c) {
 
 void geas_rt_course_redrive(GeasContract* c) {
     GeasCourse* k = c->course;
-    if (!k) return;
-    geas_rt_join_delivered(c);
-    if (!k->deferred) return;
+    if (!k || !k->deferred) return;
     k->deferred = 0;
     if (k->state != GEAS_COURSE_RUNNING || k->queued || k->executing) return;
     k->queued = 1;
@@ -309,7 +324,6 @@ void geas_rt_course_free(GeasContract* c) {
     GeasCourse* k = c->course;
     if (!k) return;
     geas_rt_join_clear(k);
-    pthread_cond_destroy(&k->join_cv);
     pthread_cond_destroy(&k->cv);
     pthread_mutex_destroy(&k->mu);
     free(k);
@@ -451,7 +465,7 @@ int geas_rt_course_level_here(const GeasContract* c) {
  * up, so a break that landed meanwhile is the cut. A refusal for the cut
  * marks the course cancelled. Under the instance lock */
 GeasStatus geas_rt_course_op_begin(GeasContract* c) {
-    geas_rt_course_settle(c);
+    geas_rt_settle_delivery(c);
     geas_rt_tick(c);
     if (c->course->held != GEAS_OK) return c->course->held;
     if (!course_cut(c)) return GEAS_OK;
@@ -466,10 +480,19 @@ static GeasStatus course_op_begin(GeasContract* c) {
 /* The deadline of the wait at the frame's step, fixed on its first poll and
  * read back on every later one. Under the instance lock */
 static int64_t wait_due(GeasContract* c, GeasCourseFrame* f, int64_t ms) {
-    if (f->wait_step == f->step && f->wait_due_ms != 0) return f->wait_due_ms;
-    int64_t due = due_after(geas_rt_now(c->rt), ms);
-    /* 0 means no wait, so the earliest deadline the frame stores is 1 */
-    f->wait_due_ms = due > 0 ? due : 1;
+    int64_t now = geas_rt_now(c->rt);
+    int64_t latest = due_after(now, ms);
+    if (f->wait_step == f->step && f->wait_due_ms != 0) {
+        /* A wait never falls due later than its own duration from now. A
+         * frame a park row brought back is entered again at its step on
+         * resume, so this poll holds whatever deadline the row carried to
+         * the duration the course function passes */
+        if (f->wait_due_ms > latest) f->wait_due_ms = latest == 0 ? 1 : latest;
+        return f->wait_due_ms;
+    }
+    /* 0 means no wait, so a deadline that lands on 0 is stored as 1; any
+     * other, one below zero from a clock below zero included, is kept */
+    f->wait_due_ms = latest == 0 ? 1 : latest;
     f->wait_step = f->step;
     return f->wait_due_ms;
 }
@@ -502,6 +525,16 @@ static GeasValue signal_payload(const GeasContract* c, uint32_t signal) {
     return c->flow.pledge_ok[signal];
 }
 
+/* Whether a fulfilled signal has a payload to hand the course. A latch an
+ * amends seed set, or one a row from before the workflow state carried,
+ * kept no value; only a signal with no parameter, whose payload is Unit,
+ * reads as delivered then. Any other answers GEAS_ERR_TYPE and the course
+ * halts on it rather than read a value that is not there */
+static GeasStatus payload_ready(const GeasContract* c, uint32_t signal) {
+    if (c->flow.pledge_ok_set[signal]) return GEAS_OK;
+    return c->desc->pledges[signal].nargs == 0 ? GEAS_OK : GEAS_ERR_TYPE;
+}
+
 /* Some of the payload, boxed on the instance */
 static GeasStatus some_of(GeasContract* c, uint32_t signal, GeasValue* out) {
     GeasValue* box = geas_box(c);
@@ -531,6 +564,8 @@ GeasStatus geas_course_await(void* ctx, GeasCourseFrame* f, uint32_t signal,
     if (!is_signal_index(c, signal)) return GEAS_ERR_TYPE;
     uint8_t latch = c->pledge_state[signal];
     if (latch == PLEDGE_FULFILLED) {
+        st = payload_ready(c, signal);
+        if (st != GEAS_OK) return st;
         if (has_within) st = some_of(c, signal, out);
         else *out = signal_payload(c, signal);
         if (st == GEAS_OK) wait_done(f, ready);
@@ -598,7 +633,8 @@ GeasStatus geas_course_select(void* ctx, GeasCourseFrame* f, const GeasCourseArm
     int64_t start = 0;
     int64_t now = 0;
     if (shortest >= 0) {
-        start = wait_due(c, f, shortest) - shortest;
+        int64_t due = wait_due(c, f, shortest);
+        start = due < INT64_MIN + shortest ? INT64_MIN : due - shortest;
         now = geas_rt_now(c->rt);
     }
     int can_arrive = shortest >= 0;
@@ -612,6 +648,10 @@ GeasStatus geas_course_select(void* ctx, GeasCourseFrame* f, const GeasCourseArm
             if (latch == PLEDGE_PENDING) can_arrive = 1;
         }
         if (!is_ready) continue;
+        if (!arms[i].is_timeout) {
+            st = payload_ready(c, arms[i].signal);
+            if (st != GEAS_OK) return st;
+        }
         memset(payload, 0, sizeof(*payload));
         if (!arms[i].is_timeout) *payload = signal_payload(c, arms[i].signal);
         *chosen = (uint32_t)i;
@@ -641,14 +681,26 @@ static void try_tick(GeasContract* c) {
     geas_rt_unlock(c);
 }
 
+/* A reader of the published block counts itself in before its lazy tick
+ * and out as its last touch, so a tick that ends the instance and delivers
+ * its end to a hook that frees it finds the free refused until the read is
+ * done. Under k->mu */
+static void course_reader(GeasCourse* k, int delta) {
+    pthread_mutex_lock(&k->mu);
+    k->readers = (uint32_t)((int)k->readers + delta);
+    pthread_mutex_unlock(&k->mu);
+}
+
 GeasStatus geas_course_info(GeasContract* c, GeasCourseInfo* out) {
     if (!c || !out || !info_fits(out)) return GEAS_ERR_TYPE;
     GeasCourseInfo view = { .size = sizeof(GeasCourseInfo) };
     GeasCourse* k = c->course;
     if (k) {
+        course_reader(k, 1);
         try_tick(c);
         pthread_mutex_lock(&k->mu);
         view = pub_view(k);
+        k->readers--;
         pthread_mutex_unlock(&k->mu);
     }
     info_copy(out, &view);
@@ -678,21 +730,24 @@ static GeasStatus wait_settled(GeasCourse* k, int64_t timeout_ms) {
 
 /* A wait that runs out answers GEAS_OK with the state RUNNING, so a caller
  * polling with a timeout tells a slow course from a failed call by the
- * state alone. A caller that could be what the course waits on, a body, a
- * hook, a delivery, or any holder of an instance lock, answers
+ * state alone. A caller that could be what the course waits on, a body, the
+ * body of a together call running with the instance lock released among
+ * them, a hook, a delivery, or any holder of an instance lock, answers
  * GEAS_ERR_STATE at once with out read as it stands */
 GeasStatus geas_course_wait(GeasContract* c, int64_t timeout_ms, GeasCourseInfo* out) {
     if (!c || !out || !info_fits(out)) return GEAS_ERR_TYPE;
     GeasCourse* k = c->course;
     if (!k) return geas_course_info(c, out);
-    if (geas_rt_thread_busy()) {
+    if (geas_rt_thread_busy() || geas_rt_in_join_body()) {
         geas_course_info(c, out);
         return GEAS_ERR_STATE;
     }
+    course_reader(k, 1);
     try_tick(c);
     pthread_mutex_lock(&k->mu);
     GeasStatus st = wait_settled(k, timeout_ms);
     GeasCourseInfo view = pub_view(k);
+    k->readers--;
     pthread_mutex_unlock(&k->mu);
     info_copy(out, &view);
     return st;
@@ -748,10 +803,16 @@ GeasStatus geas_runtime_start_ticker(GeasRuntime* rt, uint32_t interval_ms) {
     return st;
 }
 
+/* The stop joins the ticker thread, so it is refused before anything moves
+ * on that thread itself, from a hook or a remedy a tick ran, and on a thread
+ * holding an instance lock, which a tick in progress may be waiting for. The
+ * lock pair is destroyed only once the join succeeded */
 GeasStatus geas_runtime_stop_ticker(GeasRuntime* rt) {
     if (!rt) return GEAS_ERR_TYPE;
+    if (geas_rt_holds_instance()) return GEAS_ERR_STATE;
     pthread_mutex_lock(&rt->lock);
-    if (!rt->ticker_running || rt->ticker_stopping) {
+    if (!rt->ticker_running || rt->ticker_stopping ||
+        pthread_equal(rt->ticker, pthread_self())) {
         pthread_mutex_unlock(&rt->lock);
         return GEAS_ERR_STATE;
     }
@@ -763,7 +824,11 @@ GeasStatus geas_runtime_stop_ticker(GeasRuntime* rt) {
     pthread_t thread = rt->ticker;
     pthread_mutex_unlock(&rt->lock);
     /* The thread may be inside a tick, which takes the runtime lock */
-    pthread_join(thread, NULL);
+    int rc = pthread_join(thread, NULL);
+    if (rc != 0) {
+        fprintf(stderr, "[libgeasrt] ticker join failed: %s\n", strerror(rc));
+        return GEAS_ERR_STATE;
+    }
     pthread_mutex_lock(&rt->lock);
     pthread_cond_destroy(&rt->ticker_cv);
     pthread_mutex_destroy(&rt->ticker_mu);
@@ -771,6 +836,13 @@ GeasStatus geas_runtime_stop_ticker(GeasRuntime* rt) {
     rt->ticker_stopping = 0;
     pthread_mutex_unlock(&rt->lock);
     return GEAS_OK;
+}
+
+int geas_rt_on_ticker(GeasRuntime* rt) {
+    pthread_mutex_lock(&rt->lock);
+    int is_ticker = rt->ticker_running && pthread_equal(rt->ticker, pthread_self());
+    pthread_mutex_unlock(&rt->lock);
+    return is_ticker;
 }
 
 void geas_rt_ticker_shutdown(GeasRuntime* rt) {

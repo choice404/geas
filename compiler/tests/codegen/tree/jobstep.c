@@ -12,7 +12,7 @@ static GeasStatus geas_clause3_Job_complete(GeasContract* cc, const GeasValue* a
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Job_copy_acb18827992a1a53_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_3Job_4copy_acb18827992a1a53_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -35,7 +35,7 @@ static GeasStatus __geas_ash_Job_copy_acb18827992a1a53_v1(void* ctx, const GeasV
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Job_flush_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_3Job_5flush_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -47,7 +47,7 @@ static GeasStatus __geas_ash_Job_flush_0e2ba22315b89a85_v1(void* ctx, const Geas
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Job_undo_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_3Job_4undo_0e2ba22315b89a85_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -60,8 +60,8 @@ static GeasStatus __geas_ash_Job_undo_0e2ba22315b89a85_v1(void* ctx, const GeasV
 }
 
 static const GeasPledgeDesc k3_Job_pledges[] = {
-    { "copy", "__geas_ash_Job_copy_acb18827992a1a53_v1", 1, __geas_ash_Job_copy_acb18827992a1a53_v1, -1 },
-    { "flush", "__geas_ash_Job_flush_0e2ba22315b89a85_v1", 0, __geas_ash_Job_flush_0e2ba22315b89a85_v1, 0 },
+    { "copy", "__geas_ash_3Job_4copy_acb18827992a1a53_v1", 1, __geas_ash_3Job_4copy_acb18827992a1a53_v1, -1 },
+    { "flush", "__geas_ash_3Job_5flush_0e2ba22315b89a85_v1", 0, __geas_ash_3Job_5flush_0e2ba22315b89a85_v1, 0 },
     { "ready", NULL, 0, NULL, 0 },
 };
 
@@ -99,7 +99,7 @@ static const uint8_t k3_Job_kinds[] = {
 };
 
 static const GeasRemedyDesc k3_Job_remedies[] = {
-    { "undo", "__geas_ash_Job_undo_0e2ba22315b89a85_v1", 0, 0, __geas_ash_Job_undo_0e2ba22315b89a85_v1, { 0 } },
+    { "undo", "__geas_ash_3Job_4undo_0e2ba22315b89a85_v1", 0, 0, __geas_ash_3Job_4undo_0e2ba22315b89a85_v1, { 0 } },
 };
 
 static const GeasAttrDesc k3_Job_attrs[] = {
@@ -143,7 +143,7 @@ static const GeasItemTypes k3_Job_remedy_types[] = {
 };
 
 static const GeasContractDesc k3_Job = {
-    "Job", 0x35f4248166776696ULL,
+    "Job", 0xbbd73e1e06b95effULL,
     1, 3, k3_Job_pledges,
     0, NULL,
     1, k3_Job_subs, 4,

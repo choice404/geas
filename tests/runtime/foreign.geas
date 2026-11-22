@@ -1,0 +1,22 @@
+// The contracts of test_foreign.c. Every abstract pledge and remedy names a
+// function through abi: "c" and symbol: "NAME", and the test exports some
+// of the names and leaves the others out. Exported's ship has a body and
+// stays open, so a contract whose charge landed is still live at the break
+// and its refund runs
+contract Exported {
+    pledge charge(amount: Int) -> Result<Int, Int> [abi: "c", symbol: "host_foreign_test_charge"]
+    pledge ship() -> Option<Int> {
+        return Some(1)
+    }
+    remedy refund for charge(receipt: Int) -> Unit [abi: "c", symbol: "host_foreign_test_refund"]
+}
+
+contract Missing {
+    pledge charge(amount: Int) -> Result<Int, Int> [abi: "c", symbol: "host_foreign_test_charge"]
+    pledge absent() -> Option<Int> [abi: "c", symbol: "host_foreign_test_absent"]
+}
+
+contract RemedyMissing {
+    pledge charge(amount: Int) -> Result<Int, Int> [abi: "c", symbol: "host_foreign_test_charge"]
+    remedy refund for charge(receipt: Int) -> Unit [abi: "c", symbol: "host_foreign_test_absent_refund"]
+}

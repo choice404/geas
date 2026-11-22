@@ -8,7 +8,8 @@ and retries, the remedies that undo what landed, the outside events it waits
 on, and the policy that decides when the whole is fulfilled, partially
 fulfilled, or broken. Any language that can load a C library signs and drives
 that contract across the C ABI, and a shared runtime holds every term while it
-does. This document describes the language as it stands today: contracts with
+does. This document describes the language as of version 1.0.0, the stable
+release: contracts with
 vows, pledges, clauses, subcontracts, and a requirements policy, durations and
 times, terms, remedies, and signals, records and sums, the full statement and
 expression core with exhaustive match and error propagation, value semantics
@@ -29,6 +30,19 @@ contract to the next, checked at build time against the recorded shape of the
 older version and applied by the runtime at the resume. The compiler is `geas`, written by hand
 in C++23 and emitting C, source files end in `.geas`, a compiled module ends in
 `.geas.so`, and the runtime is a shared C library, `libgeasrt`.
+
+From 1.0.0 on the C surface is frozen: every declaration in `geas.h` and
+`geas_abi.h`, every enum value and struct layout, the shape hash and the
+mangling, the park row, and the wire encoding stay as they are for every 1.x
+release, and grow only at their tails. The Stability section of
+[docs/abi.md](docs/abi.md#stability) says exactly what that promise covers and
+what it leaves out. The limits this release carries on purpose are listed
+under [Known limits](#known-limits) at the end.
+
+The examples are fragments unless they say otherwise. A block taken from a
+larger file names records, sums, and provisional clauses declared elsewhere in
+that file, and `...` stands for code left out; every complete program in the
+repository, the skeletons under `skeleton/` among them, checks as written.
 
 ---
 
@@ -53,6 +67,7 @@ in C++23 and emitting C, source files end in `.geas`, a compiled module ends in
 17. [Interop and the ABI](#interop-and-the-abi)
 18. [The Store Layer](#the-store-layer)
 19. [The Bridge](#the-bridge)
+20. [Known limits](#known-limits)
 
 ---
 
@@ -161,7 +176,8 @@ carries a type and an optional default:
 vow currency: String = "USD"
 ```
 
-A vow default is a constant of the vow's type. Nothing inside the contract may
+A vow default is a literal of the vow's type, a negative number or duration
+included, and never an expression to work out. Nothing inside the contract may
 assign to a vow, and a host may override a vow at sign, supplying a value of the
 declared type. A vow with no default and no override at sign is an unbound
 signing and is refused. A pledge body reads a vow by name.
@@ -219,7 +235,9 @@ subcontract Validation {
 A subcontract is satisfied when every member inside it has latched fulfilled. A
 pledge declared outside any subcontract is a loose pledge and stands on its own
 in the policy. A subcontract may also hold signals, and it may carry `within`
-and `after` terms that cover every member inside it.
+and `after` terms that cover every member inside it. A subcontract holds at
+least one pledge or signal, since an empty one could never be satisfied, and
+the checker refuses one that holds neither.
 
 ### Attributes
 
@@ -233,6 +251,8 @@ attribute region: Int on pledge
 attribute region_max: Int on pledge
 attribute threads: Int on pledge
 attribute queue: String on contract
+
+CopyError is either Failed(code: Int)
 
 contract Job [queue: "batch"] {
     pledge copy(target: String) -> Result<Unit, CopyError> [program: "/bin/copy", region: 64M, region_max: 512M, threads: 1]
@@ -260,7 +280,22 @@ job's queue or a step's memory budget leaves a parked instance compatible. The
 runtime publishes those values as immutable descriptor data, available until
 runtime shutdown, and the host decides how to apply them.
 
-A contract carries an optional version attribute, `[version: N]`, default 1. The
+A pledge or a remedy with no body can name the C function that implements
+it, `[abi: "c", symbol: "charge_card"]`, both keys together and only on an
+abstract declaration. At sign, resume, and claim the runtime looks for an
+implementation in one order: a host binding made through the runtime first,
+then a compiled body, and then the function the process exports under that
+symbol, found with `dlsym`. A host executable exports its functions to that
+lookup by linking with `-rdynamic`, and a symbol nothing exports leaves the
+pledge unbound, so the sign is refused the way any unbound pledge refuses it.
+The symbol is a C identifier and may not start with `geas_`, `__geas_`, or
+`GEAS_`, the prefixes the runtime and the code geas emits own. That is the
+only name the compiler holds it away from: a symbol that collides with libc
+or with anything else the process links, `printf` or `free`, is the host's to
+avoid, since `dlsym` answers with whatever the process exports under it.
+
+A contract carries an optional version attribute, `[version: N]`, an integer
+from 1 through 4294967295, default 1, anything else a compile error. The
 version is baked into every mangled name, so a host that signs against the wrong
 version is refused at discovery rather than corrupted at call time.
 
@@ -308,7 +343,8 @@ call can be made again once the steps ahead of it land. An `Err` never
 satisfies an `after`, so a step waiting on one that broke never becomes
 eligible. The checker rejects a cycle and names the path.
 
-**`within`** is a deadline counted from eligibility. A step still pending when
+**`within`** is a deadline counted from eligibility, a duration greater than
+zero, since `within 0s` would read as no deadline at all. A step still pending when
 it passes lapses: it latches broken, with no error payload, because the
 pledge's own error type has no say over a deadline, and the runtime marks the
 latch as a lapse so a host can tell a missed deadline from an `Err`. A lapse
@@ -316,9 +352,10 @@ arms the break line like any broken latch. A body started in time lands its
 outcome even if it returns late, since the work it did is real. A
 subcontract's `within` lapses every member inside it that has not latched.
 
-**`retry`** is the number of attempts after the first. The delay before each
-retry starts at `every`, multiplies by `backoff` each time, a float of at
-least `1.0`, and stops growing at `cap`. Without `on`, only lifecycle failures
+**`retry`** is the number of attempts after the first, from 1 up to
+1,000,000. The delay before each retry starts at `every`, multiplies by
+`backoff` each time, a float of at least `1.0`, and stops growing at `cap`;
+`every` and `cap` are durations greater than zero when they are given. Without `on`, only lifecycle failures
 retry, a lost worker or a lapsed attempt, never a business `Err`, because a
 declined card is an answer and not an accident. With `on`, the listed variants
 of the pledge's error sum retry too. Only the last attempt's outcome is
@@ -564,6 +601,17 @@ through the same machinery a host fulfillment uses, the eligibility gate, the
 terms, the retries, the latch, the policy, the events, and the remedy pass a
 break makes due. Between two steps the course is ordinary code.
 
+Every slot carries its type and starts, when the instance signs, at the
+smallest value of that type: zero, an empty string or list or map, `None`, a
+record of smallest fields, the variant of a sum and the arm of a `Result`
+that nest least. So a slot's type has to have a finite value at all, and its
+smallest one nests at most 256 levels and holds at most 4096 values; a record
+that holds itself with nothing between, or one that holds the next record
+twice down a dozen levels, is refused when the contract builds, with a
+message that says to hold it behind an `Option` or a `List`, whose smallest
+value is empty. A resume, a claim, and an amend hold every slot a row brings
+back to its type the same way the checked boundary holds a value.
+
 *Steps are at least once.* After every step the course stores its next step
 number, and an armed autopark writes the instance's row right there. A
 resumed course enters at the step its row names with the slots its row
@@ -572,6 +620,8 @@ and a step that was running when the process died runs again from its start.
 A body that must not act twice keys its side effect the way any at least once
 worker does. The same boundary publishes the step number, so a host reading
 the course while it runs sees the step it stands at.
+
+A `select` holds at least one arm, an empty one is a compile error.
 
 *Suspend and wake.* At an `await`, a `sleep`, a `select`, or a `together`
 that cannot finish yet, the function returns to the runtime, the course reads
@@ -590,10 +640,15 @@ worker, and while that thread delivers, the instance is reserved to it. A
 course that meets such a delivery at one of its operations, at the end of a
 retry delay, at a step boundary, or where an armed autopark writes its row,
 waits for it to end and goes on, so a course never halts or is cancelled
-over a delivery it had no part in. A host driven fulfillment that meets one
-is refused with `GEAS_ERR_STATE` instead, since the host thread may hold a
-lock the hook is waiting on, and the host calls again once the delivery
-ended, which its own hook is the one to tell it.
+over a delivery it had no part in. A host driven fulfillment, signal, park,
+break, or release that meets one waits it out the same way and then runs, so
+the host never has to tell a delivery in flight from a step that cannot
+happen; only the same calls made from inside the hook, or from a body while
+another thread delivers, are refused with `GEAS_ERR_STATE`. The host keeps
+its own lock order: it does not make such a call while it holds a lock its
+hook takes. A sync fulfillment returns after the events it recorded were
+delivered, so a host on one thread sees each call's events before the call
+returns.
 
 *Together.* The calls of a `together` start at once on the pool, each with
 the instance lock released, so two bodies really run at the same time, bounded
@@ -626,8 +681,13 @@ from then on the runtime writes its row at every step boundary, whenever the
 course waits or ends, and at every latch, lapse, state change, and remedy, the
 same row `geas_instance_park` writes. A resume in a fresh runtime enters a
 waiting or running course at its saved step; a finished, halted, or cancelled
-one stays as it was. The row carries a hash of the course, its step count,
-its slot count, and the tokens of its source, and a module whose course hash
+one stays as it was. The row carries a hash of the course, taken over the
+lowered course, its slots with their types, its steps, and its statements,
+plus the layouts its slot types reach and the schemas, so a comment, a
+blank line, a renamed `let` or pattern binding, the order a record literal
+lists its fields in, and the spelling of a literal, `1_000` against `0x3e8`,
+`1m` against `60s`, `1.0e3` against `1000.0`, leave it alone, while every
+change in what the course does moves it, and a module whose course hash
 differs refuses the row with `GEAS_ERR_VERSION`, since a frame laid out for
 one course cannot drive another. A course that changes ships under a new
 contract version, the job amendment takes on.
@@ -776,9 +836,42 @@ layout changed as a changed type.
 | `Duration` | a span of time, 64 bit signed milliseconds |
 | `Time` | a point in time, 64 bit signed milliseconds since the Unix epoch |
 
-Numeric widths are fixed and never convert implicitly. A widening or narrowing
-is a type error unless written explicitly, and there is no implicit conversion
-anywhere in the language, widths included.
+Numeric widths are fixed and never convert. There is no implicit conversion
+anywhere in the language, widening included, and no conversion syntax either,
+no cast and no call named after a type, so an `Int` never becomes a `Float` or
+a `UInt` inside a contract. A host that needs a value at another width hands
+it in at that width.
+
+Integer arithmetic never wraps. A `+`, `-`, `*`, or unary `-` on `Int`,
+`UInt`, `Byte`, `Duration`, or `Time` whose result leaves its type's range,
+a `UInt` or `Byte` going below zero included, a `/` or `%` by zero, and the
+least `Int` divided by or taken modulo `-1` fault the fulfillment with the
+same status an out of range list index reports, and a course stops on it the
+same way. A literal gets no special treatment, so `9223372036854775807 + 1`
+faults when it runs. `Float` follows IEEE 754, never faults, and has no `%`,
+which is a compile error on it.
+
+A literal stands for its value, not its spelling. An integer literal may be
+written in decimal, hex, or binary with underscores between digits, and one
+whose magnitude leaves 64 bits is a lex error, with one exception: the least
+`Int`, `-9223372036854775808`, is written as that magnitude right after a
+unary minus, the one place the magnitude means a value that fits, and the
+same holds for the least `Duration`, `-9223372036854775808ms`, and the least
+size, `-8388608T`; anywhere else the bare magnitude is the overflow error. A
+`Float` literal is the double nearest the decimal it spells, so `1_000.5`,
+`1.0e3`, and `0.1` reach the module as the doubles 1000.5, 1000.0, and the
+nearest double to 0.1, and one whose value is past the largest finite double,
+`1.0e309`, is a lex error.
+
+The one value of type `Unit` is spelled `Unit`, so a body returning
+`Result<Unit, E>` succeeds with `return Ok(Unit)`. It compares like any other
+value, so `Unit == Unit` is `true`, and so is the comparison of two composites
+that differ in nothing but `Unit` fields.
+
+Any other type name is a declared record, sum, schema row, or contract. A
+name nothing declares, `Strng` for `String`, is the compile error
+`unknown type 'Strng'` and never a type of its own; `StoreError`, the `Err`
+side of every Store answer, is the one name the compiler brings in.
 
 ### Byte buffers
 
@@ -897,11 +990,11 @@ inside a pledge body, never a value that crosses the boundary, so nothing a
 foreign host receives can carry an instance it cannot own. See
 [Cross Contract Calls](#cross-contract-calls).
 
-A pledge type, `pledge(Int) -> Unit`, is held to the same line. A pledge value
-is bound to the instance that made it and means nothing outside that process,
-so it is a value only inside the module, in a clause parameter, a clause
-return, and a local binding, and the checker refuses it at every position a
-contract type is refused.
+A pledge is called on its instance and never held as a value. The bare
+member `instance.pledge_name` and the type `pledge(Int) -> Unit` still parse,
+so the spelling stays reserved, but pledge values are not part of this
+version of the language and the checker refuses either wherever it appears;
+docs/grammar.md lists it with the rest of what the grammar leaves out.
 
 ---
 
@@ -921,8 +1014,9 @@ let n = 0
 let mut xs = [a, b, c]
 ```
 
-An unused binding is not silently accepted; the language names deferred and
-unsupported constructs rather than accepting them quietly.
+A binding the code never reads is accepted, the way an unused parameter is.
+What the language does not support it names, and refuses with a diagnostic,
+rather than accepting it quietly.
 
 ### Control flow
 
@@ -932,13 +1026,21 @@ unsupported constructs rather than accepting them quietly.
 - `while cond { }` loops on a condition.
 - `for x in list { }` walks a list.
 - `break` and `continue` inside a loop.
-- `return` leaves a pledge or clause with a value of its declared type.
+- `return` leaves a pledge or clause with a value of its declared type. A
+  pledge, clause, or remedy whose return type is not `Unit` returns on every
+  path, so an `if` without an `else`, a `match` arm, or a loop that can reach
+  the closing brace is the error `not every path of 'NAME' returns a value`.
+  A `while true` no `break` leaves counts as ending its path. A `Unit` body
+  may fall off its end, and a course returns nothing.
 
 ### Match
 
 `match` is an exhaustive expression over sums, `Option`, `Result`, and `Bool`.
-It must cover every variant, and the checker rejects it otherwise. Each arm binds
-the payload it matches:
+It must cover every variant, and the checker rejects it otherwise. Coverage
+reads one level deep: an arm with a refutable pattern nested inside,
+`Some(Ok(x))` or `Gateway(500)`, covers nothing toward it, so such a match
+still needs an arm that takes the case whole, or a `_` or binding arm. Each
+arm binds the payload it matches:
 
 ```text
 match r {
@@ -955,14 +1057,26 @@ type must be the enclosing return type's error type.
 
 ### Blocks as values
 
-A block is an expression, and its value is its last expression, so a `match` arm
-or an `if` branch can produce a value directly.
+A block is an expression, and its value is its last expression, so a `match`
+arm can produce a value directly. `if` is a statement and never a value; a
+value that depends on a condition comes from a `match` on the `Bool`, or from
+a `let mut` both branches assign:
+
+```text
+let fee = match express {
+    true -> 500
+    false -> 0
+}
+```
 
 ### Operators
 
 The language has an eight level precedence ladder. `String + String`
-and `Bytes + Bytes` concatenate. The comparison and equality operators work over the primitive
-types. The logical operators `&&` and `||` short circuit: the right operand is
+and `Bytes + Bytes` concatenate. `==` and `!=` compare two values of one type,
+composites structurally. The ordering operators `<`, `<=`, `>`, and `>=` take
+two numbers of one type, `Int`, `UInt`, `Float`, or `Byte`, or two durations
+or two times; `Char`, `String`, `Bool`, and `Bytes` have no ordering. The
+logical operators `&&` and `||` short circuit: the right operand is
 evaluated only when the left does not already decide the result, so a bounds
 check like `i < n && xs[i] == 0` never touches `xs[i]` when `i < n` is false.
 
@@ -974,7 +1088,11 @@ is never visible through another. The one place a write lands in place is an
 assignment target, `xs[0] = y` or `record.field = y` or `map[k] = y`, which walks
 to the named slot and writes there while the right side still copies. An out of
 range list index or a missing map key mid chain is a clean type error, never a
-fault, and the fault checks run before the right side evaluates.
+fault, and the fault checks run before the right side evaluates. The right
+side, and any index the target reads, may not assign the binding the target
+is rooted in, a compile error, so where a value lands never depends on that
+order, in ordinary code or in a course that finds the slot again after a step
+resumes; bind such a value with `let` first.
 
 The single exception to value semantics is a signed instance, described next.
 
@@ -1051,6 +1169,8 @@ declares exactly one `Main` contract with a `run` pledge over `List<String>`
 returning `Result<Int, E>`:
 
 ```text
+DemoError is either BadMood(reason: String)
+
 contract Main {
     vow greeting: String = "counted"
 
@@ -1141,7 +1261,10 @@ the table immutable: after it, loading, registering, and binding refuse, while
 signing and fulfilling continue.
 
 The mangled name has the form
-`__geas_ash_{contract}_{symbol}_{sighash}_v{n}`, and `geas emit-header` writes the
+`__geas_ash_{len}{contract}_{len}{symbol}_{sighash}_v{n}`, each name led by
+its byte length so no two pairs of names ever spell one string,
+`__geas_ash_7Greeter_5greet_5155c52e95ed821d_v1` for `Greeter.greet`, and
+`geas emit-header` writes the
 shape hash and every mangled name as C defines so a host resolves against
 generated names instead of string literals.
 
@@ -1168,7 +1291,9 @@ would read it. A value that does not conform is `GEAS_ERR_TYPE` and no body
 runs, nothing latches, and nothing of it is kept. A body's answer that does not
 conform fails that attempt with `GEAS_ERR_TYPE`, retried like any failed
 attempt and never latched, and a course whose call meets it halts with that
-status. A value nests at most 256 levels at any boundary, and anything that
+status. A value nests at most 256 levels at any boundary and holds at most
+2^24 values in all, counted as the tree it unfolds to; one past that budget is
+`GEAS_ERR_OOM`, a limit on resources rather than on types, and anything that
 conforms can always be parked.
 
 The same check runs on a park row. A resume, a claim, and an amend hold the
@@ -1237,7 +1362,10 @@ A host can pass an argument by reference and receive data back through its own
 pointer. The runtime copies the value in at fulfill, the body mutates its
 instance owned slot, and the write back lands in host memory only at delivery,
 while the host is still blocked in the call, through a default for scalars and
-strings or a caller supplied callback.
+strings or a caller supplied callback. A callback runs after the default write
+backs of that call, with the instance's lock let go, so it may call into the
+runtime, the same instance included, and the value it is handed is a copy,
+string bytes and all, valid until it returns.
 
 ### Binding an abstract pledge
 
@@ -1268,6 +1396,10 @@ A store backed contract declares the shape of a table as a schema, beside its
 vows:
 
 ```text
+import std.store
+
+LedgerError is either NoSuchAccount(id: Int) or Insufficient or StoreFailed
+
 contract Ledger {
     vow dsn: String = "file:ledger.db"
 
@@ -1304,15 +1436,28 @@ naming a schema in its own contract:
 ```text
 pledge debit(id: Int, amount: Float) -> Result<Unit, LedgerError> {
     match Store.find(Accounts, id) {
-        Err(_) -> { return Err(NoSuchAccount(id)) }
-        Ok(None) -> { return Err(NoSuchAccount(id)) }
         Ok(Some(row)) -> {
-            Store.update(Accounts, id, Accounts { balance: row.balance - amount })
-            return Ok(Unit)
+            if row.balance < amount {
+                return Err(Insufficient)
+            }
+            let next = Accounts { id: id, balance: row.balance - amount, owner: row.owner }
+            match Store.update(Accounts, id, next) {
+                Ok(_) -> { return Ok(Unit) }
+                Err(_) -> { return Err(StoreFailed) }
+            }
         }
+        Ok(None) -> { return Err(NoSuchAccount(id)) }
+        _ -> { return Err(StoreFailed) }
     }
 }
 ```
+
+A row is the schema's record, so a write spells every column, the key
+included. Every Store answer is a `Result` whose `Err` is `StoreError`, which
+a pledge folds into its own error type rather than propagating with `?`, since
+`?` only carries an `Err` whose type is the body's own. The last arm is a `_`
+because `Ok(Some(row))` and `Ok(None)` nest a pattern inside `Ok`, and a
+nested pattern covers nothing toward exhaustiveness, see [Match](#match).
 
 `Store.find`, `Store.insert`, `Store.update`, and `Store.delete` name a schema
 and bind every value positionally, never by concatenation, so a value carrying
@@ -1372,8 +1517,9 @@ value. In particular, a failing pledge that triggered remedies still returns
 its `Err` with `GEAS_OK` after the original pass finishes. A shutdown joins
 workers, so the host wakes its own sleep callbacks. A running pledge body,
 a queued fulfillment, and a completed but unwaited receipt still refuse a
-park. Workflow blob version 3 adds the retry fields; version 2 and rows
-without a workflow blob retain their earlier resume rules.
+park. The workflow column is versioned on its own, and a runtime reads every
+version it ever wrote, so a row parked by an earlier release resumes under a
+later one; docs/abi.md lays out each version byte for byte.
 
 Steps are at least once. A host that dies in the middle of a step resumes from
 its last park with that pledge still pending and runs it again, so a step body
@@ -1395,8 +1541,48 @@ emitted artifacts with stock tooling. A pledge's `Err` crosses as a value on
 an OK rpc, a Geas status crosses as a gRPC code, the shape hash pins both
 ends to one contract, and a park store lets a session survive its stream, its
 client, and its server. Every signal is its own typed `Signal` rpc on the
-emitted surface, with a helper in each session wrapper, and serving those rpcs
-from the reference bridge server is next on the roadmap. The bridge adds no language surface; it is the same
+emitted surface, with a helper in each session wrapper, and the reference
+bridge server serves every one of them. The bridge adds no language surface; it is the same
 contracts, one emitted file wider. The canonical little endian value encoding
 remains the park row's format, so a parked value round trips exactly.
 [docs/bridge.md](docs/bridge.md) is the normative surface.
+
+---
+
+## Known limits
+
+So these are the edges version 1.0.0 draws on purpose. Each one is a rule the
+compiler or the runtime holds, never a case that quietly misbehaves, and
+lifting one is a tail addition the stability promise already leaves room for.
+
+- A vow's type is a scalar, `String`, `Bytes`, `Duration`, or `Time`, the
+  values the contract descriptor carries as one `GeasValue`. A vow of a record,
+  a sum, a collection, an `Option`, or a `Result` checks, and `geas build`
+  refuses it.
+- A `together` block holds only single calls of the contract's own pledges,
+  one call a statement, bound with `let` or not and with or without `?`.
+- A host call that waits out another thread's event delivery waits on that
+  delivery's hook, so a host thread holding a lock its hook takes does not
+  make a fulfill, signal, park, break, release, free, or tick, nor wait on a
+  receipt, until it lets that lock go; reads never wait and are safe there.
+- Across the bridge a message nests about 100 levels deep before the protobuf
+  parser refuses it, well under the 256 levels the runtime admits, so the
+  parser's limit is the one a gRPC client meets first.
+- On the bridge an `Option` of a record, or of a sum whose arms carry
+  payloads, shares its field's spelling with the plain type, so such a
+  parameter coming in from a client reads as the plain type.
+- Steps are at least once. A process that dies inside a step resumes with
+  that step still pending and runs it again, so a step body keys its outside
+  effect or checks its own progress before it repeats work.
+- A value nests at most 256 levels at a boundary and holds at most 2^24
+  values, `GEAS_VALUE_MAX_NODES`, counted as the tree it unfolds to. Past the
+  depth it is `GEAS_ERR_TYPE` and past the count `GEAS_ERR_OOM`, at every
+  boundary, in a deep copy, and at a park, so nothing parks that a resume
+  would refuse.
+- A course slot starts at the smallest value of its type, so that value has
+  to exist, nest at most 256 levels, and hold at most 4096 values,
+  `GEAS_SLOT_MIN_NODES_MAX`; a larger type rides behind an `Option` or a
+  `List`, whose smallest value is empty.
+- A foreign `symbol` may not start with `geas_`, `__geas_`, or `GEAS_`, and
+  the compiler checks nothing more about it, so a name libc or another linked
+  library already exports is the host's to avoid.

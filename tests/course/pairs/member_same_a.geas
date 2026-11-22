@@ -1,0 +1,8 @@
+// A pledge the course never calls joins the contract, so the members the
+// course names keep their names though their indices move
+contract Flow {
+    pledge visit(value: Int) -> Option<Int>
+    course {
+        visit(1)?
+    }
+}

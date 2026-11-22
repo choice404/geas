@@ -24,16 +24,21 @@
 # accepted programs of tests/check, each one has to be a workflow, course,
 # or amends golden or on the plain list, so a new one cannot slip between
 # them. The syntax check runs the real cc over the module C of every golden
-# and every course of tests/course: it has to compile under -Wall -Wextra,
-# no warning may land inside a course function or a type table, and with
-# gcc no goto may jump over an initialization. Module C that carries an
+# and every course of tests/course: it has to compile under -Wall -Wextra
+# with no warning at all, and with gcc no goto may jump over an
+# initialization. Module C that carries an
 # amends table compiles only against a runtime header that declares
 # GeasAmendDesc, and module C that carries a type table only against one
 # that declares GeasTypeNode; against a header without them such a file is
 # counted as skipped
 # The tree goldens pin every remaining program under skeleton, lib/std, and
 # examples, including command failures from library modules and partial
-# skeletons
+# skeletons. The bounds check holds the slot bounds the compiler shares with
+# the runtime registrar to the defines in geas_abi.h, then builds generated
+# sources under a loose time limit: course slots whose smallest value is
+# exponential in the source or nests past the depth limit are refused, the
+# same types behind an Option or a List build, and a clause of 32000 lets
+# emits
 #
 # Set GEAS to test another build, the sanitizer one at target/bin-asan/geas
 # for instance. BLESS=1 rewrites every golden from GEAS and does nothing
@@ -51,7 +56,7 @@ $(cd "$ROOT" && ls compiler/tests/codegen/src/*.geas)"
 OUT_DIR="target/geas-out"
 WORKFLOW_DIR="$ROOT/compiler/tests/codegen/workflow"
 WORKFLOW_SOURCES="skeleton/saga.geas skeleton/flowdesk.geas skeleton/boundary.geas
-$(printf 'tests/check/%s.geas ' remedy_ok signal_ok term_attr_ok terms_ok)"
+$(printf 'tests/check/%s.geas ' remedy_ok signal_ok term_attr_ok terms_ok foreign_ok)"
 COURSE_DIR="$ROOT/compiler/tests/codegen/course"
 COURSE_SOURCES="$(printf 'tests/course/%s.geas ' straight_line while_head for_list if_match select_arms together questions)
 $(cd "$ROOT" && ls compiler/tests/codegen/course/src/*.geas)
@@ -65,18 +70,23 @@ UNBUILT_COURSES="order_saga"
 AMENDS_DIR="$ROOT/compiler/tests/codegen/amends"
 AMENDS_SOURCES="$(cd "$ROOT" && ls compiler/tests/codegen/amends/src/*.geas)
 $(printf 'tests/check/%s.geas ' amends_ok order_saga amends_vows_ok amends_items_ok amends_parts_ok amends_course_ok \
-    amends_layout_ok amends_vow_order_ok amends_seed_remedy_ok)"
+    amends_layout_ok amends_vow_order_ok amends_seed_remedy_ok amends_sub_ok)"
 TREE_DIR="$ROOT/compiler/tests/codegen/tree"
 TREE_SOURCES="$(printf 'skeleton/%s.geas ' blob hello_v2 jobattrs jobstep lifecycle order_course order_course_v2 steps)
 $(printf 'lib/std/%s.geas ' collections errors math process store strings traits)
 examples/supervisor/service.geas"
+
+# The time one generated build in the bounds check may take: loose, since a
+# sanitizer build runs several times slower, and still far below what a
+# build exponential or quadratic in its source takes
+BOUND_LIMIT_MS="${BOUND_LIMIT_MS:-3000}"
 
 # The tree modules whose generated C has to carry a course or amends table
 TREE_SYNTAX_STEMS="order_course order_course_v2"
 
 # The accepted programs of tests/check with no workflow construct in them,
 # which pin nothing the goldens above do not
-PLAIN_SOURCES="abi_clause_ok abi_pledge_type_ok incorporate misc payment requirements std_user
+PLAIN_SOURCES="abi_clause_ok incorporate misc payment requirements std_user
 store_ledger sub_transactional_ok attribute_name sizes req_forty req_worst_case bytes bytes_shadow process"
 
 if [ ! -x "$GEAS" ]; then
@@ -233,40 +243,12 @@ check_source_tree_coverage() {
     done < <(find skeleton lib/std examples -type f -name '*.geas' | sort)
 }
 
-# The line ranges of the course functions of one C file, as first last pairs
-course_ranges() {
-    awk '/^static uint32_t k[0-9]+_[A-Za-z0-9_]*_course\(/ { first = NR }
-         first && /^}$/ { print first, NR; first = 0 }' "$1"
-}
-
-# The line ranges of the type table arrays of one C file, as first last
-# pairs: a one line index array, or a table that runs to its closing brace
-type_ranges() {
-    awk '/^static const (uint32_t|GeasTypeVariant|GeasTypeNode|GeasItemTypes) k[0-9]+_[A-Za-z0-9_]*_(type_kids_|type_fields_|type_variants_|types\[|item_params_|item_types\[|vow_types\[|remedy_params_|remedy_types\[)/ {
-             if ($0 ~ /;$/) { print NR, NR } else { first = NR }
-             next
-         }
-         first && /^};$/ { print first, NR; first = 0 }' "$1"
-}
-
-# Whether a line of a C file falls inside one of the ranges a lister prints
-in_ranges() {
-    local lister="$1" file="$2" number="$3" first last
-    while read -r first last; do
-        if [ "$number" -ge "$first" ] && [ "$number" -le "$last" ]; then
-            return 0
-        fi
-    done < <("$lister" "$file")
-    return 1
-}
-
-# Runs the real cc over one module C file: a failure, a warning inside a
-# course function or a type table, or a goto over an initialization fails
-# it. A file that carries an amends table or a type table is skipped when
-# the runtime header has no GeasAmendDesc or GeasTypeNode to compile it
-# against
+# Runs the real cc over one module C file: a failure, any warning, or a goto
+# over an initialization fails it. A file that carries an amends table or a
+# type table is skipped when the runtime header has no GeasAmendDesc or
+# GeasTypeNode to compile it against
 check_c_file() {
-    local name="$1" file="$2" log="$WORK/syntax.log" number
+    local name="$1" file="$2" log="$WORK/syntax.log"
     if [ "$HAS_AMEND_ABI" -eq 0 ] && grep -q "GeasAmendDesc" "$file"; then
         skipped=$((skipped + 1))
         return
@@ -280,18 +262,11 @@ check_c_file() {
         head -10 "$log"
         return
     fi
-    while IFS=: read -r _ number _; do
-        if in_ranges course_ranges "$file" "$number"; then
-            fail_case "syntax/$name" "a warning inside a course function at line $number"
-            grep -F ":$number:" "$log" | head -3
-            return
-        fi
-        if in_ranges type_ranges "$file" "$number"; then
-            fail_case "syntax/$name" "a warning inside a type table at line $number"
-            grep -F ":$number:" "$log" | head -3
-            return
-        fi
-    done < <(grep -F ': warning: ' "$log")
+    if grep -qF ': warning: ' "$log"; then
+        fail_case "syntax/$name" "cc warns on the module C"
+        grep -F ': warning: ' "$log" | head -3
+        return
+    fi
     pass=$((pass + 1))
 }
 
@@ -348,6 +323,103 @@ check_module_syntax() {
     fi
 }
 
+# The bounds a slot type is held to are the runtime registrar's: each
+# constant in compiler/src/smallest.hpp has to equal its define in geas_abi.h
+check_bound_constants() {
+    local pair define name header compiler
+    for pair in GEAS_SLOT_MIN_NODES_MAX:slotMinNodesMax GEAS_VALUE_MAX_DEPTH:valueMaxDepth; do
+        define="${pair%%:*}"
+        name="${pair#*:}"
+        header="$(sed -n "s/^#define $define \([0-9]*\)u\{0,1\}\$/\1/p" runtime/include/geas/geas_abi.h)"
+        compiler="$(sed -n "s/.* $name = \([0-9]*\);\$/\1/p" compiler/src/smallest.hpp)"
+        if [ -z "$header" ] || [ "$header" != "$compiler" ]; then
+            fail_case "bounds/$define" "geas_abi.h says '$header', smallest.hpp says '$compiler'"
+        else
+            pass=$((pass + 1))
+        fi
+    done
+}
+
+# A record tree of depth levels, each record holding two of the next, so
+# the smallest value of R0 doubles at every level, or a chain when the
+# second field is left out
+write_records() {
+    local file="$1" depth="$2" shape="$3" level
+    : > "$file"
+    for level in $(seq 0 $((depth - 1))); do
+        if [ "$shape" = "tree" ]; then
+            printf 'record R%d {\n    a: R%d\n    b: R%d\n}\n' "$level" $((level + 1)) $((level + 1)) >> "$file"
+        else
+            printf 'record R%d {\n    a: R%d\n}\n' "$level" $((level + 1)) >> "$file"
+        fi
+    done
+    printf 'record R%d {\n    z: Int\n}\n' "$depth" >> "$file"
+}
+
+# A contract whose course holds one value of the given type
+write_slot_course() {
+    local file="$1" type="$2"
+    printf 'contract Holder {\n    signal hold(v: %s)\n    course {\n        let v = await hold\n    }\n}\n' \
+        "$type" >> "$file"
+}
+
+# A clause of count lets, the unread local pass over a long body
+write_long_clause() {
+    local file="$1" count="$2"
+    {
+        printf 'contract Long {\n    clause f(x: Int) -> Int {\n'
+        seq 0 $((count - 1)) | sed 's/.*/        let v& = x/'
+        printf '        return x\n    }\n}\n'
+    } > "$file"
+}
+
+# One build held to its exit code, a text its stderr holds or nothing, and a
+# loose time limit in milliseconds, so a build that grows exponentially or
+# quadratically in its source fails here
+check_timed_build() {
+    local name="$1" src="$2" code="$3" want="$4" limit="$5" dir start elapsed
+    dir="$WORK/bounds/$name"
+    start="$(date +%s%N)"
+    run_in "$dir" "$GEAS" build "$src"
+    elapsed=$(( ($(date +%s%N) - start) / 1000000 ))
+    if [ "$(cat "$dir/code")" -ne "$code" ]; then
+        fail_case "bounds/$name" "expected exit $code, got $(cat "$dir/code")"
+        head -5 "$dir/stderr"
+    elif [ -n "$want" ] && ! grep -qF -- "$want" "$dir/stderr"; then
+        fail_case "bounds/$name" "stderr missing: $want"
+        head -5 "$dir/stderr"
+    elif [ "$elapsed" -gt "$limit" ]; then
+        fail_case "bounds/$name" "took ${elapsed}ms, past the ${limit}ms limit"
+    else
+        pass=$((pass + 1))
+    fi
+}
+
+# The slot bounds and the long body, over sources generated here
+check_bounds() {
+    local dir="$WORK/bounds/src" nodes depth
+    mkdir -p "$dir"
+    nodes="whose smallest value has more than 4096 nodes; hold it behind an Option or a List"
+    depth="whose smallest value nests more than 256 levels; hold it behind an Option or a List"
+    write_records "$dir/wide.geas" 30 tree
+    write_slot_course "$dir/wide.geas" R0
+    check_timed_build wide "$dir/wide.geas" 1 "type 'R0' $nodes" "$BOUND_LIMIT_MS"
+    write_records "$dir/wide_option.geas" 30 tree
+    write_slot_course "$dir/wide_option.geas" "Option<R0>"
+    check_timed_build wide_option "$dir/wide_option.geas" 0 "" "$BOUND_LIMIT_MS"
+    write_records "$dir/deep.geas" 300 chain
+    write_slot_course "$dir/deep.geas" R0
+    check_timed_build deep "$dir/deep.geas" 1 "type 'R0' $depth" "$BOUND_LIMIT_MS"
+    write_records "$dir/deep_list.geas" 300 chain
+    write_slot_course "$dir/deep_list.geas" "List<R0>"
+    check_timed_build deep_list "$dir/deep_list.geas" 0 "" "$BOUND_LIMIT_MS"
+    write_records "$dir/deep_ok.geas" 254 chain
+    write_slot_course "$dir/deep_ok.geas" R0
+    check_timed_build deep_ok "$dir/deep_ok.geas" 0 "" "$BOUND_LIMIT_MS"
+    write_long_clause "$dir/long.geas" 32000
+    check_timed_build long "$dir/long.geas" 0 "" "$BOUND_LIMIT_MS"
+}
+
 if [ "${BLESS:-0}" = "1" ]; then
     bless_dir "$GOLDEN_SOURCES" "$GOLDEN_DIR"
     bless_dir "$WORKFLOW_SOURCES" "$WORKFLOW_DIR"
@@ -366,6 +438,8 @@ check_goldens "$TREE_SOURCES" "$TREE_DIR"
 check_workflow_coverage
 check_source_tree_coverage
 check_module_syntax
+check_bound_constants
+check_bounds
 
 echo "[codegen] $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

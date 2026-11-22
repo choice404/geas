@@ -97,7 +97,7 @@ message StepsCopyRequest {
   string target = 2;
 }
 
-// contract ProgramRemedy, version 1, shape 0xafa477785f6fee52.
+// contract ProgramRemedy, version 1, shape 0x05d011f668f80da4.
 // The sign surface: one optional field per vow, and the shape check,
 // where 0 skips it and the wrapper's pinned hash enforces this build.
 message ProgramRemedySignRequest {

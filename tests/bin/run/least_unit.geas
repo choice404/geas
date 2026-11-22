@@ -1,0 +1,35 @@
+// The least Int written as a literal, in an expression and in a pattern,
+// and Unit equality, which always holds, alone and inside a composite.
+// With no arguments every check holds and the program exits 7; with one,
+// the least Int is negated, which leaves the Int range and faults
+E is either Bad
+
+record Box {
+    tag: Unit
+    n: Int
+}
+
+contract Main {
+    clause bucket(x: Int) -> Int {
+        return match x {
+            -9223372036854775808 -> 1
+            _ -> 0
+        }
+    }
+
+    pledge run(args: List<String>) -> Result<Int, E> {
+        let least = -9223372036854775808
+        if len(args) == 1 {
+            return Ok(-least)
+        }
+        let isLeast = least == -9223372036854775807 - 1 && bucket(least) == 1 && bucket(0) == 0
+        let isUnit = Unit == Unit && !(Unit != Unit)
+        let isWrapped = Some(Unit) == Some(Unit) && [Unit, Unit] == [Unit, Unit]
+        let isBoxed = Box { tag: Unit, n: 1 } == Box { tag: Unit, n: 1 }
+        let isApart = Box { tag: Unit, n: 1 } != Box { tag: Unit, n: 2 }
+        if isLeast && isUnit && isWrapped && isBoxed && isApart {
+            return Ok(7)
+        }
+        return Ok(1)
+    }
+}

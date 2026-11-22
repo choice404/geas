@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/faults_slots.geas: 1:1: error: a --bin build needs exactly one Main contract
+  // Course slots the runtime could not start: every slot begins at the
+  ^

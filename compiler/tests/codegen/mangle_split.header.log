@@ -1,0 +1,4 @@
+exit 1
+compiler/tests/codegen/src/mangle_split.geas: 12:5: error: geas: the header macro GEAS_MANGLED_A_b_c would name both pledge b_c of contract A and pledge c of contract A_b; rename one of them so each macro names one item
+      pledge c(x: Int) -> Option<Int> { return Some(x + 1) }
+      ^~~~~~~~

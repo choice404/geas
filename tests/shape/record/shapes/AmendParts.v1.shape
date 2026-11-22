@@ -1,9 +1,9 @@
-geas shape 2
+geas shape 3
 contract AmendParts
 version 1
-hash 0x881b810253ab47e8
+hash 0xdf959dc9893ba5fd
 course 0x0000000000000000
-shape contract AmendParts;pledge charge:()->R(I,S);pledge pack:()->V;pledge log:()->V;pledge old:()->V;pledge reserve:()->R(I,S);remedy refund:charge:(I)->V;remedy release:reserve:(I)->V;remedy unpack:pack:()->V;
+shape contract AmendParts;pledge charge:()->R(I,S);pledge pack:()->V;pledge log:()->V;pledge old:()->V;pledge reserve:()->R(I,S);remedy refund:charge:(I)->V;remedy release:reserve:(I)->V;remedy unpack:pack:()->V;sub Billing:charge;sub Shipping:pack;sub #2:log;sub Legacy:old;
 pledge charge ()->R(I,S) I
 pledge pack ()->V V
 pledge log ()->V V

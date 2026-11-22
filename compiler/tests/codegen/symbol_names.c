@@ -11,14 +11,14 @@ static GeasStatus geas_clause6_Ledger_note_entry(GeasContract* cc, const GeasVal
     GeasValue t1 = *t0;
     GeasValue t2 = {0};
     t2.ty = GEAS_TY_INT;
-    t2.as.i = args[0].as.i + t1.as.i;
+    if (__builtin_add_overflow(args[0].as.i, t1.as.i, &t2.as.i)) return GEAS_ERR_TYPE;
     *out = t2;
     return GEAS_OK;
     out->ty = GEAS_TY_UNIT;
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_6Ledger_4post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -47,7 +47,7 @@ static const GeasVowDesc k6_Ledger_vows[] = {
 };
 
 static const GeasPledgeDesc k6_Ledger_pledges[] = {
-    { "post", "__geas_ash_Ledger_post_a821ae9487abd245_v1", 1, __geas_ash_Ledger_post_a821ae9487abd245_v1, -1 },
+    { "post", "__geas_ash_6Ledger_4post_a821ae9487abd245_v1", 1, __geas_ash_6Ledger_4post_a821ae9487abd245_v1, -1 },
 };
 
 static const GeasReqAtom k6_Ledger_atoms[] = {
@@ -94,7 +94,7 @@ static const GeasContractDesc k6_Ledger = {
     .remedy_types = NULL,
 };
 
-static GeasStatus __geas_ash_Ledger_types_post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_12Ledger_types_4post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -115,7 +115,7 @@ static GeasStatus __geas_ash_Ledger_types_post_a821ae9487abd245_v1(void* ctx, co
 }
 
 static const GeasPledgeDesc k12_Ledger_types_pledges[] = {
-    { "post", "__geas_ash_Ledger_types_post_a821ae9487abd245_v1", 1, __geas_ash_Ledger_types_post_a821ae9487abd245_v1, -1 },
+    { "post", "__geas_ash_12Ledger_types_4post_a821ae9487abd245_v1", 1, __geas_ash_12Ledger_types_4post_a821ae9487abd245_v1, -1 },
 };
 
 static const GeasReqAtom k12_Ledger_types_atoms[] = {
@@ -160,7 +160,7 @@ static const GeasContractDesc k12_Ledger_types = {
     .remedy_types = NULL,
 };
 
-static GeasStatus __geas_ash_Ledger_item_post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_11Ledger_item_4post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -181,7 +181,7 @@ static GeasStatus __geas_ash_Ledger_item_post_a821ae9487abd245_v1(void* ctx, con
 }
 
 static const GeasPledgeDesc k11_Ledger_item_pledges[] = {
-    { "post", "__geas_ash_Ledger_item_post_a821ae9487abd245_v1", 1, __geas_ash_Ledger_item_post_a821ae9487abd245_v1, -1 },
+    { "post", "__geas_ash_11Ledger_item_4post_a821ae9487abd245_v1", 1, __geas_ash_11Ledger_item_4post_a821ae9487abd245_v1, -1 },
 };
 
 static const GeasReqAtom k11_Ledger_item_atoms[] = {
@@ -237,7 +237,7 @@ static GeasStatus geas_clause11_Ledger_note_entry(GeasContract* cc, const GeasVa
     return GEAS_OK;
 }
 
-static GeasStatus __geas_ash_Ledger_note_post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
+static GeasStatus __geas_ash_11Ledger_note_4post_a821ae9487abd245_v1(void* ctx, const GeasValue* args, size_t nargs,
                            GeasValue* out) {
     GeasContract* cc = (GeasContract*)ctx;
     (void)cc;
@@ -262,7 +262,7 @@ static GeasStatus __geas_ash_Ledger_note_post_a821ae9487abd245_v1(void* ctx, con
 }
 
 static const GeasPledgeDesc k11_Ledger_note_pledges[] = {
-    { "post", "__geas_ash_Ledger_note_post_a821ae9487abd245_v1", 1, __geas_ash_Ledger_note_post_a821ae9487abd245_v1, -1 },
+    { "post", "__geas_ash_11Ledger_note_4post_a821ae9487abd245_v1", 1, __geas_ash_11Ledger_note_4post_a821ae9487abd245_v1, -1 },
 };
 
 static const GeasReqAtom k11_Ledger_note_atoms[] = {

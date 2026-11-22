@@ -1,0 +1,8 @@
+// The course calls another pledge of the same signature
+contract Flow {
+    pledge left(value: Int) -> Option<Int>
+    pledge right(value: Int) -> Option<Int>
+    course {
+        right(1)?
+    }
+}

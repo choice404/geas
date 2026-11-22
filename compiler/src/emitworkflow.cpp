@@ -18,7 +18,7 @@ constexpr int tagSome = 1;
 
 CValue CEmitter::genWorkflowExpr(const Expr& expr) {
     if (const auto* duration = std::get_if<DurationLiteral>(&expr.kind)) {
-        return genScalar("GEAS_TY_INT", "i", decimal(duration->milliseconds), TyKind::Duration);
+        return genScalar("GEAS_TY_INT", "i", cInteger(duration->milliseconds), TyKind::Duration);
     }
     if (const auto* ctor = std::get_if<GenericNewExpr>(&expr.kind)) {
         return genGenericNew(expr, *ctor);

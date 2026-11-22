@@ -20,10 +20,9 @@
  * the lock across its body, so its open episode never shares a window with
  * another body's store calls.
  *
- * Events. Another thread delivering this instance's events refuses a host
- * driven fulfillment the gate sees; the course's own paths wait instead, on
- * join_cv under the instance mutex, which the redrive broadcasts once the
- * delivery ended. A together call waits before it starts, when its body
+ * Events. Another thread delivering this instance's events is waited out,
+ * on the instance's delivery_cv under its mutex, which every end of a
+ * delivery broadcasts. A together call waits before it starts, when its body
  * returns, and after a retry delay; the course function waits at every
  * operation, at a call's gate and after its retry delay, at a checkpoint,
  * and before an armed autopark writes its landing. A thread that waits
@@ -51,34 +50,24 @@ static __thread GeasJoinCall* t_released;
 
 /* ---- waiting out a delivery ---- */
 
-/* Waits until no other thread is delivering this instance's events and
- * answers whether it had to, since the lock was out of its hands meanwhile.
- * Only a thread holding the instance lock exactly once, outside any
- * delivery or hook of its own, waits: the wait gives the recursive mutex up
- * whole, so the delivering thread can take it back to end its delivery. Any
- * other caller answers 0 at once and its refusal stands. Under the instance
- * lock */
+/* The course's own paths wait out another thread's delivery whole, a
+ * remedy pass's reservation included, so a course never stops on a delivery
+ * it had no part in. Under the instance lock */
 int geas_rt_course_await_delivery(GeasContract* c) {
-    GeasCourse* k = c->course;
-    if (!k || !geas_rt_may_await_delivery()) return 0;
-    int is_waited = 0;
-    while (geas_rt_events_blocked(c)) {
-        pthread_cond_wait(&k->join_cv, &c->mu);
-        is_waited = 1;
-    }
-    return is_waited;
+    return geas_rt_await_delivery(c, GEAS_AWAIT_ALL);
 }
 
-void geas_rt_join_delivered(GeasContract* c) {
-    if (c->course) pthread_cond_broadcast(&c->course->join_cv);
-}
-
-/* The wait for the course's own paths only. A host driven caller is never
- * one of them and keeps the refusal. Under the instance lock */
-int geas_rt_course_settle(GeasContract* c) {
+/* The wait at a fulfillment's gate and after its retry delay. The course's
+ * own paths, a together call on its worker or the course function at its
+ * own level, wait the way the course does; a host driven fulfillment waits
+ * out a delivery but not another thread's remedy pass, which leaves the
+ * contract Remedying and the gate's own checks answering for it. A caller
+ * the wait refuses, a body, a hook, a delivery, or a write back, keeps its
+ * refusal. Under the instance lock */
+int geas_rt_settle_delivery(GeasContract* c) {
     int is_call = t_call && t_call->node.c == c;
-    if (!is_call && !geas_rt_course_level_here(c)) return 0;
-    return geas_rt_course_await_delivery(c);
+    int is_course = is_call || geas_rt_course_level_here(c);
+    return geas_rt_await_delivery(c, is_course ? GEAS_AWAIT_ALL : GEAS_AWAIT_LIVE);
 }
 
 /* ---- the body without the lock ---- */
@@ -93,12 +82,23 @@ int geas_rt_join_release(GeasContract* c) {
     return 1;
 }
 
+/* The body has returned, so the wait below is the call's own and not a
+ * body's, which is why t_released is let go before it */
 void geas_rt_join_retake(GeasContract* c) {
     geas_rt_lock(c);
+    GeasJoinCall* call = t_released;
+    t_released = NULL;
     geas_rt_course_await_delivery(c);
     c->course->join_unlocked--;
-    t_call = t_released;
-    t_released = NULL;
+    t_call = call;
+}
+
+int geas_rt_in_join_body(void) {
+    return t_released != NULL;
+}
+
+int geas_rt_in_body_here(void) {
+    return geas_rt_holds_instance() || geas_rt_in_join_body();
 }
 
 /* ---- one call on its worker ---- */

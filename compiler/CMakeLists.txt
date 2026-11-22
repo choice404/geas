@@ -26,6 +26,7 @@ add_executable(geas
     src/token.cpp
     src/duration.cpp
     src/size.cpp
+    src/magnitude.cpp
     src/lexer.cpp
     src/lexnumber.cpp
     src/lexdump.cpp
@@ -55,7 +56,10 @@ add_executable(geas
     src/sigs.cpp
     src/checker.cpp
     src/checkrun.cpp
+    src/checkreturn.cpp
+    src/astwalk.cpp
     src/checkstmt.cpp
+    src/checkassign.cpp
     src/checkexpr.cpp
     src/checkctor.cpp
     src/checkcall.cpp
@@ -87,6 +91,7 @@ add_executable(geas
     src/emittext.cpp
     src/emitlookup.cpp
     src/emitc.cpp
+    src/emitunread.cpp
     src/emitmodule.cpp
     src/emitdesc.cpp
     src/emitflow.cpp
@@ -95,6 +100,7 @@ add_executable(geas
     src/emitstmt.cpp
     src/emitassign.cpp
     src/emitexpr.cpp
+    src/emitarith.cpp
     src/emitvalue.cpp
     src/emitcall.cpp
     src/emitstore.cpp
@@ -105,6 +111,7 @@ add_executable(geas
     src/emitamends.cpp
     src/emittypes.cpp
     src/typetable.cpp
+    src/smallest.cpp
     src/typedump.cpp
     src/emitcoursestep.cpp
     src/emitcoursematch.cpp

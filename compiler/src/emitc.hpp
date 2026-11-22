@@ -183,6 +183,8 @@ private:
     void emitPledgeTable(const ContractShape& shape);
     std::string emitSubFlags(const ContractShape& shape);
     void emitAttrTail(const ContractShape& shape, std::vector<std::string>& tail);
+    std::string emitForeignSymbols(const ContractShape& shape);
+    std::string emitSymbolTable(std::string_view symbol, const std::vector<const Attr*>& rows);
     std::string attrValueText(ExprId value) const;
     void appendAttrEntries(const std::vector<Attr>& attrs, AttrTarget target, std::size_t index,
                            std::vector<std::string>& entries) const;
@@ -257,6 +259,11 @@ private:
     CValue genCompare(const BinaryExpr& binary, const CValue& lhs, const CValue& rhs,
                       std::string_view field);
     CValue genConcat(const CValue& lhs, const CValue& rhs);
+
+    // Checked integer arithmetic, emitarith.cpp
+    void genCheckedArithmetic(BinaryOp op, const CValue& lhs, const CValue& rhs,
+                              std::string_view field, std::string_view value);
+    void genCheckedNegation(const CValue& operand, std::string_view field, std::string_view value);
     CValue genMapNew(const Expr& expr, const MapNewExpr& ctor);
 
     // Constructors and reads, emitvalue.cpp

@@ -5,6 +5,8 @@
 
 #include <utility>
 
+#include "magnitude.hpp"
+
 namespace geas {
 
 // pledge IDENT "(" [ Params ] ")" "->" Type Terms [ Attrs ] [ Block ]. A
@@ -146,6 +148,11 @@ void Parser::parseAttr(std::vector<Attr>& attrs) {
     std::string key = ident();
     expect(TokenKind::Colon, "':' between the attribute key and its value");
     const std::int64_t lo = current().lo;
+    if (at(TokenKind::Minus) && isLeastMagnitude(text_, lookahead())) {
+        bump();
+        attrs.push_back(Attr{std::move(key), parseLeastLiteral(lo)});
+        return;
+    }
     const bool isNegative = eat(TokenKind::Minus);
     std::optional<ExprId> value = parseLiteralExpr();
     if (!value) {

@@ -1,7 +1,6 @@
-// The first class pledge value read off an instance type checks, the member
-// form the grammar admits, but it has no lowering yet: the code generator
-// must refuse it as a named build error rather than emit C it would be
-// guessing at.
+// A pledge read off an instance without a call would be a first class
+// pledge value, which this version of the language leaves out, so the build
+// stops at the checker before any C is emitted.
 
 contract Helper {
     pledge ping() -> Result<Int, Int> {
