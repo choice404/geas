@@ -355,10 +355,22 @@ static uint32_t course_enter(GeasContract* c) {
     GeasCourse* k = c->course;
     for (;;) {
         k->wake = 0;
+        int64_t carried = k->frame.wait_due_ms;
+        int was_due = course_due(c);
         uint32_t answer = c->desc->course_fn(c, &k->frame);
         if (c->autopark_dsn) geas_rt_course_await_delivery(c);
         if (answer != GEAS_COURSE_SUSPENDED || k->refused || course_cut(c)) return answer;
         if (!k->wake && !course_due(c)) return answer;
+        /* Every wait that keeps a deadline ends once it is past, so one that
+         * was past when the entry began and is still there untouched belongs
+         * to no wait the course stands at, a row brought back with a stray
+         * one for instance. It is dropped and the run ends, rather than
+         * entering the course again for it while the lock is held */
+        if (!k->wake && was_due && k->frame.wait_due_ms == carried) {
+            k->frame.wait_due_ms = 0;
+            k->frame.wait_step = 0;
+            return answer;
+        }
     }
 }
 

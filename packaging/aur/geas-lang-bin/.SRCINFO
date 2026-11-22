@@ -1,0 +1,21 @@
+pkgbase = geas-lang-bin
+	pkgdesc = Language for durable obligations: contracts with deadlines, remedies, and signals, enforced by a C runtime any language can load (release binary)
+	pkgver = 1.0.1
+	pkgrel = 1
+	url = https://github.com/choice404/geas
+	arch = x86_64
+	license = MIT
+	depends = gcc
+	depends = glibc
+	depends = libgcc
+	depends = libstdc++
+	provides = geas-lang
+	conflicts = geas-lang
+	conflicts = geas-lang-git
+	conflicts = geas
+	options = !debug
+	options = !strip
+	source_x86_64 = https://github.com/choice404/geas/releases/download/v1.0.1/geas-lang-1.0.1-x86_64-linux.tar.gz
+	sha256sums_x86_64 = SKIP
+
+pkgname = geas-lang-bin

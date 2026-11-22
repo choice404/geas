@@ -30,7 +30,10 @@
 
 #define TEST_NAME "test_course_slots"
 #define MODULE_PATH "target/geas-out/libcourse_slots.geas.so"
-#define DSN "target/geas-out/test_course_slots.db"
+/* The park store, one per process so two runs side by side never share it */
+#define DSN_FORMAT "target/geas-out/test_course_slots_%ld.db"
+static char g_dsn[64];
+#define DSN g_dsn
 
 /* The Int the course writes into its first slot before it parks */
 #define MARKER 777001
@@ -476,6 +479,7 @@ static void test_mutations(void) {
 }
 
 int main(void) {
+    snprintf(g_dsn, sizeof(g_dsn), DSN_FORMAT, (long)getpid());
     unlink(DSN);
     test_zero_slots();
     test_retyped_slot();

@@ -1,0 +1,47 @@
+# Builds the x86_64 linux release tarball for every pushed version tag and
+# attaches it, with its sha256, to the GitHub release of that tag.
+#
+# The build runs in the archlinux:base-devel container rather than on the
+# stock Ubuntu runner. geas-lang-bin installs this binary on Arch, so it is
+# built against the glibc and libstdc++ Arch ships, and the gcc there carries
+# the C++23 std::expected the compiler needs and the cmake 3.28 or newer
+# compiler/CMakeLists.txt asks for, with no toolchain pinning on top.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      # Git first, so checkout clones a real repository the tarball's
+      # timestamps can be read from
+      - name: Install the toolchain
+        run: pacman -Syu --noconfirm --needed cmake git github-cli
+
+      - uses: actions/checkout@v4
+
+      - name: Build and pack
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          packaging/release.sh "$GITHUB_REF_NAME" target/release
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          files="target/release/geas-lang-$ver-x86_64-linux.tar.gz target/release/geas-lang-$ver-x86_64-linux.tar.gz.sha256"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" $files --title "$GITHUB_REF_NAME" --verify-tag --notes "See CHANGELOG.md for what $GITHUB_REF_NAME carries."
+          fi

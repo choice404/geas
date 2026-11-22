@@ -20,7 +20,10 @@
 # built with `geas build --bin` and run, held to their exit code and stderr.
 # The geas binary is built with
 # `make compiler` when missing; set GEAS to test another build, the
-# sanitizer one at target/bin-asan/geas for instance.
+# sanitizer one at target/bin-asan/geas for instance. The commands of a
+# golden suite run side by side, JOBS at a time and the machine's width when
+# it is unset, and their results are then read in order, so the report and
+# the count are the ones a run one case at a time gives.
 
 set -u
 
@@ -47,52 +50,114 @@ fail_case() {
     fail=$((fail + 1))
 }
 
-run_suite() {
-    local dir="$1"
-    local cmd="$2"
-    local src name base out code err missing want
-    for src in tests/"$dir"/*.geas; do
-        name="${src%.geas}"
-        base="$dir/$(basename "$name")"
+# How many cases run at once, and the scratch directory their verdicts land
+# in
+JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+VERDICTS="$(mktemp -d "${TMPDIR:-/tmp}/geas-tests.XXXXXX")"
+trap 'rm -rf "$VERDICTS"' EXIT
 
-        if [ -f "$name.expect" ]; then
-            out="$("$GEAS" "$cmd" "$src" 2>/dev/null)"
-            code=$?
-            if [ "$code" -ne 0 ]; then
-                fail_case "$base" "expected exit 0, got $code"
-                continue
-            fi
-            if ! diff <(printf '%s\n' "$out") "$name.expect" >/dev/null; then
-                fail_case "$base" "dump differs from golden"
-                diff <(printf '%s\n' "$out") "$name.expect" | head -20
-                continue
-            fi
-            pass=$((pass + 1))
-        elif [ -f "$name.err" ]; then
-            err="$("$GEAS" "$cmd" "$src" 2>&1 >/dev/null)"
-            code=$?
-            if [ "$code" -eq 0 ]; then
-                fail_case "$base" "expected rejection, got exit 0"
-                continue
-            fi
-            missing=""
-            while IFS= read -r want; do
-                [ -z "$want" ] && continue
-                if ! printf '%s' "$err" | grep -qF -- "$want"; then
-                    missing="$want"
-                    break
-                fi
-            done < "$name.err"
-            if [ -n "$missing" ]; then
-                fail_case "$base" "stderr missing: $missing"
-                printf '%s\n' "$err" | head -10
-                continue
-            fi
-            pass=$((pass + 1))
-        else
-            fail_case "$base" "no .expect or .err beside it"
+# Runs a command in the background, holding at most JOBS of them at once.
+# running counts what was spawned since the last full wait, which settle
+# takes and resets
+running=0
+spawn() {
+    if [ "$running" -ge "$JOBS" ]; then
+        wait -n
+        running=$((running - 1))
+    fi
+    "$@" &
+    running=$((running + 1))
+}
+
+settle() {
+    wait
+    running=0
+}
+
+# One golden case: an accepted program held to its dump, a rejected one to
+# the diagnostics its .err lists. Prints what a failure reports and answers
+# 0 for a pass, 1 for a failure, and 2 for a file that is no case, a module
+# of the multi-file suite with no golden beside it, or for a file with no
+# golden in the other suites a failure of its own
+judge_case() {
+    local cmd="$1" src="$2" base="$3" is_multi="$4"
+    local name out code err missing want
+    name="${src%.geas}"
+    if [ -f "$name.expect" ]; then
+        out="$("$GEAS" "$cmd" "$src" 2>/dev/null)"
+        code=$?
+        if [ "$code" -ne 0 ]; then
+            echo "FAIL $base: expected exit 0, got $code"
+            return 1
         fi
+        if ! diff <(printf '%s\n' "$out") "$name.expect" >/dev/null; then
+            echo "FAIL $base: dump differs from golden"
+            diff <(printf '%s\n' "$out") "$name.expect" | head -20
+            return 1
+        fi
+        return 0
+    elif [ -f "$name.err" ]; then
+        err="$("$GEAS" "$cmd" "$src" 2>&1 >/dev/null)"
+        code=$?
+        if [ "$code" -eq 0 ]; then
+            echo "FAIL $base: expected rejection, got exit 0"
+            return 1
+        fi
+        missing=""
+        while IFS= read -r want; do
+            [ -z "$want" ] && continue
+            if ! printf '%s' "$err" | grep -qF -- "$want"; then
+                missing="$want"
+                break
+            fi
+        done < "$name.err"
+        if [ -n "$missing" ]; then
+            echo "FAIL $base: stderr missing: $missing"
+            printf '%s\n' "$err" | head -10
+            return 1
+        fi
+        return 0
+    elif [ "$is_multi" -eq 1 ]; then
+        return 2
+    fi
+    echo "FAIL $base: no .expect or .err beside it"
+    return 1
+}
+
+# One case in the background, its report and its verdict kept under stem
+judge_into() {
+    local stem="$1"
+    shift
+    judge_case "$@" > "$stem.log" 2>&1
+    echo $? > "$stem.verdict"
+}
+
+# Every case of a suite directory judged side by side, then read back in
+# order, so the report and the counts come out as one case at a time gives
+judge_dir() {
+    local dir="$1" cmd="$2" is_multi="$3" src stem index=0 verdict
+    mkdir -p "$VERDICTS/$dir"
+    for src in tests/"$dir"/*.geas; do
+        index=$((index + 1))
+        spawn judge_into "$VERDICTS/$dir/$index" "$cmd" "$src" \
+            "$dir/$(basename "${src%.geas}")" "$is_multi"
     done
+    settle
+    index=0
+    for src in tests/"$dir"/*.geas; do
+        index=$((index + 1))
+        stem="$VERDICTS/$dir/$index"
+        cat "$stem.log"
+        read -r verdict < "$stem.verdict"
+        case "$verdict" in
+            0) pass=$((pass + 1)) ;;
+            1) fail=$((fail + 1)) ;;
+        esac
+    done
+}
+
+run_suite() {
+    judge_dir "$1" "$2" 0
 }
 
 # The multi-file suite. Every NAME.geas in the directory with a NAME.expect
@@ -100,48 +165,7 @@ run_suite() {
 # case; a file with neither is a helper another root imports and is skipped
 # rather than failed, since it is not a test by itself.
 run_multi_suite() {
-    local dir="$1"
-    local src name base out code err missing want
-    for src in tests/"$dir"/*.geas; do
-        name="${src%.geas}"
-        base="$dir/$(basename "$name")"
-
-        if [ -f "$name.expect" ]; then
-            out="$("$GEAS" check "$src" 2>/dev/null)"
-            code=$?
-            if [ "$code" -ne 0 ]; then
-                fail_case "$base" "expected exit 0, got $code"
-                continue
-            fi
-            if ! diff <(printf '%s\n' "$out") "$name.expect" >/dev/null; then
-                fail_case "$base" "dump differs from golden"
-                diff <(printf '%s\n' "$out") "$name.expect" | head -20
-                continue
-            fi
-            pass=$((pass + 1))
-        elif [ -f "$name.err" ]; then
-            err="$("$GEAS" check "$src" 2>&1 >/dev/null)"
-            code=$?
-            if [ "$code" -eq 0 ]; then
-                fail_case "$base" "expected rejection, got exit 0"
-                continue
-            fi
-            missing=""
-            while IFS= read -r want; do
-                [ -z "$want" ] && continue
-                if ! printf '%s' "$err" | grep -qF -- "$want"; then
-                    missing="$want"
-                    break
-                fi
-            done < "$name.err"
-            if [ -n "$missing" ]; then
-                fail_case "$base" "stderr missing: $missing"
-                printf '%s\n' "$err" | head -10
-                continue
-            fi
-            pass=$((pass + 1))
-        fi
-    done
+    judge_dir "$1" check 1
 }
 
 # The standalone reject suite. Every NAME.geas here breaks the entry point

@@ -15,9 +15,15 @@ if ! command -v dusk >/dev/null 2>&1; then
 fi
 
 cd "$ROOT"
-make compiler runtime
-target/bin/geas build skeleton/saga.geas
-target/bin/geas build skeleton/order_course.geas
+
+# make test-dusk builds the runtime and both modules through their own rules
+# and sets GEAS_PREBUILT, so the gate never rebuilds a module another gate
+# beside it is loading
+if [ "${GEAS_PREBUILT:-0}" != "1" ]; then
+    make compiler runtime
+    target/bin/geas build skeleton/saga.geas
+    target/bin/geas build skeleton/order_course.geas
+fi
 
 # The link resolves -l:libgeasrt.so.0 through LIBRARY_PATH and the loader
 # finds the same file through LD_LIBRARY_PATH

@@ -4,6 +4,47 @@ Every released version of Geas, newest first. The language was named
 Ashford through v0.6.8; entries below the rename keep the names they
 shipped with, because a changelog that rewrites its own past is not one.
 
+## [v1.0.1] the shelf
+
+Geas now ships the way a stable language is installed and gated. The gates run
+in tiers sized to how often they are run, the runtime is compiled once per
+flavour so every gate runs beside every other one, a fulfillment that ends its
+own instance publishes its receipt in the same order every other outcome
+keeps, and the toolchain lands on Arch as three packages over one release
+tarball. Nothing in the frozen surface moves, so every module, host, and
+parked row built against 1.0.0 runs unchanged.
+
+- run the gates in four tiers: `make quick`, the front end and codegen goldens,
+  the smoke walk, the language lowering gate, and the host driven saga, in
+  about fifteen seconds; `make check`, which `make all` is the same target as,
+  every test the repository carries exactly once, each TSan gate one round and
+  each fuzz pass a short count, safe under `-j`, about twenty five seconds as
+  `make -j24 check` from a built compiler, well under a minute from nothing but
+  the compiler, and a little over two minutes serial; `make soak`, the twenty
+  and thirty round TSan loops, the full fuzz counts, and the hundred thousand
+  round reuse case, every round its own make target and `SOAK_ROUNDS` setting
+  the rounds of every repeated test at once, about a minute; and
+  `make check-net`, the gRPC bridge and supervisor gates, each skipping clean
+  where grpcio, Go, or Node is absent, in about ten seconds
+- compile the runtime once per sanitizer flavour into `target/geas-out/rt/`, an
+  archive per flavour each gate links whole, so a gate compiles only its own
+  test and a rerun rebuilds only what a change reached
+- run the cases of `tests/run.sh` and `compiler/tests/run_codegen.sh` side by
+  side, reported in order, as the `test-golden` and `test-codegen` gates
+- publish the receipt of a fulfillment whose own body broke or released its
+  instance once the RECLAIMED or RELEASED event that ending recorded is
+  delivered, holding the `GEAS_ERR_STATE` the forfeit gave it, the order every
+  other outcome keeps, so a wait that returns has seen that event
+- drop a deadline a course entry finds already past and owned by no wait the
+  course stands at, a row brought back with a stray one for instance, and end
+  the run there rather than entering the course again for it
+- package the toolchain for Arch as `geas-lang`, built from the tagged source
+  and taking over from the `geas` package, `geas-lang-git`, built from the head
+  of the repository, and `geas-lang-bin`, installed from the release tarball
+- cut `geas-lang-<version>-x86_64-linux.tar.gz` and its `.sha256` with
+  `packaging/release.sh`, and attach both to the GitHub release of every
+  version tag from `.github/workflows/release.yml`
+
 ## [v1.0.0] the kept word
 
 Geas is stable. The language the spec and the grammar describe, the C surface

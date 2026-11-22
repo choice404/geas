@@ -24,7 +24,10 @@
 
 #define TEST_NAME "test_foreign"
 #define MODULE_PATH "target/geas-out/libforeign.geas.so"
-#define DSN "target/geas-out/test_foreign.db"
+/* The park store, one per process so two runs side by side never share it */
+#define DSN_FORMAT "target/geas-out/test_foreign_%ld.db"
+static char g_dsn[64];
+#define DSN g_dsn
 
 /* What the exported charge multiplies its amount by, and the host body's */
 #define FOREIGN_FACTOR 10
@@ -213,6 +216,7 @@ static void test_resume(void) {
 }
 
 int main(void) {
+    snprintf(g_dsn, sizeof(g_dsn), DSN_FORMAT, (long)getpid());
     unlink(DSN);
     test_exported();
     test_missing();

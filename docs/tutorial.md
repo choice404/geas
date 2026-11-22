@@ -35,6 +35,16 @@ host that signs it and fulfills a pledge end to end. `make compiler` builds the
 compiler on its own, and `make compiler SANITIZE=ON` builds it under the
 address and undefined behavior sanitizers into `target/bin-asan/geas`.
 
+Every `make test-...` this tutorial names is a gate you can run on its own,
+and the gates are grouped into tiers. `make quick` runs the golden suites,
+the smoke walk, and two runtime gates in about fifteen seconds, the one to
+run while you change something. `make check`, which `make all` also runs, is
+every test once, each thread sanitizer gate for one round, and it is built to
+run in parallel, so `make -j$(nproc) check` finishes in under a minute on a
+24 core machine. `make soak` repeats the thread sanitizer gates for the
+rounds their races want and runs the full fuzz counts, and `make check-net`
+runs the gRPC bridge and supervisor gates, which need grpcio, Go, and Node.
+
 The compiler is `geas`, source files end in `.geas`, and a compiled module ends
 in `.geas.so`. Everything lands under `target/`. `geas check file.geas` runs the
 whole front end without building anything, which is the fastest way to try an

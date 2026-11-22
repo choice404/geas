@@ -1,0 +1,59 @@
+# Maintainer: Austin Choi <austin.c.percussion@gmail.com>
+pkgname=geas-lang-git
+pkgver=1.0.1.r0.g0000000
+pkgrel=1
+pkgdesc="Language for durable obligations: contracts with deadlines, remedies, and signals, enforced by a C runtime any language can load (development build)"
+arch=('x86_64')
+url="https://github.com/choice404/geas"
+license=('MIT')
+# geas shells out to cc to compile the C it emits, so a C compiler is a
+# runtime dependency, not just a build one, and the compiler itself links
+# libstdc++. The runtime's SQLite is vendored and compiled in, so the store
+# adds nothing here.
+depends=('gcc' 'glibc' 'libstdc++')
+# The compiler is C++23 built by CMake; the g++ it needs comes with gcc above,
+# which has to be 13 or newer for std::expected.
+makedepends=('cmake' 'git')
+provides=('geas-lang')
+conflicts=('geas-lang' 'geas-lang-bin' 'geas')
+source=("geas::git+https://github.com/choice404/geas.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd geas
+  # The newest tag and the commits past it, or the commit count and hash
+  # when the history carries no tag yet
+  if git describe --long --tags >/dev/null 2>&1; then
+    git describe --long --tags | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+build() {
+  cd geas
+  make compiler runtime
+}
+
+check() {
+  cd geas
+  # The binary must agree with the source about what version it is, the
+  # version string in the compiler is the release the tree is heading for
+  src_ver=$(grep -oE 'versionString = "geas [0-9]+\.[0-9]+\.[0-9]+"' compiler/src/main.cpp | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+  if [ -z "$src_ver" ]; then
+    echo "ERROR: cannot read the source version from compiler/src/main.cpp" >&2
+    return 1
+  fi
+  test "$(target/bin/geas version)" = "geas $src_ver"
+  # The front end and codegen goldens, the smoke walk, and two runtime gates,
+  # under a minute
+  make quick
+}
+
+package() {
+  cd geas
+  make DESTDIR="$pkgdir" PREFIX=/usr install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 spec.md "$pkgdir/usr/share/doc/$pkgname/spec.md"
+}

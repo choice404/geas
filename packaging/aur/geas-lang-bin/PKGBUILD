@@ -1,0 +1,38 @@
+# Maintainer: Austin Choi <austin.c.percussion@gmail.com>
+pkgname=geas-lang-bin
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Language for durable obligations: contracts with deadlines, remedies, and signals, enforced by a C runtime any language can load (release binary)"
+# The release binary is the x86_64 linux build the release workflow ran the
+# quick gates over; other platforms build from source through geas-lang-git.
+arch=('x86_64')
+url="https://github.com/choice404/geas"
+license=('MIT')
+# geas shells out to cc to compile the C it emits, so a C compiler is a
+# runtime dependency, and the compiler itself links libstdc++. The runtime's
+# SQLite is vendored and compiled in, so the store adds nothing here.
+depends=('gcc' 'glibc' 'libgcc' 'libstdc++')
+provides=('geas-lang')
+conflicts=('geas-lang' 'geas-lang-git' 'geas')
+options=('!debug' '!strip')
+# Nothing is compiled here: the compiler, the runtime, its headers, and the
+# std modules all come from the tagged release, laid out by the same make
+# install the source packages run, so the three packages install the same files
+source_x86_64=("https://github.com/choice404/geas/releases/download/v$pkgver/geas-lang-$pkgver-x86_64-linux.tar.gz")
+sha256sums_x86_64=('SKIP')
+
+check() {
+  cd "geas-lang-$pkgver-$CARCH-linux"
+  # The binary must be the release it claims to be before it is installed
+  test "$(usr/bin/geas version)" = "geas $pkgver"
+  # The runtime must answer to the SONAME every module names
+  test "$(readlink usr/lib/libgeasrt.so)" = "libgeasrt.so.0"
+}
+
+package() {
+  cd "geas-lang-$pkgver-$CARCH-linux"
+  cp -a usr "$pkgdir/"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 spec.md "$pkgdir/usr/share/doc/$pkgname/spec.md"
+}

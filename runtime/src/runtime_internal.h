@@ -286,6 +286,7 @@ struct GeasFuture {
     GeasPledgeFn       fn;
     uint32_t          pidx;    /* descriptor index of the pledge, for latch */
     uint8_t           is_running; /* under the instance lock */
+    uint8_t           is_forfeited; /* forfeited, published by its own worker */
     GeasValue*         frame;   /* instance owned, one slot per parameter */
     size_t            frame_nargs;
     GeasStatus         status;

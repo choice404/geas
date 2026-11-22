@@ -382,6 +382,24 @@ static int wait_at(GeasContract* c, uint32_t step) {
     return 0;
 }
 
+/* Waits in real time until a host body has started count times */
+static int wait_runs(int body, int count) {
+    for (int i = 0; i < WAIT_MS; i++) {
+        if (runs(body) >= count) return 1;
+        nap_ms(1);
+    }
+    return 0;
+}
+
+/* Waits in real time until the saga reads state */
+static int wait_state(GeasContract* c, GeasContractState state) {
+    for (int i = 0; i < WAIT_MS; i++) {
+        if (geas_contract_state(c) == state) return 1;
+        nap_ms(1);
+    }
+    return 0;
+}
+
 /* Waits until the course reads want, whatever it passes through */
 static uint32_t settle_to(GeasContract* c, uint32_t want) {
     uint32_t state = GEAS_COURSE_NONE;
@@ -831,6 +849,9 @@ static void test_break_together(void) {
     GeasContract* c = sign_saga(rt);
     CHECK(wait_flag(&g_capture_inside), "capture's body is running");
     CHECK(wait_at(c, STEP_TOGETHER), "the course waits on the together");
+    /* A together call not yet started when the break lands never starts, so
+     * reserve's is waited into its body, which then finishes and latches */
+    CHECK(wait_runs(B_RESERVE, 1), "reserve's body has started beside it");
     CHECK(geas_contract_break(c) == GEAS_OK, "the host breaks mid together");
     CHECK(geas_contract_state(c) == GEAS_REMEDYING, "and gets the saga back Remedying");
     CHECK(settle(c) == GEAS_COURSE_CANCELLED, "the course is cancelled");
@@ -857,6 +878,9 @@ static void test_term(void) {
     GeasContract* c = sign_saga(rt);
     CHECK(wait_flag(&g_reserve_inside), "reserve's body is running");
     CHECK(wait_at(c, STEP_TOGETHER), "the course waits on the together");
+    /* capture runs beside reserve, and its latch is what makes the saga
+     * Partial, so it is waited for before the week runs out */
+    CHECK(wait_state(c, GEAS_PARTIAL), "capture latched beside it");
     clock_set(1000 + 7 * DAY_MS);
     CHECK(geas_runtime_tick(rt) == GEAS_OK, "tick at the week");
     CHECK(geas_contract_state(c) == GEAS_PARTIAL && !geas_contract_term_lapsed(c),

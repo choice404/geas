@@ -3,7 +3,8 @@
  * eight bindings, more than two hundred fifty six live instances, and a
  * hundred thousand sign and end rounds whose handles geas_contract_free
  * gives back, in memory that stays flat while the ticker walks the table,
- * and a growth whose size would overflow.
+ * and a growth whose size would overflow. GEAS_REUSE_ROUNDS sets the rounds
+ * of the reuse case, a hundred thousand when unset.
  * Handwritten descriptors and an empty module copied to many paths; runs
  * under ASan, LSan, and UBSan, every case in a child of its own */
 
@@ -21,8 +22,8 @@
 #define MANY_BINDINGS 130
 #define MANY_INSTANCES 300
 
-/* The rounds of the reuse case, the round its baseline is read at, and the
- * growth it may show between the two */
+/* The rounds of the reuse case when GEAS_REUSE_ROUNDS is unset, the round its
+ * baseline is read at, and the growth it may show between the two */
 #define REUSE_ROUNDS 100000
 #define REUSE_BASELINE 1000
 #define REUSE_GROWTH_BYTES (1u << 20)
@@ -199,6 +200,23 @@ static void case_many_instances(void) {
 
 /* ---- freeing handles ---- */
 
+/* How many times an ended instance is freed again, and the pause between,
+ * while the pool still lets go of the receipt it ran */
+#define FREE_TRIES 1000
+#define FREE_PAUSE_US 1000
+
+/* Frees an ended instance. The pool drops its hold on a receipt just after
+ * the wait it woke returns, and geas_contract_free answers GEAS_ERR_STATE for
+ * a receipt the pool still holds, which a later call finds drained */
+static GeasStatus free_drained(GeasContract* c) {
+    GeasStatus st = geas_contract_free(c);
+    for (int tries = 0; st == GEAS_ERR_STATE && tries < FREE_TRIES; tries++) {
+        usleep(FREE_PAUSE_US);
+        st = geas_contract_free(c);
+    }
+    return st;
+}
+
 static void case_free_rules(void) {
     GeasRuntime* rt = echo_runtime();
     if (!rt) return;
@@ -214,7 +232,7 @@ static void case_free_rules(void) {
     GeasValue got;
     CHECK(receipt && geas_future_wait(receipt, &got) == GEAS_OK, "the receipt delivers");
     CHECK(c && geas_contract_break(c) == GEAS_OK, "the instance ends");
-    CHECK(c && geas_contract_free(c) == GEAS_OK, "and its handle and receipt are freed");
+    CHECK(c && free_drained(c) == GEAS_OK, "and its handle and receipt are freed");
     GeasContract* next = sign_named(rt, "Echo");
     CHECK(next && run(next, "echo", &arg, 1, &out) == GEAS_OK, "a later instance runs");
     CHECK(rt->ninstances == 1, "only the live handle is in the table");
@@ -233,13 +251,21 @@ static int reuse_round(GeasRuntime* rt, int round) {
     return geas_contract_free(c) == GEAS_OK;
 }
 
+/* The rounds GEAS_REUSE_ROUNDS asks for, never fewer than the baseline needs */
+static long reuse_rounds(void) {
+    const char* env = getenv("GEAS_REUSE_ROUNDS");
+    long rounds = env ? atol(env) : REUSE_ROUNDS;
+    return rounds > REUSE_BASELINE ? rounds : REUSE_BASELINE + 1;
+}
+
 static void case_reuse_rounds(void) {
+    long rounds = reuse_rounds();
     GeasRuntime* rt = echo_runtime();
     if (!rt) return;
     CHECK(geas_runtime_start_ticker(rt, REUSE_TICKER_MS) == GEAS_OK, "the ticker walks meanwhile");
     size_t baseline = 0;
     int failed_round = -1;
-    for (int round = 0; round < REUSE_ROUNDS && failed_round < 0; round++) {
+    for (int round = 0; round < rounds && failed_round < 0; round++) {
         if (!reuse_round(rt, round)) failed_round = round;
         if (round == REUSE_BASELINE) baseline = __sanitizer_get_current_allocated_bytes();
     }

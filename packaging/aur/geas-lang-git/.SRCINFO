@@ -1,0 +1,20 @@
+pkgbase = geas-lang-git
+	pkgdesc = Language for durable obligations: contracts with deadlines, remedies, and signals, enforced by a C runtime any language can load (development build)
+	pkgver = 1.0.1.r0.g0000000
+	pkgrel = 1
+	url = https://github.com/choice404/geas
+	arch = x86_64
+	license = MIT
+	makedepends = cmake
+	makedepends = git
+	depends = gcc
+	depends = glibc
+	depends = libstdc++
+	provides = geas-lang
+	conflicts = geas-lang
+	conflicts = geas-lang-bin
+	conflicts = geas
+	source = geas::git+https://github.com/choice404/geas.git
+	sha256sums = SKIP
+
+pkgname = geas-lang-git

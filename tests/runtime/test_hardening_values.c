@@ -25,8 +25,11 @@ size_t __sanitizer_get_current_allocated_bytes(void);
 #define WIRE_FUZZ_ROUNDS 2000
 
 /* Levels of the shared substructure value, 2^levels nodes unfolded */
-#define DAG_LEVELS 26
+#define DAG_LEVELS 40
 #define DAG_SMALL_LEVELS 14
+
+/* The three refusals each walk the node budget and no further, which a loaded machine does well inside this, while the unfolding itself would never end */
+#define NODE_BUDGET_LIMIT_MS 60000
 
 /* The decode input of the slot budget case and the memory it may claim */
 #define AMPLIFY_BYTES (256u * 1024u)
@@ -346,7 +349,7 @@ static void case_node_budget(void) {
     size_t need = 1;
     CHECK(geas_wire_encode_value(&big, NULL, 0, &need) == GEAS_ERR_OOM && need == 0,
           "the encoder refuses it before measuring a size, so it never parks");
-    CHECK(mono_ms() - t0 < 10000, "and all three stop at the budget, not the unfolding");
+    CHECK(mono_ms() - t0 < NODE_BUDGET_LIMIT_MS, "and all three stop at the budget, not the unfolding");
     GeasValue small = shared_lists(DAG_SMALL_LEVELS);
     CHECK(geas_value_deep_copy(c, &small, &copy) == GEAS_OK,
           "a shared value within the budget copies");

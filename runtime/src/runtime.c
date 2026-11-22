@@ -167,8 +167,12 @@ static void future_finish(struct GeasFuture* f, GeasStatus st,
                           const GeasValue* val) {
     pthread_mutex_lock(&f->mu);
     if (!__atomic_load_n(&f->done, __ATOMIC_RELAXED)) {
-        f->status = st;
-        if (val) f->value = *val;
+        /* A receipt its own body's break or release forfeited keeps the
+         * GEAS_ERR_STATE the forfeit left it */
+        if (!f->is_forfeited) {
+            f->status = st;
+            if (val) f->value = *val;
+        }
         __atomic_store_n(&f->done, 1, __ATOMIC_RELEASE);
         pthread_cond_broadcast(&f->cv);
     }
@@ -190,8 +194,16 @@ static void future_forfeit(struct GeasFuture* f) {
         f->refs = NULL;
         f->ref_slots = NULL;
         f->nrefs = 0;
-        __atomic_store_n(&f->done, 1, __ATOMIC_RELEASE);
-        pthread_cond_broadcast(&f->cv);
+        /* The fulfillment running on this thread, whose own body broke or
+         * released the instance, is published by its worker once the events
+         * that ending recorded are delivered, the order every other outcome
+         * keeps, so a wait that returns has seen RECLAIMED or RELEASED */
+        if (f == t_running_future) {
+            f->is_forfeited = 1;
+        } else {
+            __atomic_store_n(&f->done, 1, __ATOMIC_RELEASE);
+            pthread_cond_broadcast(&f->cv);
+        }
     }
     pthread_mutex_unlock(&f->mu);
 }

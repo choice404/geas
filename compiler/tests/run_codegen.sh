@@ -42,7 +42,10 @@
 #
 # Set GEAS to test another build, the sanitizer one at target/bin-asan/geas
 # for instance. BLESS=1 rewrites every golden from GEAS and does nothing
-# else, read the diff before keeping it
+# else, read the diff before keeping it. The commands of a check run side by
+# side, JOBS at a time and the machine's width when it is unset, each in a
+# scratch directory of its own, and their results are then read in order,
+# so the report and the count are the ones a run one command at a time gives
 
 set -u
 
@@ -119,6 +122,27 @@ fail_case() {
     fail=$((fail + 1))
 }
 
+# How many commands run at once
+JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+
+# Runs a command in the background, holding at most JOBS of them at once.
+# running counts what was spawned since the last full wait, which settle
+# takes and resets
+running=0
+spawn() {
+    if [ "$running" -ge "$JOBS" ]; then
+        wait -n
+        running=$((running - 1))
+    fi
+    "$@" &
+    running=$((running + 1))
+}
+
+settle() {
+    wait
+    running=0
+}
+
 # Runs one geas command in a scratch directory of its own, where lib points
 # at the repository's library so imports resolve the way they do at the
 # root. Leaves the exit code in $dir/code, stderr in $dir/stderr, and the
@@ -133,13 +157,14 @@ run_in() {
     { echo "exit $(cat "$dir/code")"; sed "s|$ROOT/||g" "$dir/stderr"; } > "$dir/log"
 }
 
-# Every artifact of one program from one binary, into $dir/target/geas-out
+# Every artifact of one program from one binary, into $dir/target/geas-out,
+# the four commands side by side
 emit_all() {
     local dir="$1" bin="$2" src="$3"
-    run_in "$dir/build" "$bin" build "$src"
-    run_in "$dir/bin" "$bin" build --bin "$src"
-    run_in "$dir/header" "$bin" emit-header "$src"
-    run_in "$dir/proto" "$bin" emit-proto "$src"
+    spawn run_in "$dir/build" "$bin" build "$src"
+    spawn run_in "$dir/bin" "$bin" build --bin "$src"
+    spawn run_in "$dir/header" "$bin" emit-header "$src"
+    spawn run_in "$dir/proto" "$bin" emit-proto "$src"
 }
 
 # The golden name of an emitted file: the --bin module C is kept apart from
@@ -170,8 +195,11 @@ bless_dir() {
     mkdir -p "$golden_dir"
     find "$golden_dir" -maxdepth 1 -type f -delete
     for src in $sources; do
+        emit_all "$WORK/bless/$(basename "${src%.geas}")" "$GEAS" "$ROOT/$src"
+    done
+    settle
+    for src in $sources; do
         stem="$(basename "${src%.geas}")"
-        emit_all "$WORK/bless/$stem" "$GEAS" "$ROOT/$src"
         for mode in build bin header proto; do
             while read -r name file; do
                 cp "$file" "$golden_dir/$name"
@@ -190,6 +218,10 @@ check_goldens() {
         stem="$(basename "${src%.geas}")"
         emit_all "$WORK/golden/$stem" "$GEAS" "$ROOT/$src"
         emit_all "$WORK/again/$stem" "$GEAS" "$ROOT/$src"
+    done
+    settle
+    for src in $sources; do
+        stem="$(basename "${src%.geas}")"
         for mode in build bin header proto; do
             while read -r name file; do
                 other="$WORK/again/$stem/${file#"$WORK/golden/$stem/"}"
@@ -205,10 +237,14 @@ check_goldens() {
             done < <(golden_files "$WORK/golden/$stem" "$stem" "$mode")
         done
     done
+    local -A produced=()
+    while read -r name; do
+        produced[$name]=1
+    done < "$WORK/golden/produced.$(basename "$golden_dir")"
     for file in "$golden_dir"/*; do
         [ -f "$file" ] || continue
         name="$(basename "$file")"
-        if ! grep -qxF "$name" "$WORK/golden/produced.$(basename "$golden_dir")"; then
+        if [ -z "${produced[$name]:-}" ]; then
             fail_case "golden/$name" "the build did not emit it"
         fi
     done
@@ -243,12 +279,20 @@ check_source_tree_coverage() {
     done < <(find skeleton lib/std examples -type f -name '*.geas' | sort)
 }
 
-# Runs the real cc over one module C file: a failure, any warning, or a goto
-# over an initialization fails it. A file that carries an amends table or a
-# type table is skipped when the runtime header has no GeasAmendDesc or
-# GeasTypeNode to compile it against
+# Runs the real cc over one module C file into its own log, and its exit
+# code beside the log, for check_c_file to read
+compile_c_file() {
+    local file="$1" log="$2"
+    $CC_CHECK "$file" > "$log" 2>&1
+    echo $? > "$log.code"
+}
+
+# Holds one module C file to what cc made of it: a failure, any warning, or
+# a goto over an initialization fails it. A file that carries an amends
+# table or a type table is skipped when the runtime header has no
+# GeasAmendDesc or GeasTypeNode to compile it against
 check_c_file() {
-    local name="$1" file="$2" log="$WORK/syntax.log"
+    local name="$1" file="$2" log="$3"
     if [ "$HAS_AMEND_ABI" -eq 0 ] && grep -q "GeasAmendDesc" "$file"; then
         skipped=$((skipped + 1))
         return
@@ -257,7 +301,7 @@ check_c_file() {
         skipped=$((skipped + 1))
         return
     fi
-    if ! $CC_CHECK "$file" > "$log" 2>&1; then
+    if [ "$(cat "$log.code")" -ne 0 ]; then
         fail_case "syntax/$name" "cc rejects the module C"
         head -10 "$log"
         return
@@ -270,10 +314,24 @@ check_c_file() {
     pass=$((pass + 1))
 }
 
+# The module C of every golden, the entry wrappers aside, as name and path
+# pairs
+golden_c_files() {
+    local file
+    for file in "$GOLDEN_DIR"/*.c "$WORKFLOW_DIR"/*.c "$COURSE_DIR"/*.c "$AMENDS_DIR"/*.c \
+        "$TREE_DIR"/*.c; do
+        [ -f "$file" ] || continue
+        case "$file" in *.main.c) continue ;; esac
+        echo "${file#"$GOLDEN_DIR"/} $file"
+    done
+}
+
 # The module C of every golden, the entry wrappers aside, then every course
-# of tests/course, emitted fresh
+# of tests/course, emitted fresh. The builds and then the compiles run side
+# by side, each into a log of its own, and the logs are read in the order a
+# run one file at a time reads them
 check_module_syntax() {
-    local cc src stem dir file
+    local cc src stem dir file index name logs="$WORK/syntax/logs"
     cc="$(command -v cc || true)"
     if [ -z "$cc" ]; then
         echo "[codegen] no cc on PATH, the syntax check is skipped"
@@ -290,16 +348,30 @@ check_module_syntax() {
             fail_case "syntax/tree/$stem" "the golden table has no module C"
         fi
     done
-    for file in "$GOLDEN_DIR"/*.c "$WORKFLOW_DIR"/*.c "$COURSE_DIR"/*.c "$AMENDS_DIR"/*.c \
-        "$TREE_DIR"/*.c; do
-        [ -f "$file" ] || continue
-        case "$file" in *.main.c) continue ;; esac
-        check_c_file "${file#"$GOLDEN_DIR"/}" "$file"
+    mkdir -p "$logs"
+    for src in tests/course/*.geas; do
+        spawn run_in "$WORK/syntax/$(basename "${src%.geas}")" "$GEAS" build "$ROOT/$src"
     done
+    settle
+    index=0
+    while read -r name file; do
+        index=$((index + 1))
+        spawn compile_c_file "$file" "$logs/golden_$index.log"
+    done < <(golden_c_files)
+    for src in tests/course/*.geas; do
+        stem="$(basename "${src%.geas}")"
+        file="$WORK/syntax/$stem/$OUT_DIR/$stem.c"
+        [ -f "$file" ] && spawn compile_c_file "$file" "$logs/course_$stem.log"
+    done
+    settle
+    index=0
+    while read -r name file; do
+        index=$((index + 1))
+        check_c_file "$name" "$file" "$logs/golden_$index.log"
+    done < <(golden_c_files)
     for src in tests/course/*.geas; do
         stem="$(basename "${src%.geas}")"
         dir="$WORK/syntax/$stem"
-        run_in "$dir" "$GEAS" build "$ROOT/$src"
         case " $UNBUILT_COURSES " in
             *" $stem "*)
                 if grep -q "not yet supported: a vow of this type in a compiled module" "$dir/stderr"; then
@@ -315,7 +387,7 @@ check_module_syntax() {
             fail_case "syntax/$stem" "build wrote no module C"
             continue
         fi
-        check_c_file "$stem" "$file"
+        check_c_file "$stem" "$file" "$logs/course_$stem.log"
     done
     if [ "$skipped" -gt 0 ]; then
         echo "[codegen] runtime/include/geas/geas_abi.h declares no GeasAmendDesc or no" \

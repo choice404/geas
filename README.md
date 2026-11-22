@@ -169,11 +169,13 @@ Where Geas differs is what it makes declarative. The requirements block is the s
 
 ## Installing
 
-On Arch, the [geas](https://aur.archlinux.org/packages/geas) package on the AUR builds from the latest tagged release:
+On Arch the toolchain is on the AUR as three packages, take whichever fits: [geas-lang](https://aur.archlinux.org/packages/geas-lang) builds the latest tagged release from source, [geas-lang-bin](https://aur.archlinux.org/packages/geas-lang-bin) installs the prebuilt x86_64 release tarball, and [geas-lang-git](https://aur.archlinux.org/packages/geas-lang-git) builds the head of the repository:
 
 ```sh
-paru -S geas   # or yay -S geas
+paru -S geas-lang   # or geas-lang-bin, or geas-lang-git, or yay -S
 ```
+
+Each tagged release also carries `geas-lang-<version>-x86_64-linux.tar.gz` and its `.sha256` on the [releases page](https://github.com/choice404/geas/releases), the same files `make install PREFIX=/usr` lays down, under `usr/`.
 
 From a checkout you need a C++23 compiler, gcc or clang, CMake, cc, and make. `make compiler` builds `geas` with CMake into `target/bin/geas`, and `make runtime` builds `libgeasrt.so` into `target/geas-out/`. `make install` lays the toolchain out under a prefix: the `geas` binary, `libgeasrt.so`, the C ABI headers, and the std modules. The default prefix is `/usr/local`.
 
@@ -192,15 +194,26 @@ An installed `geas` needs no environment variables. It probes for a repository c
 
 New to Geas, start with [docs/tutorial.md](docs/tutorial.md): it walks the whole language, drives one contract from C and from Python with no generated bindings, and then walks the order saga, host driven, engine driven, and across a deploy from one version to the next. [spec.md](spec.md) is the language reference, [docs/grammar.md](docs/grammar.md) is the normative grammar, [docs/abi.md](docs/abi.md) is the C surface a host compiles against, and [CHANGELOG.md](CHANGELOG.md) carries the history version by version.
 
-The whole pipeline runs end to end, and one target runs every gate:
+The whole pipeline runs end to end, and the gates come in four tiers:
 
 ```sh
 # build everything and run the end to end check
 make smoke
 
-# every functional gate the repository carries
-make all
+# the goldens, the smoke walk, and two runtime gates, while you change code
+make quick
+
+# every test once, the daily full run, make all is the same target
+make -j$(nproc) check
+
+# the repeated TSan rounds and the full fuzz counts, side by side
+make soak
+
+# the gRPC bridge and supervisor gates, which need grpcio, Go, and Node
+make -j$(nproc) check-net
 ```
+
+`make quick` runs the front end and codegen goldens, the smoke walk, the language lowering gate, and the host driven saga, in about fifteen seconds. `make check` runs every test the repository carries exactly once, each ThreadSanitizer gate for one round and each fuzz pass at a short count, and every gate is safe beside every other, so on a 24 core machine `make -j24 check` takes about twenty five seconds from a built compiler and well under a minute from nothing but the compiler, and a plain serial `make check` a little over two minutes. The runtime is compiled once per sanitizer flavour into `target/geas-out/rt/` and each gate compiles only its own test against that archive, so a rerun after a change rebuilds only what the change reached. `make soak` is the long tail, the twenty and thirty round TSan loops, the full fuzz counts, and the hundred thousand round reuse case, every round its own make target so the rounds run across the machine, about a minute here; `make soak SOAK_ROUNDS=100` sets the rounds of every repeated test at once. `make check-net` stays out of `check` since it needs grpcio, the Go toolchain, and Node, each gate skipping clean where its tool is absent, and it runs side by side the same way in about ten seconds. Every gate still runs on its own by its name, `make test-saga` or `make tsan-workflow` for instance.
 
 `make smoke` builds the runtime shared library `libgeasrt.so` from `runtime/`, the `geas` binary from `compiler/`, the compiled contract module `libhello.geas.so` from `skeleton/hello.geas`, and the C host from `skeleton/host.c`, then runs the host, which loads the module, signs `Greeter`, fulfills `greet("world")`, checks the result is `Ok("hello, world")`, exercises the error paths, and breaks the contract. Everything lands under `target/`.
 
@@ -220,7 +233,7 @@ target/bin/geas record skeleton/order_course.geas
 
 `build` reads the source, emits the module C into `target/geas-out/`, and links it with cc into a loadable `.geas.so`. Each module names `libgeasrt.so.0` as its runtime dependency, so a host may link the runtime plainly without preloading it with `RTLD_GLOBAL`. Hosts that already preload `libgeasrt.so` globally keep using the same runtime through its symlink to `libgeasrt.so.0`. Run it from the repository root, or set `GEAS_ROOT` to a checkout and run `geas` from anywhere: `GEAS_ROOT` points cc at the runtime headers and `libgeasrt`, and `GEAS_HOME` at the standard library for imports. A module finds the runtime through its RUNPATH, `$ORIGIN` first and, built in a checkout, the checkout's `target/geas-out`, which is relative unless `GEAS_ROOT` is set, so a module built that way runs from the repository root; an installed `geas` links with `$ORIGIN` alone and the loader finds the installed `libgeasrt.so.0` on its ordinary path.
 
-The front end has its own golden suite: `tests/run.sh` drives the lex, parse, check, and shape goldens, every accepted program beside its expected dump and every rejected one beside the diagnostics it must produce, and `compiler/tests/run_codegen.sh` pins the emitted C.
+The front end has its own golden suite: `tests/run.sh` drives the lex, parse, check, and shape goldens, every accepted program beside its expected dump and every rejected one beside the diagnostics it must produce, and `compiler/tests/run_codegen.sh` pins the emitted C. Both run their cases side by side and report them in order, and `make test-golden` and `make test-codegen` run them as gates.
 
 ### The workflow gates
 
